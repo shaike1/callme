@@ -48,6 +48,25 @@ class CallHandler {
       return;
     }
 
+    // Extract caller number/URI for contact lookup
+    const fromHeader = req.get('From') || '';
+    const callerMatch = fromHeader.match(/sip:([^@>]+)@/);
+    const callerRaw = callerMatch ? callerMatch[1] : '';
+
+    // Look up in contacts
+    const callerContact = callerRaw && global.contacts
+      ? global.contacts.find(c => {
+          const normalized = c.phone.replace(/[^0-9+]/g, '');
+          const rawNorm = callerRaw.replace(/[^0-9+]/g, '');
+          return normalized && rawNorm && (normalized.endsWith(rawNorm) || rawNorm.endsWith(normalized));
+        })
+      : null;
+
+    const callerName = callerContact ? callerContact.name : null;
+    if (callerName) {
+      logger.info('Caller identified', { callId, callerName, callerRaw });
+    }
+
     try {
       const audioOnlySdp = stripVideoFromSdp(req.body);
       const { endpoint, dialog } = await this.mediaServer.connectCaller(req, res, {
@@ -56,7 +75,7 @@ class CallHandler {
 
       const callStartedAt = Date.now();
       logger.info('Call connected', { callId, uuid: endpoint.uuid });
-      if (global.fireWebhook) global.fireWebhook('call.started', { callId, direction: 'inbound', startedAt: callStartedAt });
+      if (global.fireWebhook) global.fireWebhook('call.started', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt });
 
       dialog.on('destroy', () => {
         const durationS = Math.round((Date.now() - callStartedAt) / 1000);
@@ -66,11 +85,11 @@ class CallHandler {
         endpoint.destroy().catch(() => {});
         this.metrics.record(callId, 'endCall', 'hangup');
         this.metrics.finalize(callId);
-        if (global.fireWebhook) global.fireWebhook('call.ended', { callId, direction: 'inbound', startedAt: callStartedAt, durationS });
+        if (global.fireWebhook) global.fireWebhook('call.ended', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt, durationS });
       });
 
       if (CONVERSATION_ENGINE === 'gemini-live') {
-        await this._handleGeminiLiveCall(endpoint, dialog, callId);
+        await this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
       } else {
         await this._handleSttTtsCall(endpoint, dialog, callId);
       }
@@ -115,10 +134,13 @@ class CallHandler {
 
   // ── Gemini Live path ─────────────────────────────────────────────────────
 
-  async _handleGeminiLiveCall(endpoint, dialog, callId) {
+  async _handleGeminiLiveCall(endpoint, dialog, callId, callerName = null) {
     const settings = global.botSettings || {};
-    const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
+    let systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
+    if (callerName) {
+      systemPrompt += `\n\nThe caller's name is ${callerName}. Address them by name naturally.`;
+    }
 
     const integrations = global.integrations || {};
 
@@ -359,8 +381,12 @@ class CallHandler {
       session.sendToolResponse(responses);
     });
 
-    // Send initial greeting
-    const greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה בעברית.';
+    // Send initial greeting — personalized if caller is known
+    let greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה בעברית.';
+    if (callerName) {
+      greeting = `שלום ${callerName}! ברך את ${callerName} בשמו בקצרה בעברית.`;
+      logger.info('Personalized greeting for known caller', { callId, callerName });
+    }
     session.sendText(greeting);
 
     // Energy-based VAD with manual activity markers.
