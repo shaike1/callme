@@ -212,7 +212,7 @@ class CallHandler {
     // so it processes the full utterance as one context instead of tiny 20ms fragments.
     const SPEECH_RMS_THRESHOLD = 400;
     const SILENCE_FRAMES_NEEDED = 20;  // ~400ms silence = end of utterance
-    const MIN_SPEECH_FRAMES = 25;      // ~500ms minimum — prevents short noise from being misidentified as non-Hebrew
+    const MIN_SPEECH_FRAMES = 15;      // ~300ms minimum — filters noise but allows short Hebrew phrases through
 
     const calcRms = (buf) => {
       let sum = 0;
