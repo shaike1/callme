@@ -216,9 +216,9 @@ class CallHandler {
     // Energy-based VAD with manual activity markers.
     // Gemini's automatic VAD is disabled — we tell it exactly when speech starts/ends
     // so it processes the full utterance as one context instead of tiny 20ms fragments.
-    const SPEECH_RMS_THRESHOLD = 300;
+    const SPEECH_RMS_THRESHOLD = 400;
     const SILENCE_FRAMES_NEEDED = 20;  // ~400ms silence = end of utterance
-    const MIN_SPEECH_FRAMES = 8;       // ~160ms minimum to count as speech
+    const MIN_SPEECH_FRAMES = 25;      // ~500ms minimum — prevents short noise from being misidentified as non-Hebrew
 
     const calcRms = (buf) => {
       let sum = 0;
