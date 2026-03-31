@@ -252,10 +252,15 @@ class CallHandler {
             silenceCount++;
             session.sendAudio(buf); // send trailing silence too
             if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+              // Always send activityEnd if we sent activityStart — never leave Gemini stuck waiting
               if (speechCount >= MIN_SPEECH_FRAMES) {
                 session.sendActivityEnd();
                 postUtteranceSuppressUntil = Date.now() + POST_UTTERANCE_SUPPRESS_MS;
                 logger.info('Speech end → sent to Gemini', { callId, speechFrames: speechCount });
+              } else {
+                // Too short to be real speech, but still close the activity to unblock Gemini
+                session.sendActivityEnd();
+                logger.debug('Speech too short, closing activity', { callId, speechFrames: speechCount });
               }
               speaking = false;
               silenceCount = 0;
