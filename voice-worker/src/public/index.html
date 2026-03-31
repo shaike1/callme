@@ -6,12 +6,13 @@
 <title>Luky Voice Bot — Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: hidden; max-width: 100vw; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
   header { background: #1a1d2e; border-bottom: 1px solid #2d3148; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
   header h1 { font-size: 20px; font-weight: 600; }
   .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; flex-shrink: 0; }
   .status-dot.offline { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
-  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; width: 100%; }
   .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 12px; padding: 20px; }
   .card h2 { font-size: 14px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
@@ -20,7 +21,7 @@
   .stat .lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
   .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; align-items: start; margin-bottom: 12px; }
   .form-row label { font-size: 13px; color: #94a3b8; padding-top: 8px; }
-  input, select, textarea { width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
+  input, select, textarea { width: 100%; max-width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
   input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
   textarea { resize: vertical; min-height: 80px; font-family: inherit; }
   .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity 0.15s; }
@@ -32,7 +33,8 @@
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
   .toast.show { opacity: 1; }
   .toast.error { background: #ef4444; }
-  #logs { background: #0a0c14; border-radius: 8px; padding: 12px; height: 280px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+  #logs { background: #0a0c14; border-radius: 8px; padding: 12px; height: 280px; overflow-y: auto; overflow-x: hidden; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; word-break: break-all; }
+  .card { overflow: hidden; }
   .log-info { color: #60a5fa; }
   .log-warn { color: #f59e0b; }
   .log-error { color: #ef4444; }
