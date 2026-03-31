@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luky Voice Bot — Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+  header { background: #1a1d2e; border-bottom: 1px solid #2d3148; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; flex-shrink: 0; }
+  .status-dot.offline { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; }
+  .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 12px; padding: 20px; }
+  .card h2 { font-size: 14px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+  .stat { background: #0f1117; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat .val { font-size: 28px; font-weight: 700; color: #60a5fa; }
+  .stat .lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; align-items: start; margin-bottom: 12px; }
+  .form-row label { font-size: 13px; color: #94a3b8; padding-top: 8px; }
+  input, select, textarea { width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
+  textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+  .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #ef4444; }
+  #logs { background: #0a0c14; border-radius: 8px; padding: 12px; height: 280px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+  .log-info { color: #60a5fa; }
+  .log-warn { color: #f59e0b; }
+  .log-error { color: #ef4444; }
+  .log-debug { color: #64748b; }
+  .active-calls { display: flex; flex-direction: column; gap: 8px; }
+  .call-item { background: #0f1117; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .call-item .call-id { font-family: monospace; color: #94a3b8; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .call-item .call-dur { color: #60a5fa; font-weight: 600; white-space: nowrap; }
+  #no-calls { color: #64748b; font-size: 13px; text-align: center; padding: 20px; }
+  .chat-box { display: flex; gap: 8px; margin-top: 12px; }
+  .chat-box input { flex: 1; }
+  #chat-out { background: #0a0c14; border-radius: 8px; padding: 12px; min-height: 80px; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <div class="status-dot" id="status-dot"></div>
+  <h1>Luky Voice Bot</h1>
+  <span id="status-text" style="font-size:13px;color:#64748b;margin-right:auto">בודק...</span>
+  <span id="uptime" style="font-size:12px;color:#64748b"></span>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="card">
+    <h2>סטטיסטיקות</h2>
+    <div class="stats-grid">
+      <div class="stat"><div class="val" id="stat-total">—</div><div class="lbl">סה"כ שיחות</div></div>
+      <div class="stat"><div class="val" id="stat-active">—</div><div class="lbl">שיחות פעילות</div></div>
+      <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl">ממוצע (שניות)</div></div>
+      <div class="stat"><div class="val" id="stat-errors">—</div><div class="lbl">שגיאות</div></div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <h2>הגדרות בוט</h2>
+    <div class="form-row"><label>שם</label><input id="s-name" placeholder="Luky"></div>
+    <div class="form-row"><label>ברכה</label><input id="s-greeting" placeholder="שלום!"></div>
+    <div class="form-row"><label>קול</label>
+      <select id="s-voice">
+        <option value="Kore">Kore (נקבה)</option>
+        <option value="Aoede">Aoede (נקבה)</option>
+        <option value="Zephyr">Zephyr (נקבה)</option>
+        <option value="Charon">Charon (זכר)</option>
+        <option value="Puck">Puck (זכר)</option>
+        <option value="Fenrir">Fenrir (זכר)</option>
+      </select>
+    </div>
+    <div class="form-row"><label>שפה</label>
+      <select id="s-language">
+        <option value="he">עברית</option>
+        <option value="en">אנגלית</option>
+        <option value="ar">ערבית</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Persona</label><textarea id="s-persona" rows="4"></textarea></div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button></div>
+  </div>
+
+  <!-- Chat test -->
+  <div class="card">
+    <h2>בדיקת צ'אט (ללא שיחה)</h2>
+    <div id="chat-out">תגובת הבוט תופיע כאן...</div>
+    <div class="chat-box">
+      <input id="chat-input" placeholder="שלח הודעה לבוט..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="btn btn-primary btn-sm" onclick="sendChat()">שלח</button>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="card">
+    <h2>לוגים חיים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="clearLogs()">נקה</button></h2>
+    <div id="logs"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch(API + '/api/settings');
+    const s = await r.json();
+    document.getElementById('s-name').value = s.name || '';
+    document.getElementById('s-greeting').value = s.greeting || '';
+    document.getElementById('s-persona').value = s.persona || '';
+    document.getElementById('s-voice').value = s.voice || 'Kore';
+    document.getElementById('s-language').value = s.language || 'he';
+  } catch(e) { console.error(e); }
+}
+
+async function saveSettings() {
+  const body = {
+    name: document.getElementById('s-name').value,
+    greeting: document.getElementById('s-greeting').value,
+    persona: document.getElementById('s-persona').value,
+    voice: document.getElementById('s-voice').value,
+    language: document.getElementById('s-language').value,
+  };
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) toast('הגדרות נשמרו ✓');
+    else toast('שגיאה בשמירה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const h = await r.json();
+    document.getElementById('status-dot').className = 'status-dot';
+    document.getElementById('status-text').textContent = 'מחובר';
+    const up = Math.floor(h.uptime);
+    const hh = Math.floor(up/3600), mm = Math.floor((up%3600)/60), ss = up%60;
+    document.getElementById('uptime').textContent = `uptime: ${hh}h ${mm}m ${ss}s`;
+  } catch(e) {
+    document.getElementById('status-dot').className = 'status-dot offline';
+    document.getElementById('status-text').textContent = 'לא מחובר';
+  }
+}
+
+async function loadMetrics() {
+  try {
+    const r = await fetch(API + '/metrics');
+    const m = await r.json();
+    const s = m.stats || {};
+    document.getElementById('stat-total').textContent = s.totalCalls ?? '0';
+    document.getElementById('stat-active').textContent = s.activeCalls ?? '0';
+    const avg = s.avgDurationMs ? Math.round(s.avgDurationMs/1000) : 0;
+    document.getElementById('stat-avg').textContent = avg;
+    document.getElementById('stat-errors').textContent = s.totalErrors ?? '0';
+  } catch(e) {}
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const out = document.getElementById('chat-out');
+  out.textContent = 'שולח...';
+  try {
+    const r = await fetch(API + '/api/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ message: msg }) });
+    const d = await r.json();
+    out.textContent = d.response || '(אין תגובה)';
+  } catch(e) { out.textContent = 'שגיאה: ' + e.message; }
+}
+
+// Live log polling via /api/logs endpoint (SSE or polling)
+const logEl = document.getElementById('logs');
+let logBuf = [];
+
+function appendLog(line) {
+  let cls = 'log-info';
+  if (line.includes('"level":"warn"') || line.includes('warn')) cls = 'log-warn';
+  if (line.includes('"level":"error"') || line.includes('error')) cls = 'log-error';
+  if (line.includes('debug')) cls = 'log-debug';
+
+  // Try to pretty print JSON log lines
+  try {
+    const obj = JSON.parse(line);
+    const ts = obj.timestamp ? new Date(obj.timestamp).toLocaleTimeString('he-IL') : '';
+    const msg = obj.message || obj.msg || line;
+    const extras = Object.entries(obj).filter(([k]) => !['message','msg','timestamp','level'].includes(k)).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(' ');
+    line = `[${ts}] ${msg}${extras ? ' | '+extras : ''}`;
+  } catch(_) {}
+
+  const div = document.createElement('div');
+  div.className = cls;
+  div.textContent = line;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  // Keep max 200 lines
+  while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
+}
+
+function clearLogs() { logEl.innerHTML = ''; }
+
+let lastLogTs = 0;
+async function pollLogs() {
+  try {
+    const r = await fetch(API + '/api/logs?since=' + lastLogTs);
+    if (!r.ok) return;
+    const lines = (await r.text()).split('\n').filter(Boolean);
+    for (const l of lines) {
+      try {
+        const obj = JSON.parse(l);
+        if (obj._ts && obj._ts <= lastLogTs) continue;
+        if (obj._ts) lastLogTs = obj._ts;
+      } catch(_) {}
+      appendLog(l);
+    }
+  } catch(_) {}
+}
+
+function refresh() {
+  loadHealth();
+  loadMetrics();
+}
+
+loadSettings();
+refresh();
+setInterval(refresh, 5000);
+setInterval(pollLogs, 2000);
+</script>
+</body>
+</html>

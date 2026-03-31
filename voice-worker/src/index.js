@@ -38,6 +38,22 @@ const callHandler = new CallHandler(srf, sessionManager, sttTtsManager, metrics,
 // Serve audio files so FreeSWITCH can fetch them via HTTP
 app.use('/audio', express.static(AUDIO_DIR));
 
+// Serve dashboard
+app.use('/', express.static(path.join(__dirname, 'public')));
+
+// In-memory log ring buffer for dashboard /api/logs
+const LOG_RING = [];
+const LOG_RING_MAX = 500;
+const origWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = (chunk, ...args) => {
+  const line = typeof chunk === 'string' ? chunk.trim() : chunk.toString().trim();
+  if (line) {
+    LOG_RING.push({ _ts: Date.now(), line });
+    if (LOG_RING.length > LOG_RING_MAX) LOG_RING.shift();
+  }
+  return origWrite(chunk, ...args);
+};
+
 // Health endpoints
 app.get('/health', (req, res) => {
   res.json({
@@ -61,6 +77,20 @@ app.get('/metrics', (req, res) => {
     timestamp: new Date().toISOString(),
     stats: metrics.getStats()
   });
+});
+
+app.get('/api/logs', (req, res) => {
+  const since = parseInt(req.query.since || '0');
+  const lines = LOG_RING.filter(e => e._ts > since);
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(lines.map(e => {
+    try {
+      const obj = JSON.parse(e.line);
+      return JSON.stringify({ ...obj, _ts: e._ts });
+    } catch (_) {
+      return JSON.stringify({ message: e.line, _ts: e._ts });
+    }
+  }).join('\n'));
 });
 
 app.use(express.json());
