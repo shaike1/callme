@@ -300,6 +300,25 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
   </div>
 
+  <!-- Calendar integration -->
+  <div class="card">
+    <h2>📅 Calendar — יומן</h2>
+    <div class="form-row">
+      <label>iCal URL</label>
+      <input id="s-calendarUrl" type="text" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" style="direction:ltr">
+    </div>
+    <div class="form-row">
+      <label>שם יומן</label>
+      <input id="s-calendarName" placeholder="My Calendar">
+    </div>
+    <div class="btn-row" style="gap:8px">
+      <button class="btn btn-primary" onclick="saveCalendarSettings()">שמור</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testCalendar()">בדוק חיבור</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadCalendarEvents()">טען אירועים</button>
+    </div>
+    <div id="calendar-events" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <!-- Browser Web Call -->
   <div class="card" id="webcall-card">
     <h2>Web Call — שיחה מהדפדפן</h2>
@@ -380,6 +399,8 @@ async function loadSettings() {
     document.getElementById('s-telegramThreadId').value = s.telegramThreadId || '';
     document.getElementById('s-telegramCallSummary').checked = !!s.telegramCallSummary;
     if (s.telegramBotToken) document.getElementById('s-telegramBotToken').placeholder = '✓ set';
+    document.getElementById('s-calendarUrl').value = s.calendarUrl || '';
+    document.getElementById('s-calendarName').value = s.calendarName || '';
     onProviderChange();
   } catch(e) { console.error(e); }
 }
@@ -829,6 +850,43 @@ function refresh() {
   loadHealth();
   loadMetrics();
   loadStatus();
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────
+async function saveCalendarSettings() {
+  const body = {
+    calendarUrl: document.getElementById('s-calendarUrl').value.trim(),
+    calendarName: document.getElementById('s-calendarName').value.trim(),
+  };
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) toast('הגדרות יומן נשמרו ✓');
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function testCalendar() {
+  try {
+    const r = await fetch(API + '/api/calendar/test', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast(`יומן מחובר ✓ — ${d.count} אירועים קרובים`);
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadCalendarEvents() {
+  const el = document.getElementById('calendar-events');
+  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/calendar/events?days=7');
+    const d = await r.json();
+    const evs = d.events || [];
+    if (!evs.length) { el.innerHTML = '<em style="color:#8892a4">אין אירועים ב-7 ימים הקרובים</em>'; return; }
+    el.innerHTML = evs.map(e => {
+      const dt = new Date(e.start).toLocaleString('he-IL', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<div style="padding:5px 0;border-bottom:1px solid #2d3148"><b>${e.title}</b><br><span style="color:#8892a4;font-size:12px">${dt}${e.location ? ' · ' + e.location : ''}</span></div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
 // ── Browser Web Call ─────────────────────────────────────────────────────

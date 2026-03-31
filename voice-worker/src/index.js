@@ -152,6 +152,9 @@ const defaultSettings = {
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   telegramThreadId: process.env.TELEGRAM_THREAD_ID || '',
   telegramCallSummary: false,
+  // Calendar integration (iCal URL — Google Calendar / Apple / any CalDAV)
+  calendarUrl: '',
+  calendarName: 'My Calendar',
 };
 
 let botSettings = { ...defaultSettings };
@@ -199,12 +202,15 @@ app.post('/api/settings', (req, res) => {
   if (sipDid !== undefined) botSettings.sipDid = sipDid;
   if (adminUser !== undefined && adminUser !== '') botSettings.adminUser = adminUser;
   if (adminPass !== undefined && adminPass !== '') botSettings.adminPass = adminPass;
-  const { callWebhookUrl, telegramBotToken, telegramChatId, telegramThreadId, telegramCallSummary } = req.body || {};
+  const { callWebhookUrl, telegramBotToken, telegramChatId, telegramThreadId, telegramCallSummary,
+          calendarUrl, calendarName } = req.body || {};
   if (callWebhookUrl !== undefined) botSettings.callWebhookUrl = callWebhookUrl;
   if (telegramBotToken) botSettings.telegramBotToken = telegramBotToken;
   if (telegramChatId !== undefined) botSettings.telegramChatId = telegramChatId;
   if (telegramThreadId !== undefined) botSettings.telegramThreadId = telegramThreadId;
   if (telegramCallSummary !== undefined) botSettings.telegramCallSummary = telegramCallSummary;
+  if (calendarUrl !== undefined) botSettings.calendarUrl = calendarUrl;
+  if (calendarName !== undefined) botSettings.calendarName = calendarName;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -701,6 +707,76 @@ setInterval(async () => {
     saveScheduler();
   }
 }, 30000);
+
+// ── Calendar integration (iCal URL reader) ───────────────────────────────
+function parseIcal(text) {
+  const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const events = [];
+  let inEvent = false, current = {};
+  for (const line of unfolded.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === 'BEGIN:VEVENT') { inEvent = true; current = {}; continue; }
+    if (trimmed === 'END:VEVENT') { inEvent = false; events.push(current); continue; }
+    if (!inEvent) continue;
+    const colon = trimmed.indexOf(':');
+    if (colon < 0) continue;
+    const keyFull = trimmed.slice(0, colon).toUpperCase();
+    const key = keyFull.split(';')[0];
+    const val = trimmed.slice(colon + 1);
+    current[key] = val;
+  }
+  return events;
+}
+
+function parseIcalDate(str) {
+  if (!str) return null;
+  const s = str.replace(/Z$/, '');
+  if (s.length === 8) return new Date(parseInt(s.slice(0,4)), parseInt(s.slice(4,6))-1, parseInt(s.slice(6,8)));
+  if (s.length >= 15) return new Date(parseInt(s.slice(0,4)), parseInt(s.slice(4,6))-1, parseInt(s.slice(6,8)), parseInt(s.slice(9,11)), parseInt(s.slice(11,13)), parseInt(s.slice(13,15)));
+  return null;
+}
+
+async function fetchCalendarEvents(daysAhead = 7) {
+  const url = (botSettings.calendarUrl || '').trim();
+  if (!url) return [];
+  const text = await new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
+    const req2 = mod.get(url, { timeout: 10000 }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    });
+    req2.on('error', reject);
+    req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
+  });
+  const now = new Date();
+  const end = new Date(now.getTime() + daysAhead * 86400000);
+  return parseIcal(text)
+    .map(e => ({ title: e.SUMMARY || 'אירוע', location: e.LOCATION || '', start: parseIcalDate(e.DTSTART), end: parseIcalDate(e.DTEND) }))
+    .filter(e => e.start && e.start >= now && e.start <= end)
+    .sort((a, b) => a.start - b.start);
+}
+global.fetchCalendarEvents = fetchCalendarEvents;
+
+app.get('/api/calendar/events', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days || '7');
+    const events = await fetchCalendarEvents(days);
+    res.json({ events: events.map(e => ({ title: e.title, location: e.location, start: e.start?.toISOString(), end: e.end?.toISOString() })) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/calendar/test', async (req, res) => {
+  try {
+    const events = await fetchCalendarEvents(30);
+    res.json({ ok: true, count: events.length, next: events[0] ? { title: events[0].title, start: events[0].start?.toISOString() } : null });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
 
 // ── Recordings (call transcripts) ────────────────────────────────────────
 const RECORDINGS_DIR = path.join(AUDIO_DIR, 'recordings');

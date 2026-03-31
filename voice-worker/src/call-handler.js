@@ -205,6 +205,34 @@ class CallHandler {
       }
     ];
 
+    if ((global.botSettings || {}).calendarUrl) {
+      toolDeclarations.push({
+        name: 'check_calendar',
+        description: 'Check the user calendar for upcoming events. Use when asked about schedule, appointments, "what do I have today/tomorrow", etc.',
+        parameters: {
+          type: 'object',
+          properties: {
+            days: { type: 'number', description: 'How many days ahead to look (default 1 = today, 7 = this week)' }
+          }
+        }
+      });
+      toolDeclarations.push({
+        name: 'add_calendar_event',
+        description: 'Schedule a new calendar event. Adds to scheduler and sends a Google Calendar creation link via Telegram.',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Event title' },
+            date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+            time: { type: 'string', description: 'Time in HH:MM 24h format' },
+            duration: { type: 'number', description: 'Duration in minutes (default 60)' },
+            location: { type: 'string', description: 'Location or Zoom link (optional)' }
+          },
+          required: ['title', 'date', 'time']
+        }
+      });
+    }
+
     if (integrations.ha?.enabled && integrations.ha?.url) {
       toolDeclarations.push({
         name: 'control_home_assistant',
@@ -386,6 +414,40 @@ class CallHandler {
             (global.contacts || []).push(contact);
             if (global.saveContacts) global.saveContacts();
             result = { success: true, message: `Saved ${name} as ${phone}` };
+          } else if (fc.name === 'check_calendar') {
+            const days = fc.args.days || 1;
+            if (global.fetchCalendarEvents) {
+              const events = await global.fetchCalendarEvents(days);
+              if (events.length === 0) {
+                result = { found: false, message: `No events in the next ${days} day(s)` };
+              } else {
+                result = { found: true, count: events.length, events: events.slice(0, 5).map(e => ({
+                  title: e.title,
+                  start: e.start?.toLocaleString('he-IL', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
+                  location: e.location || undefined,
+                })) };
+              }
+            } else {
+              result = { error: 'Calendar not configured' };
+            }
+          } else if (fc.name === 'add_calendar_event') {
+            const { title, date, time, duration, location } = fc.args;
+            // Add to internal scheduler
+            const [hh, mm] = time.split(':').map(Number);
+            const jobTime = time;
+            const job = { id: `cal-${Date.now()}`, name: title, target: '', message: `תזכורת: ${title}`, time: jobTime, repeat: 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+            const next = new Date(`${date}T${time}:00`);
+            job.nextAt = next.getTime();
+            (global.scheduledJobs || []).push(job);
+            if (global.saveScheduler) global.saveScheduler();
+            // Send Google Calendar link via Telegram
+            const startDt = `${date.replace(/-/g,'')}T${time.replace(':','')}00`;
+            const endDt = (() => { const e = new Date(next.getTime() + (duration || 60) * 60000); return e.toISOString().replace(/[-:]/g,'').slice(0,15); })();
+            const gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDt}/${endDt}${location ? '&location=' + encodeURIComponent(location) : ''}`;
+            if (global.sendTelegramMessage) {
+              global.sendTelegramMessage(`📅 <b>אירוע חדש נוסף</b>\n📌 ${title}\n🕐 ${date} ${time}\n<a href="${gcUrl}">הוסף לGoogle Calendar</a>`);
+            }
+            result = { success: true, message: `Event "${title}" scheduled for ${date} at ${time}. A Google Calendar link was sent to Telegram.` };
           } else if (fc.name === 'control_home_assistant') {
             const { domain, service, entity_id } = fc.args;
             if (global.callHaService) {
