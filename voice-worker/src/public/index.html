@@ -45,6 +45,14 @@
   .chat-box { display: flex; gap: 8px; margin-top: 12px; }
   .chat-box input { flex: 1; }
   #chat-out { background: #0a0c14; border-radius: 8px; padding: 12px; min-height: 80px; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap; }
+  .conn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .conn-item { background: #0f1117; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 10px; }
+  .conn-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .conn-dot.ok { background: #22c55e; box-shadow: 0 0 5px #22c55e; }
+  .conn-dot.err { background: #ef4444; box-shadow: 0 0 5px #ef4444; }
+  .conn-dot.na { background: #64748b; }
+  .conn-item .conn-label { font-size: 13px; font-weight: 600; }
+  .conn-item .conn-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -65,6 +73,18 @@
       <div class="stat"><div class="val" id="stat-active">—</div><div class="lbl">שיחות פעילות</div></div>
       <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl">ממוצע (שניות)</div></div>
       <div class="stat"><div class="val" id="stat-errors">—</div><div class="lbl">שגיאות</div></div>
+    </div>
+  </div>
+
+  <!-- Connection Status -->
+  <div class="card">
+    <h2>סטטוס חיבורים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadStatus()">רענן</button></h2>
+    <div class="conn-grid" id="conn-grid">
+      <div class="conn-item"><div class="conn-dot na" id="cs-dot-drachtio"></div><div><div class="conn-label">Drachtio SIP</div><div class="conn-sub" id="cs-sub-drachtio">בודק...</div></div></div>
+      <div class="conn-item"><div class="conn-dot na" id="cs-dot-sip"></div><div><div class="conn-label" id="cs-label-sip">SIP Trunk</div><div class="conn-sub" id="cs-sub-sip">בודק...</div></div></div>
+      <div class="conn-item"><div class="conn-dot na" id="cs-dot-teamy"></div><div><div class="conn-label">Teamy</div><div class="conn-sub" id="cs-sub-teamy">לא מוגדר</div></div></div>
+      <div class="conn-item"><div class="conn-dot na" id="cs-dot-openclaw"></div><div><div class="conn-label">OpenClaw</div><div class="conn-sub" id="cs-sub-openclaw">לא מוגדר</div></div></div>
+      <div class="conn-item"><div class="conn-dot na" id="cs-dot-ha"></div><div><div class="conn-label">Home Assistant</div><div class="conn-sub" id="cs-sub-ha">לא מוגדר</div></div></div>
     </div>
   </div>
 
@@ -397,9 +417,49 @@ async function testIntegration(name) {
   } catch(e) { el.style.color = '#ef4444'; el.textContent = `${name}: ${e.message}`; }
 }
 
+function setConn(id, ok, sub) {
+  const dot = document.getElementById('cs-dot-' + id);
+  const subEl = document.getElementById('cs-sub-' + id);
+  if (dot) dot.className = 'conn-dot ' + (ok === true ? 'ok' : ok === false ? 'err' : 'na');
+  if (subEl) subEl.textContent = sub || '';
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(API + '/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Drachtio
+    setConn('drachtio', d.drachtio === 'connected', d.drachtio === 'connected' ? 'מחובר' : 'מנותק');
+
+    // SIP registration
+    const extKeys = Object.keys(d.sip || {});
+    const label = document.getElementById('cs-label-sip');
+    const providerNames = { '3cx': '3CX', zadarma: 'Zadarma', twilio: 'Twilio', custom: 'Custom SIP', '': 'SIP Trunk' };
+    if (label) label.textContent = providerNames[d.sipProvider] || 'SIP Trunk';
+    if (extKeys.length > 0) {
+      const ext = extKeys[0];
+      const reg = d.sip[ext];
+      setConn('sip', true, `שלוחה ${ext} — רשום (${reg.age}s)`);
+    } else {
+      setConn('sip', false, d.sipExtension ? `שלוחה ${d.sipExtension} — לא רשום` : 'לא מוגדר');
+    }
+
+    // Integrations
+    for (const name of ['teamy', 'openclaw', 'ha']) {
+      const s = d.integrations?.[name];
+      if (!s || s.ok === null) setConn(name, null, 'לא מוגדר / כבוי');
+      else if (s.ok) setConn(name, true, `מחובר (HTTP ${s.status || '2xx'})`);
+      else setConn(name, false, s.error || 'שגיאה');
+    }
+  } catch(e) { console.error(e); }
+}
+
 function refresh() {
   loadHealth();
   loadMetrics();
+  loadStatus();
 }
 
 loadSettings();

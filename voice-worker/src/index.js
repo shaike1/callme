@@ -417,6 +417,60 @@ app.post('/call', async (req, res) => {
   }
 });
 
+// ── Connection status ─────────────────────────────────────────────────────
+// Tracks SIP registration + integration test results for the dashboard
+let sipRegistrar = null;
+const integrationStatus = {}; // { teamy: {ok, ts, error}, openclaw: {...}, ha: {...} }
+
+app.get('/api/status', async (req, res) => {
+  // SIP registration
+  const sipRegs = {};
+  if (sipRegistrar) {
+    for (const [ext, reg] of sipRegistrar.registrations.entries()) {
+      sipRegs[ext] = { registered: true, age: Math.round((Date.now() - reg.registeredAt) / 1000) };
+    }
+  }
+  // Integration ping (cached, updated every 30s)
+  const now = Date.now();
+  const intResults = {};
+  for (const name of ['teamy', 'openclaw', 'ha']) {
+    const cached = integrationStatus[name];
+    if (cached && (now - cached.ts) < 30000) {
+      intResults[name] = cached;
+    } else {
+      const cfg = integrations[name];
+      if (!cfg?.url || !cfg?.enabled) {
+        intResults[name] = integrationStatus[name] = { ok: null, ts: now, error: 'not configured' };
+      } else {
+        const testUrl = name === 'teamy' ? cfg.url + '/api/bots' :
+                        name === 'openclaw' ? cfg.url + '/health' :
+                        cfg.url + '/api/config';
+        const result = await new Promise((resolve) => {
+          try {
+            const urlObj = new URL(testUrl);
+            const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
+            const opts = { hostname: urlObj.hostname, port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80), path: urlObj.pathname, method: 'GET', timeout: 4000 };
+            if (cfg.token && cfg.token !== '✓ set') opts.headers = { Authorization: `Bearer ${cfg.token}` };
+            const req2 = mod.request(opts, r => resolve({ ok: r.statusCode < 500, status: r.statusCode }));
+            req2.on('error', e => resolve({ ok: false, error: e.message }));
+            req2.on('timeout', () => resolve({ ok: false, error: 'timeout' }));
+            req2.end();
+          } catch(e) { resolve({ ok: false, error: e.message }); }
+        });
+        intResults[name] = integrationStatus[name] = { ...result, ts: now };
+      }
+    }
+  }
+  res.json({
+    drachtio: (srf._conn && !srf._conn.destroyed) ? 'connected' : 'disconnected',
+    sip: sipRegs,
+    sipProvider: botSettings.sipProvider || '3cx',
+    sipDomain: botSettings.sipServer || process.env.SIP_DOMAIN || '',
+    sipExtension: botSettings.sipExtension || process.env.SIP_EXTENSION || '',
+    integrations: intResults,
+  });
+});
+
 // Start health server
 app.listen(config.healthPort, '0.0.0.0', () => {
   logger.info(`Health server listening on port ${config.healthPort}`);
@@ -459,6 +513,7 @@ srf.on('connect', (err, hostport) => {
       local_port: parseInt(process.env.DRACHTIO_SIP_PORT || '5070'),
     });
 
+    sipRegistrar = registrar;
     registrar.registerAll({
       [process.env.SIP_EXTENSION]: {
         name: `ext-${process.env.SIP_EXTENSION}`,
