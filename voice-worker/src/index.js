@@ -164,6 +164,12 @@ const defaultSettings = {
   twilioAuthToken: '',
   twilioPhoneNumber: '',   // e.g. +19725551234
   twilioPublicUrl: '',     // e.g. https://callme.right-api.com
+  // Vonage integration (PSTN DID → Gemini Live via WebSocket — native 16kHz PCM)
+  vonageApiKey: '',
+  vonageApiSecret: '',
+  vonagePhoneNumber: '',   // e.g. 972501234567
+  vonagePublicUrl: '',     // e.g. https://callme.right-api.com
+  vonageAppId: '',         // Vonage Voice Application ID
 };
 
 let botSettings = { ...defaultSettings };
@@ -230,6 +236,12 @@ app.post('/api/settings', (req, res) => {
   if (twilioAuthToken !== undefined && twilioAuthToken !== '') botSettings.twilioAuthToken = twilioAuthToken;
   if (twilioPhoneNumber !== undefined) botSettings.twilioPhoneNumber = twilioPhoneNumber;
   if (twilioPublicUrl !== undefined) botSettings.twilioPublicUrl = twilioPublicUrl;
+  const { vonageApiKey, vonageApiSecret, vonagePhoneNumber, vonagePublicUrl, vonageAppId } = req.body || {};
+  if (vonageApiKey !== undefined) botSettings.vonageApiKey = vonageApiKey;
+  if (vonageApiSecret !== undefined && vonageApiSecret !== '') botSettings.vonageApiSecret = vonageApiSecret;
+  if (vonagePhoneNumber !== undefined) botSettings.vonagePhoneNumber = vonagePhoneNumber;
+  if (vonagePublicUrl !== undefined) botSettings.vonagePublicUrl = vonagePublicUrl;
+  if (vonageAppId !== undefined) botSettings.vonageAppId = vonageAppId;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -1403,6 +1415,151 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
   logger.info('Browser WebCall WS attached to port', { port: config.healthPort });
 }
 
+// ── Vonage Voice integration — PSTN DID → Gemini Live via WebSocket ─────────
+
+// Downsample 24kHz → 16kHz (linear interpolation, 3:2 ratio)
+function downsample24to16(pcm24) {
+  const outLen = Math.floor(pcm24.length * 2 / 3);
+  const out = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const src = i * 1.5;
+    const lo = Math.floor(src), hi = Math.min(lo + 1, pcm24.length - 1);
+    out[i] = Math.round(pcm24[lo] * (1 - (src - lo)) + pcm24[hi] * (src - lo));
+  }
+  return out;
+}
+
+// Vonage REST helper
+function vonageRequest(method, path, body) {
+  const key = botSettings.vonageApiKey;
+  const secret = botSettings.vonageApiSecret;
+  if (!key || !secret) return Promise.reject(new Error('Vonage not configured'));
+  return new Promise((resolve, reject) => {
+    const qs = `api_key=${encodeURIComponent(key)}&api_secret=${encodeURIComponent(secret)}`;
+    const fullPath = path.includes('?') ? `${path}&${qs}` : `${path}?${qs}`;
+    const bodyStr = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname: 'rest.nexmo.com',
+      path: fullPath,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+      },
+      timeout: 10000,
+    };
+    const req2 = require('https').request(opts, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks).toString()) }); }
+        catch { resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString() }); }
+      });
+    });
+    req2.on('error', reject);
+    req2.on('timeout', () => { req2.destroy(); reject(new Error('Vonage timeout')); });
+    if (bodyStr) req2.write(bodyStr);
+    req2.end();
+  });
+}
+
+// NCCO webhook — Vonage calls this when a call arrives on the DID
+app.get('/api/vonage/voice', (req, res) => {
+  const publicUrl = botSettings.vonagePublicUrl || `https://${req.headers.host}`;
+  const streamUrl = publicUrl.replace(/^https?/, 'wss') + '/api/vonage/stream';
+  res.json([{
+    action: 'connect',
+    endpoint: [{
+      type: 'websocket',
+      uri: streamUrl,
+      'content-type': 'audio/l16;rate=16000',
+      headers: { callId: req.query.uuid || '' },
+    }],
+  }]);
+  logger.info('Vonage NCCO webhook', { streamUrl, uuid: req.query.uuid });
+});
+
+app.post('/api/vonage/voice', (req, res) => {
+  // Same as GET — Vonage may POST depending on config
+  const publicUrl = botSettings.vonagePublicUrl || `https://${req.headers.host}`;
+  const streamUrl = publicUrl.replace(/^https?/, 'wss') + '/api/vonage/stream';
+  res.json([{
+    action: 'connect',
+    endpoint: [{
+      type: 'websocket',
+      uri: streamUrl,
+      'content-type': 'audio/l16;rate=16000',
+      headers: { callId: req.body?.uuid || req.query.uuid || '' },
+    }],
+  }]);
+});
+
+// Vonage event webhook (required by Vonage)
+app.post('/api/vonage/event', (req, res) => {
+  logger.info('Vonage call event', { event: req.body?.status, uuid: req.body?.uuid });
+  res.status(200).end();
+});
+
+// List owned Vonage numbers
+app.get('/api/vonage/numbers', async (req, res) => {
+  try {
+    const r = await vonageRequest('GET', '/account/numbers');
+    if (r.status !== 200) return res.status(r.status).json({ error: r.data?.error_title || 'Vonage error' });
+    const numbers = (r.data.numbers || []).map(n => ({
+      msisdn: n.msisdn, country: n.country, type: n.type, voiceCallbackValue: n.voiceCallbackValue
+    }));
+    res.json({ numbers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Configure a Vonage number to route to our NCCO webhook
+app.post('/api/vonage/configure/:msisdn', async (req, res) => {
+  const publicUrl = botSettings.vonagePublicUrl || `https://${req.headers.host}`;
+  const voiceUrl = publicUrl.replace(/\/+$/, '') + '/api/vonage/voice';
+  try {
+    const r = await vonageRequest('POST', '/number/update', {
+      country: req.body?.country || 'IL',
+      msisdn: req.params.msisdn,
+      'voiceCallbackType': 'app',
+      'voiceCallbackValue': voiceUrl,
+    });
+    if (r.status < 300) res.json({ ok: true, voiceUrl });
+    else res.status(r.status).json({ error: r.data?.error_title || 'Vonage error' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Search available Vonage numbers
+app.get('/api/vonage/search', async (req, res) => {
+  const country = req.query.country || 'IL';
+  const pattern = req.query.pattern || '';
+  try {
+    const path = `/number/search?country=${country}${pattern ? '&pattern=' + encodeURIComponent(pattern) : ''}&features=VOICE&size=10`;
+    const r = await vonageRequest('GET', path);
+    if (r.status !== 200) return res.status(r.status).json({ error: r.data?.error_title || 'Vonage error' });
+    const numbers = (r.data.numbers || []).slice(0, 10).map(n => ({
+      msisdn: n.msisdn, country: n.country, cost: n.cost, type: n.type
+    }));
+    res.json({ numbers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Buy a Vonage number
+app.post('/api/vonage/buy', async (req, res) => {
+  const { msisdn, country } = req.body || {};
+  if (!msisdn) return res.status(400).json({ error: 'msisdn required' });
+  const publicUrl = botSettings.vonagePublicUrl || `https://${req.headers.host}`;
+  const voiceUrl = publicUrl.replace(/\/+$/, '') + '/api/vonage/voice';
+  try {
+    const buyR = await vonageRequest('POST', '/number/buy', { country: country || 'IL', msisdn });
+    if (buyR.status >= 300) return res.status(buyR.status).json({ error: buyR.data?.error_title || 'Buy failed' });
+    // Configure webhook
+    await vonageRequest('POST', '/number/update', { country: country || 'IL', msisdn, voiceCallbackType: 'app', voiceCallbackValue: voiceUrl });
+    botSettings.vonagePhoneNumber = msisdn;
+    saveSettings();
+    res.json({ ok: true, msisdn });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Twilio Media Streams WebSocket handler ─────────────────────────────────
 {
   const { Server: WsServer } = require('ws');
@@ -1514,6 +1671,115 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
   });
 
   logger.info('Twilio Media Streams WS attached to port', { port: config.healthPort });
+}
+
+// ── Vonage WebSocket Audio handler ─────────────────────────────────────────
+{
+  const { Server: WsServer } = require('ws');
+  const GeminiLiveSession = require('./gemini-live/session');
+
+  const vonageWss = new WsServer({ server: httpServer, path: '/api/vonage/stream' });
+
+  vonageWss.on('connection', (ws) => {
+    const callId = `vonage-${Date.now()}`;
+    logger.info('Vonage WS stream connected', { callId });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { ws.close(1011, 'GEMINI_API_KEY not configured'); return; }
+
+    let session = null;
+    let configured = false;
+    let audioChunks = [];
+
+    const flushToVonage = () => {
+      if (!audioChunks.length) return;
+      const pcm24 = Buffer.concat(audioChunks); audioChunks = [];
+      const samples24 = new Int16Array(pcm24.buffer, pcm24.byteOffset, Math.floor(pcm24.length / 2));
+      const samples16 = downsample24to16(samples24);
+      ws.send(Buffer.from(samples16.buffer));
+    };
+
+    let waitingForGemini = false;
+    const SPEECH_RMS_THRESHOLD = 400;
+    const SILENCE_FRAMES_NEEDED = 20;
+    const MIN_SPEECH_FRAMES = 15;
+    let speaking = false, silenceCount = 0, speechCount = 0, waitingTimer = null;
+
+    const calcRms = (buf) => {
+      const s = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
+      let sum = 0; for (let i = 0; i < s.length; i++) sum += s[i] * s[i];
+      return Math.sqrt(sum / s.length);
+    };
+
+    const startSession = async () => {
+      const settings = global.botSettings || {};
+      session = new GeminiLiveSession({
+        callId, apiKey,
+        systemPrompt: settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+        language: settings.language || 'he',
+        voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: settings.voice || 'Kore' } } },
+      });
+      session.on('audio', (chunk) => {
+        audioChunks.push(chunk);
+        if (audioChunks.reduce((s, c) => s + c.length, 0) >= 32000) flushToVonage();
+      });
+      session.on('turn_complete', () => { flushToVonage(); waitingForGemini = false; });
+      session.on('interrupted', () => { audioChunks = []; waitingForGemini = false; });
+      session.on('input_transcript', (t) => logger.info('Vonage caller said', { callId, t }));
+      session.on('output_transcript', (t) => logger.info('Vonage bot said', { callId, t }));
+      session.on('error', (err) => logger.error('Vonage Gemini error', { callId, error: err.message }));
+      await session.connect();
+      session.sendText((global.botSettings || {}).greeting || 'שלום! איך אני יכול לעזור?');
+      logger.info('Vonage Gemini session ready', { callId });
+    };
+
+    ws.on('message', async (data, isBinary) => {
+      if (!configured) {
+        // First message may be JSON metadata from Vonage
+        if (!isBinary) {
+          try {
+            const meta = JSON.parse(data.toString());
+            logger.info('Vonage WS metadata', { callId, meta });
+          } catch(_) {}
+          try { await startSession(); } catch(err) { logger.error('Vonage session start failed', { callId, error: err.message }); }
+          configured = true;
+          return;
+        }
+        // If first message is binary (some Vonage versions), start immediately
+        try { await startSession(); } catch(err) { logger.error('Vonage session start failed', { callId, error: err.message }); }
+        configured = true;
+      }
+
+      if (!isBinary || !session || waitingForGemini) return;
+
+      // Vonage sends 16kHz linear16 PCM directly — no conversion needed for Gemini input
+      const rms = calcRms(data);
+      if (rms > SPEECH_RMS_THRESHOLD) {
+        silenceCount = 0; speechCount++;
+        if (!speaking && speechCount >= 2) { speaking = true; session.sendActivityStart(); }
+        if (speaking) session.sendAudio(data);
+      } else if (speaking) {
+        silenceCount++; session.sendAudio(data);
+        if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+          if (speechCount >= MIN_SPEECH_FRAMES) {
+            session.sendActivityEnd(); waitingForGemini = true;
+            if (waitingTimer) clearTimeout(waitingTimer);
+            waitingTimer = setTimeout(() => { waitingForGemini = false; }, 10000);
+          } else { session.sendActivityEnd(); }
+          speaking = false; silenceCount = 0; speechCount = 0;
+        }
+      } else { speechCount = 0; }
+    });
+
+    ws.on('close', () => {
+      logger.info('Vonage WS closed', { callId });
+      if (waitingTimer) clearTimeout(waitingTimer);
+      if (session) { try { if (speaking) session.sendActivityEnd(); session.close(); } catch(_) {} }
+    });
+    ws.on('error', (err) => logger.error('Vonage WS error', { callId, error: err.message }));
+  });
+
+  logger.info('Vonage WebSocket handler attached to port', { port: config.healthPort });
 }
 
 // Connect to Drachtio

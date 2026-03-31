@@ -326,6 +326,31 @@
     </div>
   </div>
 
+  <!-- Vonage DID -->
+  <div class="card">
+    <h2>📞 Vonage — מספר טלפון PSTN</h2>
+    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
+      שיחות PSTN דרך Vonage → WebSocket 16kHz ישיר לGemini Live. פשוט יותר מTwilio — אין codec.
+    </div>
+    <div class="form-row"><label>API Key</label><input id="s-vonageKey" placeholder="xxxxxxxx" style="direction:ltr"></div>
+    <div class="form-row"><label>API Secret</label><input id="s-vonageSecret" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="form-row"><label>Public URL</label><input id="s-vonageUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div class="btn-row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveVonageSettings()">שמור</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadVonageNumbers()">טען מספרים</button>
+    </div>
+    <div id="vonage-numbers" style="margin-top:12px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #2d3148;padding-top:14px">
+      <b style="font-size:13px">חפש מספר חדש</b>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <input id="vonage-country" placeholder="IL" style="width:60px;direction:ltr">
+        <input id="vonage-pattern" placeholder="Pattern (אופציונלי)" style="flex:1;direction:ltr">
+        <button class="btn btn-sm btn-primary" onclick="searchVonageNumbers()">חפש</button>
+      </div>
+      <div id="vonage-search-results" style="margin-top:10px;font-size:13px"></div>
+    </div>
+  </div>
+
   <!-- WhatsApp notifications -->
   <div class="card">
     <h2>💬 WhatsApp — התראות</h2>
@@ -452,6 +477,8 @@ async function loadSettings() {
     document.getElementById('s-whatsappCallSummary').checked = !!s.whatsappCallSummary;
     document.getElementById('s-twilioSid').value = s.twilioAccountSid || '';
     document.getElementById('s-twilioUrl').value = s.twilioPublicUrl || location.origin;
+    document.getElementById('s-vonageKey').value = s.vonageApiKey || '';
+    document.getElementById('s-vonageUrl').value = s.vonagePublicUrl || location.origin;
     onProviderChange();
   } catch(e) { console.error(e); }
 }
@@ -901,6 +928,73 @@ function refresh() {
   loadHealth();
   loadMetrics();
   loadStatus();
+}
+
+// ── Vonage ────────────────────────────────────────────────────────────────
+async function saveVonageSettings() {
+  const body = { vonageApiKey: document.getElementById('s-vonageKey').value.trim(), vonagePublicUrl: document.getElementById('s-vonageUrl').value.trim() };
+  const secret = document.getElementById('s-vonageSecret').value;
+  if (secret) body.vonageApiSecret = secret;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('הגדרות Vonage נשמרו ✓'); document.getElementById('s-vonageSecret').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadVonageNumbers() {
+  const el = document.getElementById('vonage-numbers');
+  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/vonage/numbers');
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">אין מספרים בחשבון</em>'; return; }
+    el.innerHTML = '<b style="font-size:12px">מספרים קיימים:</b><br>' + nums.map(n => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2d3148">
+        <span style="direction:ltr">${n.msisdn} <span style="color:#8892a4">${n.country}</span></span>
+        <button class="btn btn-sm" style="background:#2d3148" onclick="configVonageNumber('${n.msisdn}','${n.country}')">הפנה לבוט</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function configVonageNumber(msisdn, country) {
+  try {
+    const r = await fetch(`${API}/api/vonage/configure/${msisdn}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ country }) });
+    const d = await r.json();
+    if (d.ok) toast('מספר הוגדר ✓ — Webhook: ' + d.voiceUrl);
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function searchVonageNumbers() {
+  const el = document.getElementById('vonage-search-results');
+  const country = document.getElementById('vonage-country').value.trim() || 'IL';
+  const pattern = document.getElementById('vonage-pattern').value.trim();
+  el.innerHTML = '<em style="color:#8892a4">מחפש...</em>';
+  try {
+    const r = await fetch(`${API}/api/vonage/search?country=${country}&pattern=${encodeURIComponent(pattern)}`);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #2d3148">
+        <span style="direction:ltr">${n.msisdn} <span style="color:#8892a4">${n.country} · €${n.cost}/חודש</span></span>
+        <button class="btn btn-sm btn-primary" onclick="buyVonageNumber('${n.msisdn}','${n.country}')">קנה</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function buyVonageNumber(msisdn, country) {
+  if (!confirm(`לקנות ${msisdn}?`)) return;
+  try {
+    const r = await fetch(`${API}/api/vonage/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ msisdn, country }) });
+    const d = await r.json();
+    if (d.ok) { toast('נרכש ✓ ' + d.msisdn); loadVonageNumbers(); }
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 // ── Twilio ────────────────────────────────────────────────────────────────

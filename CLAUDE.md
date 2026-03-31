@@ -1,246 +1,75 @@
-# Claude Phone
+# Claude Telegram Relay
 
-Voice interface for Claude Code via SIP/3CX. Call your AI, and your AI can call you.
+You are running on a **headless server** as part of the Relay system. The human user communicates with you **exclusively through Telegram** — not through this terminal.
 
-## Project Overview
+## Critical: this terminal is not your interface
 
-Claude Phone gives your Claude Code installation a phone number through 3CX PBX integration:
-- **Inbound**: Call an extension and talk to Claude - run commands, check status, ask questions
-- **Outbound**: Your server can call YOU with alerts, then have a conversation about what to do
+Messages typed into this terminal are relayed from Telegram by the Relay bot. **The user cannot see your terminal output.** Your only way to reach them is the `telegram` MCP server.
 
-## Tech Stack
+For **every** message you receive — whether via `notifications/claude/channel`, keyboard input, or any other means:
 
-| Component | Technology |
-|-----------|------------|
-| Language | Node.js (ES modules for CLI, CommonJS for voice-app) |
-| SIP Server | drachtio-srf |
-| Media Server | FreeSWITCH (via drachtio-fsmrf) |
-| STT | OpenAI Whisper API |
-| TTS | ElevenLabs API |
-| AI Backend | Claude Code CLI (via HTTP wrapper) |
-| PBX | 3CX (any SIP-compatible works) |
-| Container | Docker Compose |
+1. Call `typing` immediately so the user sees you're working
+2. Do the work (run commands, edit files, check logs, etc.)
+3. Call `send_message` with your response
 
-## Architecture
+**Never write responses to this terminal.** The user cannot see them.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Phone Call                                                  │
-│      │                                                       │
-│      ↓ Call extension 9000                                  │
-│  ┌─────────────┐                                            │
-│  │     3CX     │  ← PBX routes the call                    │
-│  └──────┬──────┘                                            │
-│         │ SIP                                               │
-│         ↓                                                    │
-│  ┌─────────────────────────────────────────────────┐       │
-│  │           voice-app (Docker)                     │       │
-│  │  ┌─────────────────────────────────────────┐   │       │
-│  │  │ drachtio  │  FreeSWITCH  │  Node.js     │   │       │
-│  │  │ (SIP)     │  (Media)     │  (Logic)     │   │       │
-│  │  └─────────────────────────────────────────┘   │       │
-│  └────────────────────┬────────────────────────────┘       │
-│                       │ HTTP                                │
-│                       ↓                                      │
-│  ┌─────────────────────────────────────────────────┐       │
-│  │   claude-api-server                              │       │
-│  │   Wraps Claude Code CLI with session management │       │
-│  └─────────────────────────────────────────────────┘       │
-└─────────────────────────────────────────────────────────────┘
-```
+**Never send terminal content to Telegram.** Do NOT include in `send_message`: Claude Code TUI output, tool call displays (`● Bash(...)`, `⎿ ...`), tmux pane content, ASCII art headers, or any raw terminal output. Send only clean, human-readable text.
 
-## Directory Structure
+## Formatting rules
 
-```
-claude-phone/
-├── CLAUDE.md                 # This file
-├── CONSTITUTION.md           # DevFlow 2.0 development principles
-├── README.md                 # User-facing documentation
-├── install.sh                # One-command installer
-├── package.json              # Root package (hooks, linting, tests)
-├── eslint.config.js          # ESLint configuration
-├── docker-compose.yml        # Multi-container orchestration
-├── .env.example              # Environment template
-│
-├── .claude/commands/         # DevFlow slash commands
-│   ├── feature.md            # /feature spec|start|ship
-│   ├── test.md               # /test
-│   ├── fix.md                # /fix [N]
-│   ├── issues.md             # /issues
-│   ├── investigate.md        # /investigate
-│   ├── project.md            # /project
-│   ├── batch.md              # /batch
-│   └── design.md             # /design
-│
-├── cli/                      # Unified CLI tool
-│   ├── package.json
-│   ├── README.md
-│   ├── bin/
-│   │   ├── claude-phone.js   # CLI entry point
-│   │   └── cli-main.js       # Command definitions
-│   ├── lib/
-│   │   ├── commands/         # Command implementations
-│   │   │   ├── setup.js      # Interactive setup wizard
-│   │   │   ├── start.js      # Start services
-│   │   │   ├── stop.js       # Stop services
-│   │   │   ├── status.js     # Service status
-│   │   │   ├── doctor.js     # Health checks
-│   │   │   ├── api-server.js # Start API server standalone
-│   │   │   ├── logs.js       # Tail service logs
-│   │   │   ├── backup.js     # Create backups
-│   │   │   ├── restore.js    # Restore backups
-│   │   │   ├── update.js     # Self-update
-│   │   │   ├── uninstall.js  # Clean removal
-│   │   │   ├── config/       # Config subcommands
-│   │   │   │   ├── show.js
-│   │   │   │   ├── path.js
-│   │   │   │   └── reset.js
-│   │   │   └── device/       # Device subcommands
-│   │   │       ├── add.js
-│   │   │       ├── list.js
-│   │   │       └── remove.js
-│   │   ├── config.js         # Config read/write
-│   │   ├── docker.js         # Docker compose wrapper
-│   │   ├── network.js        # Network utilities
-│   │   ├── platform.js       # Platform detection
-│   │   ├── port-check.js     # Port availability checks
-│   │   ├── prereqs.js        # Prerequisite checks
-│   │   ├── prerequisites.js  # Pi-specific prereqs
-│   │   ├── process-manager.js# PID-based process management
-│   │   ├── utils.js          # Shared utilities
-│   │   └── validators.js     # API key validation
-│   └── test/                 # Test suite
-│
-├── voice-app/                # Docker container for voice handling
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── index.js              # Main entry point
-│   ├── config/
-│   │   └── devices.json      # Device configurations
-│   ├── lib/
-│   │   ├── audio-fork.js     # WebSocket audio streaming
-│   │   ├── claude-bridge.js  # HTTP client for Claude API
-│   │   ├── connection-retry.js # Connection retry logic
-│   │   ├── conversation-loop.js  # Core conversation flow
-│   │   ├── device-registry.js    # Multi-device management
-│   │   ├── http-server.js    # Express server for audio/API
-│   │   ├── logger.js         # Logging utility
-│   │   ├── multi-registrar.js    # Multi-extension SIP registration
-│   │   ├── outbound-handler.js   # Outbound call logic
-│   │   ├── outbound-routes.js    # Outbound API endpoints
-│   │   ├── outbound-session.js   # Outbound call sessions
-│   │   ├── query-routes.js   # Query API endpoints
-│   │   ├── registrar.js      # Single SIP registration
-│   │   ├── sip-handler.js    # Inbound call handling
-│   │   ├── tts-service.js    # ElevenLabs TTS
-│   │   └── whisper-client.js # OpenAI Whisper STT
-│   ├── DEPLOYMENT.md         # Production deployment guide
-│   ├── README-OUTBOUND.md    # Outbound calling API docs
-│   └── API-QUERY-CONTRACT.md # Query API specification
-│
-├── claude-api-server/        # HTTP wrapper for Claude CLI
-│   ├── package.json
-│   ├── server.js             # Express server
-│   └── structured.js         # JSON validation helpers
-│
-├── docs/
-│   └── TROUBLESHOOTING.md    # Troubleshooting guide
-│
-└── src/features/             # DevFlow feature specs (planning docs)
-    └── */SPEC.md, PLAN.md, TASKS.md
-```
+- Short answers: plain text or `<code>` for commands/values
+- Code snippets: always wrap in `<pre>`
+- Lists: use `•` bullets, not markdown `-`
+- Never use markdown (`**`, `_`, ` ``` `) — Telegram uses HTML mode
+- Split very long responses into multiple `send_message` calls
 
-## CLI Commands
+## Working in this project
 
-```bash
-# One-line install
-curl -sSL https://raw.githubusercontent.com/shaike1/openclaw-3cx/main/install.sh | bash
+- You have full access to the project files in your working directory
+- Run commands, edit files, read logs — then report results via `send_message`
+- If a task will take a while, send a quick acknowledgement first, then the result
+- For long-running operations (builds, tests, deployments >2 min): send a brief progress update every few minutes so the user knows you're still working. Example: "עדיין רץ — build בעיצומו (3 דק׳)" or "בדיקות רצות, עוד רגע..."
 
-# Setup and run
-claude-phone setup    # Interactive configuration
-claude-phone start    # Launch services
-claude-phone stop     # Stop services
-claude-phone status   # Check status
-claude-phone doctor   # Health checks
-```
+## Example flow
 
-## Development
+User message arrives: "show me the last 20 lines of app.log"
 
-### Running Tests
+You:
+1. Call `typing`
+2. Run `tail -20 app.log`
+3. Call `send_message` with result wrapped in `<pre>`
 
-```bash
-npm test              # All tests
-npm run test:cli      # CLI tests only
-npm run test:voice-app # Voice app tests only
-```
+## Buttons — use them proactively
 
-### Linting
+Whenever you ask the user to choose or confirm, attach inline buttons instead of asking them to type:
 
-```bash
-npm run lint          # Check for issues
-npm run lint:fix      # Auto-fix issues
-```
+- Yes/No confirmation → `buttons: [["Yes", "No"]]`
+- Multiple options → `buttons: [["Option A", "Option B"], ["Option C"]]`
+- Proceed/Cancel → `buttons: [["Proceed", "Cancel"]]`
 
-### DevFlow Commands
+The clicked label arrives as a plain message. Always prefer buttons over "type 1 or 2".
 
-| Command | Purpose |
-|---------|---------|
-| `/feature spec [name]` | Create feature spec |
-| `/feature start [name]` | Build with TDD |
-| `/feature ship` | Review and merge |
-| `/test` | Run tests |
-| `/fix [N]` | Fix GitHub issue #N |
-| `/investigate [problem]` | Debug without changing code |
+## Persistent memory across restarts
 
-## API Endpoints
+Your memory directory survives both restarts and context compaction. Use it actively.
 
-### Voice App (port 3000)
+**On startup** — before responding to the first user message:
+1. Call `typing` then `send_message` immediately with a brief "I'm back" message — this forces the MCP to reconnect so the user knows you're online (e.g. "חזרתי ✓" or "Back online.")
+2. Check if `memory/session_context.md` exists (use the memory path from your system prompt)
+3. If it exists, read it and open with: "I remember working on [X]. Continuing from there." or similar
+4. If absent or empty, let the user know it's a fresh context
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/outbound-call` | Initiate outbound call |
-| GET | `/api/call/:callId` | Get call status |
-| GET | `/api/calls` | List active calls |
-| POST | `/api/query` | Query device programmatically |
-| GET | `/api/devices` | List configured devices |
+**After completing tasks or at natural break points:**
+Write/update `memory/session_context.md` with:
+- What was being worked on and current status
+- Key findings, decisions, or file changes
+- Any open questions or next steps
 
-### Claude API Server (port 3333)
+Keep it concise (under 20 lines). This is your safety net against context loss.
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/ask` | Send prompt to Claude |
-| POST | `/ask-structured` | Send prompt, return JSON |
-| POST | `/end-session` | Clean up session |
-| GET | `/health` | Health check |
+## Important
 
-## Key Design Decisions
-
-1. **CommonJS for voice-app** - Compatibility with drachtio ecosystem
-2. **ES Modules for CLI** - Modern Node.js tooling
-3. **Host networking mode** - Required for FreeSWITCH RTP
-4. **Separate claude-api-server** - Runs where Claude Code CLI is installed
-5. **Session-per-call** - Each call gets Claude session for multi-turn context
-6. **RTP ports 30000-30100** - Avoids conflict with 3CX SBC (uses 20000-20099)
-7. **Config in ~/.claude-phone** - User config separate from codebase
-
-## Environment Variables
-
-See `.env.example` for all variables. Key ones:
-
-| Variable | Purpose |
-|----------|---------|
-| `EXTERNAL_IP` | Server LAN IP for RTP routing |
-| `CLAUDE_API_URL` | URL to claude-api-server |
-| `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT API key |
-| `SIP_DOMAIN` | 3CX server FQDN |
-| `SIP_REGISTRAR` | SIP registrar address |
-
-## Documentation
-
-- [README.md](README.md) - User quickstart
-- [cli/README.md](cli/README.md) - CLI reference
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues
-- [voice-app/DEPLOYMENT.md](voice-app/DEPLOYMENT.md) - Production deployment
-- [voice-app/README-OUTBOUND.md](voice-app/README-OUTBOUND.md) - Outbound API
-- [CONSTITUTION.md](CONSTITUTION.md) - DevFlow principles
+- Always respond via `send_message` — never leave a message unanswered
+- If you're unsure what the user wants, ask in the topic
+- Stay focused on this project's context
