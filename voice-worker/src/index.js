@@ -72,6 +72,7 @@ app.use(requireAuth);
 
 // Serve dashboard
 app.use('/', express.static(path.join(__dirname, 'public')));
+app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
 
 // In-memory log ring buffer for dashboard /api/logs
 const LOG_RING = [];
