@@ -702,6 +702,70 @@ setInterval(async () => {
   }
 }, 30000);
 
+// ── Recordings (call transcripts) ────────────────────────────────────────
+const RECORDINGS_DIR = path.join(AUDIO_DIR, 'recordings');
+if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
+
+app.get('/api/recordings', (req, res) => {
+  try {
+    const files = fs.readdirSync(RECORDINGS_DIR).filter(f => f.endsWith('.json'));
+    const recordings = files.map(f => {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(RECORDINGS_DIR, f), 'utf8'));
+        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0 };
+      } catch (_) { return null; }
+    }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    res.json({ recordings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/recordings/:file', (req, res) => {
+  const filePath = path.join(RECORDINGS_DIR, path.basename(req.params.file));
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not found' });
+  try { res.json(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/recordings/:file', (req, res) => {
+  const filePath = path.join(RECORDINGS_DIR, path.basename(req.params.file));
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not found' });
+  fs.unlinkSync(filePath);
+  res.json({ success: true });
+});
+
+// ── Voicemails ────────────────────────────────────────────────────────────
+const VOICEMAILS_DIR = path.join(AUDIO_DIR, 'voicemails');
+if (!fs.existsSync(VOICEMAILS_DIR)) fs.mkdirSync(VOICEMAILS_DIR, { recursive: true });
+
+// Serve voicemail audio files
+app.use('/voicemail-audio', express.static(VOICEMAILS_DIR));
+
+app.get('/api/voicemails', (req, res) => {
+  try {
+    const files = fs.readdirSync(VOICEMAILS_DIR).filter(f => f.endsWith('.json'));
+    const vms = files.map(f => {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(VOICEMAILS_DIR, f), 'utf8'));
+        return { file: f, ...data };
+      } catch (_) { return null; }
+    }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    res.json({ voicemails: vms });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/voicemails/:file', (req, res) => {
+  const base = path.basename(req.params.file).replace('.json', '');
+  const jsonPath = path.join(VOICEMAILS_DIR, base + '.json');
+  const wavPath = path.join(VOICEMAILS_DIR, base + '.wav');
+  if (!fs.existsSync(jsonPath)) return res.status(404).json({ error: 'not found' });
+  fs.unlinkSync(jsonPath);
+  if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+  res.json({ success: true });
+});
+
 // ── Connection status ─────────────────────────────────────────────────────
 // Tracks SIP registration + integration test results for the dashboard
 let sipRegistrar = null;

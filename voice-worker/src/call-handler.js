@@ -10,6 +10,15 @@ const MAX_CALL_DURATION_MS = parseInt(process.env.MAX_CALL_DURATION_MS || '30000
 
 const geminiManager = new GeminiLiveManager();
 
+function calcRms(buf) {
+  let sum = 0;
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    const s = buf.readInt16LE(i);
+    sum += s * s;
+  }
+  return Math.sqrt(sum / (buf.length / 2));
+}
+
 function stripVideoFromSdp(sdp) {
   if (!sdp) return sdp;
   const lines = sdp.split('\n');
@@ -140,6 +149,8 @@ class CallHandler {
   // ── Gemini Live path ─────────────────────────────────────────────────────
 
   async _handleGeminiLiveCall(endpoint, dialog, callId, callerName = null) {
+    const callStartedAt = Date.now();
+    const transcript = [];
     const settings = global.botSettings || {};
     let systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
@@ -211,16 +222,23 @@ class CallHandler {
     }
 
     const voiceName = settings.voice || 'Kore';
-    const session = await geminiManager.getOrCreate(callId, {
-      systemPrompt,
-      language: process.env.CALL_LANGUAGE || 'he',
-      voiceConfig: {
-        voice_config: {
-          prebuilt_voice_config: { voice_name: voiceName }
-        }
-      },
-      tools: toolDeclarations,
-    });
+    let session;
+    try {
+      session = await geminiManager.getOrCreate(callId, {
+        systemPrompt,
+        language: process.env.CALL_LANGUAGE || 'he',
+        voiceConfig: {
+          voice_config: {
+            prebuilt_voice_config: { voice_name: voiceName }
+          }
+        },
+        tools: toolDeclarations,
+      });
+    } catch (err) {
+      logger.error('Gemini unavailable — voicemail mode', { callId, error: err.message });
+      await this._handleVoicemail(endpoint, dialog, callId, callerName);
+      return;
+    }
 
     let audioChunks = [];
 
@@ -230,10 +248,12 @@ class CallHandler {
 
     session.on('input_transcript', (text) => {
       logger.info('Caller said', { callId, text });
+      transcript.push({ role: 'user', text, ts: Date.now() });
     });
 
     session.on('output_transcript', (text) => {
       logger.info('Bot said', { callId, text });
+      transcript.push({ role: 'bot', text, ts: Date.now() });
     });
 
     // Suppress audio input until the first greeting has been played, then during
@@ -401,15 +421,6 @@ class CallHandler {
     const SILENCE_FRAMES_NEEDED = 20;  // ~400ms silence = end of utterance
     const MIN_SPEECH_FRAMES = 15;      // ~300ms minimum — filters noise but allows short Hebrew phrases through
 
-    const calcRms = (buf) => {
-      let sum = 0;
-      for (let i = 0; i + 1 < buf.length; i += 2) {
-        const s = buf.readInt16LE(i);
-        sum += s * s;
-      }
-      return Math.sqrt(sum / (buf.length / 2));
-    };
-
     let speaking = false;
     let silenceCount = 0;
     let speechCount = 0;
@@ -499,6 +510,95 @@ class CallHandler {
         resolve();
       }, MAX_CALL_DURATION_MS);
     });
+
+    // Save transcript after call ends
+    if (transcript.length > 0) {
+      const durationS = Math.round((Date.now() - callStartedAt) / 1000);
+      this._saveRecording(callId, callerName, durationS, transcript);
+    }
+  }
+
+  _saveRecording(callId, callerName, durationS, transcript) {
+    const recDir = path.join(this.audioDir, 'recordings');
+    try {
+      if (!fs.existsSync(recDir)) fs.mkdirSync(recDir, { recursive: true });
+      const safeName = callId.replace(/[^a-z0-9-]/gi, '_');
+      const filename = `${safeName}-${Date.now()}.json`;
+      const data = { callId, callerName, durationS, savedAt: new Date().toISOString(), transcript };
+      fs.writeFileSync(path.join(recDir, filename), JSON.stringify(data, null, 2));
+      logger.info('Transcript saved', { callId, filename, lines: transcript.length });
+    } catch (err) {
+      logger.error('Failed to save transcript', { callId, error: err.message });
+    }
+  }
+
+  async _handleVoicemail(endpoint, dialog, callId, callerName) {
+    const vmDir = path.join(this.audioDir, 'voicemails');
+    if (!fs.existsSync(vmDir)) fs.mkdirSync(vmDir, { recursive: true });
+    logger.info('Voicemail mode', { callId, callerName });
+
+    const voicemailChunks = [];
+    let done = false;
+    let silenceFrames = 0;
+    const SILENCE_FRAMES_NEEDED = 250; // ~5s at 20ms/frame
+    const MIN_FRAMES = 25; // ~500ms minimum to bother saving
+
+    let resolveVm;
+    const vmPromise = new Promise(r => { resolveVm = r; });
+
+    this.audioForkServer.register(callId, {
+      onAudio: (buf) => {
+        if (done) return;
+        voicemailChunks.push(buf);
+        const rms = calcRms(buf);
+        if (rms < 200) {
+          silenceFrames++;
+          if (silenceFrames >= SILENCE_FRAMES_NEEDED && voicemailChunks.length > MIN_FRAMES) {
+            done = true;
+            resolveVm();
+          }
+        } else {
+          silenceFrames = 0;
+        }
+      },
+      onClose: () => { if (!done) { done = true; resolveVm(); } }
+    });
+
+    const wsUrl = `ws://127.0.0.1:${WS_PORT}/${encodeURIComponent(callId)}`;
+    await endpoint.forkAudioStart({ wsUrl, mixType: 'mono', sampling: '16k' }).catch(() => {});
+
+    const timeout = setTimeout(() => { done = true; resolveVm(); }, 60000);
+    await Promise.race([vmPromise, new Promise(r => dialog.once('destroy', r))]);
+    clearTimeout(timeout);
+
+    if (voicemailChunks.length > MIN_FRAMES) {
+      try {
+        const { WaveFile } = require('wavefile');
+        const pcm = Buffer.concat(voicemailChunks);
+        const wav = new WaveFile();
+        const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2));
+        wav.fromScratch(1, 16000, '16', samples);
+        const ts = Date.now();
+        const safeName = callId.replace(/[^a-z0-9-]/gi, '_');
+        const wavFile = path.join(vmDir, `${safeName}-${ts}.wav`);
+        const metaFile = path.join(vmDir, `${safeName}-${ts}.json`);
+        fs.writeFileSync(wavFile, Buffer.from(wav.toBuffer()));
+        const durationS = Math.round(voicemailChunks.length * 20 / 1000);
+        fs.writeFileSync(metaFile, JSON.stringify({
+          callId, callerName, savedAt: new Date().toISOString(), durationS,
+          wavFile: path.basename(wavFile),
+        }, null, 2));
+        logger.info('Voicemail saved', { callId, wavFile, durationS });
+        if (global.sendTelegramMessage && (global.botSettings || {}).telegramCallSummary) {
+          const who = callerName || 'לא ידוע';
+          global.sendTelegramMessage(`📩 <b>הודעה קולית חדשה</b>\n👤 מ: ${who}\n⏱ ~${durationS}ש\n🆔 ${callId.slice(0,12)}`);
+        }
+      } catch (err) {
+        logger.error('Failed to save voicemail', { callId, error: err.message });
+      }
+    }
+
+    this.audioForkServer.unregister(callId);
   }
 
   async _savePcmAsWav(pcmBuffer, callId) {

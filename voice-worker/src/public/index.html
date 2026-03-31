@@ -300,6 +300,18 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
   </div>
 
+  <!-- Recordings (transcripts) -->
+  <div class="card">
+    <h2>תמלולים — שיחות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadRecordings()">רענן</button></h2>
+    <div id="recordings-list"><em style="color:#8892a4">טוען...</em></div>
+  </div>
+
+  <!-- Voicemails -->
+  <div class="card">
+    <h2>הודעות קוליות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadVoicemails()">רענן</button></h2>
+    <div id="voicemails-list"><em style="color:#8892a4">טוען...</em></div>
+  </div>
+
   <!-- Logs -->
   <div class="card">
     <h2>לוגים חיים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="clearLogs()">נקה</button></h2>
@@ -808,10 +820,82 @@ function refresh() {
   loadStatus();
 }
 
+// ── Recordings ────────────────────────────────────────────────────────────
+async function loadRecordings() {
+  const el = document.getElementById('recordings-list');
+  try {
+    const r = await fetch(`${API}/api/recordings`, {});
+    const d = await r.json();
+    const recs = d.recordings || [];
+    if (!recs.length) { el.innerHTML = '<em style="color:#8892a4">אין תמלולים עדיין</em>'; return; }
+    el.innerHTML = recs.map(rec => {
+      const dt = new Date(rec.savedAt).toLocaleString('he-IL');
+      const caller = rec.callerName || rec.callId?.slice(0,12) || '—';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2d3148">
+        <div>
+          <b>${caller}</b> &nbsp; ${dt} &nbsp;
+          <span style="color:#8892a4">${rec.durationS}ש | ${rec.lines} שורות</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="background:#2d3148" onclick="viewRecording('${rec.file}')">צפה</button>
+          <button class="btn btn-sm" style="background:#c62828" onclick="deleteRecording('${rec.file}')">מחק</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function viewRecording(file) {
+  const r = await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`, {});
+  const d = await r.json();
+  const lines = (d.transcript || []).map(l => `[${l.role === 'user' ? '👤' : '🤖'}] ${l.text}`).join('\n');
+  alert(`תמלול שיחה — ${d.callerName || d.callId}\nמשך: ${d.durationS}ש\n\n${lines || '(ריק)'}`);
+}
+
+async function deleteRecording(file) {
+  if (!confirm('למחוק תמלול זה?')) return;
+  await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  loadRecordings();
+}
+
+// ── Voicemails ────────────────────────────────────────────────────────────
+async function loadVoicemails() {
+  const el = document.getElementById('voicemails-list');
+  try {
+    const r = await fetch(`${API}/api/voicemails`, {});
+    const d = await r.json();
+    const vms = d.voicemails || [];
+    if (!vms.length) { el.innerHTML = '<em style="color:#8892a4">אין הודעות קוליות</em>'; return; }
+    el.innerHTML = vms.map(vm => {
+      const dt = new Date(vm.savedAt).toLocaleString('he-IL');
+      const caller = vm.callerName || '—';
+      const audioUrl = `${API}/voicemail-audio/${encodeURIComponent(vm.wavFile)}`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2d3148">
+        <div>
+          <b>${caller}</b> &nbsp; ${dt} &nbsp;
+          <span style="color:#8892a4">${vm.durationS}ש</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <audio controls src="${audioUrl}" style="height:28px;direction:ltr"></audio>
+          <button class="btn btn-sm" style="background:#c62828" onclick="deleteVoicemail('${vm.file}')">מחק</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function deleteVoicemail(file) {
+  if (!confirm('למחוק הודעה קולית זו?')) return;
+  await fetch(`${API}/api/voicemails/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  loadVoicemails();
+}
+
 loadSettings();
 loadIntegrations();
 loadContacts();
 loadScheduler();
+loadRecordings();
+loadVoicemails();
 refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);
