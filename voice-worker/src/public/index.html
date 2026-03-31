@@ -300,6 +300,26 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
   </div>
 
+  <!-- WhatsApp notifications -->
+  <div class="card">
+    <h2>💬 WhatsApp — התראות</h2>
+    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
+      הגדרה: שמור את המספר <b>+34 644 59 65 90</b> ושלח לו "I allow callmebot to send me messages" — תקבל apikey.
+    </div>
+    <div class="form-row"><label>מספר טלפון</label><input id="s-whatsappPhone" placeholder="+972501234567" style="direction:ltr"></div>
+    <div class="form-row"><label>API Key</label><input id="s-whatsappApiKey" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="form-row">
+      <label>התראות שיחה</label>
+      <label style="display:flex;align-items:center;gap:8px;padding-top:6px">
+        <input type="checkbox" id="s-whatsappCallSummary"> שלח סיכום אחרי כל שיחה / voicemail
+      </label>
+    </div>
+    <div class="btn-row" style="gap:8px">
+      <button class="btn btn-primary" onclick="saveWhatsappSettings()">שמור</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testWhatsapp()">שלח הודעת בדיקה</button>
+    </div>
+  </div>
+
   <!-- Calendar integration -->
   <div class="card">
     <h2>📅 Calendar — יומן</h2>
@@ -401,6 +421,9 @@ async function loadSettings() {
     if (s.telegramBotToken) document.getElementById('s-telegramBotToken').placeholder = '✓ set';
     document.getElementById('s-calendarUrl').value = s.calendarUrl || '';
     document.getElementById('s-calendarName').value = s.calendarName || '';
+    document.getElementById('s-whatsappPhone').value = s.whatsappPhone || '';
+    if (s.whatsappApiKey) document.getElementById('s-whatsappApiKey').placeholder = '✓ set';
+    document.getElementById('s-whatsappCallSummary').checked = !!s.whatsappCallSummary;
     onProviderChange();
   } catch(e) { console.error(e); }
 }
@@ -850,6 +873,30 @@ function refresh() {
   loadHealth();
   loadMetrics();
   loadStatus();
+}
+
+// ── WhatsApp ──────────────────────────────────────────────────────────────
+async function saveWhatsappSettings() {
+  const body = {
+    whatsappPhone: document.getElementById('s-whatsappPhone').value.trim(),
+    whatsappCallSummary: document.getElementById('s-whatsappCallSummary').checked,
+  };
+  const key = document.getElementById('s-whatsappApiKey').value;
+  if (key) body.whatsappApiKey = key;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('הגדרות WhatsApp נשמרו ✓'); document.getElementById('s-whatsappApiKey').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function testWhatsapp() {
+  try {
+    const r = await fetch(API + '/api/whatsapp/test', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast('הודעת בדיקה נשלחה ל-WhatsApp ✓');
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────

@@ -100,6 +100,10 @@ class CallHandler {
           const msg = `📞 <b>שיחה נכנסת הסתיימה</b>\n👤 מתקשר: ${callerInfo}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
           global.sendTelegramMessage(msg);
         }
+        if (global.sendWhatsappMessage && (global.botSettings || {}).whatsappCallSummary) {
+          const callerInfo = callerName ? callerName : (callerRaw || 'לא ידוע');
+          global.sendWhatsappMessage(`📞 שיחה נכנסת\n👤 ${callerInfo}\n⏱ ${durationS}ש`);
+        }
       });
 
       if (CONVERSATION_ENGINE === 'gemini-live') {
@@ -654,6 +658,10 @@ class CallHandler {
         if (global.sendTelegramMessage && (global.botSettings || {}).telegramCallSummary) {
           const who = callerName || 'לא ידוע';
           global.sendTelegramMessage(`📩 <b>הודעה קולית חדשה</b>\n👤 מ: ${who}\n⏱ ~${durationS}ש\n🆔 ${callId.slice(0,12)}`);
+        }
+        if (global.sendWhatsappMessage && (global.botSettings || {}).whatsappCallSummary) {
+          const who = callerName || 'לא ידוע';
+          global.sendWhatsappMessage(`📩 הודעה קולית חדשה\n👤 מ: ${who}\n⏱ ~${durationS}ש`);
         }
       } catch (err) {
         logger.error('Failed to save voicemail', { callId, error: err.message });

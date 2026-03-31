@@ -155,6 +155,10 @@ const defaultSettings = {
   // Calendar integration (iCal URL — Google Calendar / Apple / any CalDAV)
   calendarUrl: '',
   calendarName: 'My Calendar',
+  // WhatsApp notifications (via CallMeBot — free, no setup)
+  whatsappPhone: '',    // e.g. +972501234567
+  whatsappApiKey: '',   // from callmebot.com
+  whatsappCallSummary: false,
 };
 
 let botSettings = { ...defaultSettings };
@@ -180,6 +184,7 @@ app.get('/api/settings', (req, res) => {
     adminPass: botSettings.adminPass ? '✓ set' : '',
     adminUser: botSettings.adminUser || adminUser,
     telegramBotToken: botSettings.telegramBotToken ? '✓ set' : '',
+    whatsappApiKey: botSettings.whatsappApiKey ? '✓ set' : '',
   });
 });
 
@@ -211,6 +216,10 @@ app.post('/api/settings', (req, res) => {
   if (telegramCallSummary !== undefined) botSettings.telegramCallSummary = telegramCallSummary;
   if (calendarUrl !== undefined) botSettings.calendarUrl = calendarUrl;
   if (calendarName !== undefined) botSettings.calendarName = calendarName;
+  const { whatsappPhone, whatsappApiKey, whatsappCallSummary } = req.body || {};
+  if (whatsappPhone !== undefined) botSettings.whatsappPhone = whatsappPhone;
+  if (whatsappApiKey !== undefined && whatsappApiKey !== '') botSettings.whatsappApiKey = whatsappApiKey;
+  if (whatsappCallSummary !== undefined) botSettings.whatsappCallSummary = whatsappCallSummary;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -500,6 +509,28 @@ function sendTelegramMessage(text) {
 }
 global.sendTelegramMessage = sendTelegramMessage;
 
+function sendWhatsappMessage(text) {
+  const phone = botSettings.whatsappPhone || process.env.WHATSAPP_PHONE;
+  const apiKey = botSettings.whatsappApiKey || process.env.WHATSAPP_APIKEY;
+  if (!phone || !apiKey) return;
+  // Strip HTML tags for WhatsApp plain text
+  const plain = text.replace(/<[^>]+>/g, '').replace(/\n/g, '%0A').replace(/ /g, '%20');
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${plain}&apikey=${encodeURIComponent(apiKey)}`;
+  try {
+    require('https').get(url, (res) => { res.resume(); }).on('error', (e) => logger.warn('WhatsApp send failed', { error: e.message }));
+    logger.debug('WhatsApp notification sent', { phone });
+  } catch(e) { logger.warn('WhatsApp send error', { error: e.message }); }
+}
+global.sendWhatsappMessage = sendWhatsappMessage;
+
+app.post('/api/whatsapp/test', (req, res) => {
+  const phone = botSettings.whatsappPhone;
+  const apiKey = botSettings.whatsappApiKey;
+  if (!phone || !apiKey) return res.json({ ok: false, error: 'WhatsApp לא מוגדר — הגדר מספר ו-API key' });
+  sendWhatsappMessage('✅ CallMe Bot — הודעת בדיקה מהדשבורד');
+  res.json({ ok: true });
+});
+
 // Active call registry — for Dialer panel and /api/calls
 const activeCalls = new Map(); // callId → { callId, to, from, startedAt, dialog }
 
@@ -525,6 +556,9 @@ app.post('/call', async (req, res) => {
       if (global.sendTelegramMessage && botSettings.telegramCallSummary) {
         const msg = `📞 <b>שיחה יוצאת הסתיימה</b>\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
         global.sendTelegramMessage(msg);
+      }
+      if (global.sendWhatsappMessage && botSettings.whatsappCallSummary) {
+        global.sendWhatsappMessage(`📞 שיחה יוצאת הסתיימה\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש`);
       }
       if (webhookUrl) {
         // Per-call webhook override
