@@ -1,92 +1,299 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const logger = require('./logger');
-const config = require('./config');
-const { v4: uuidv4 } = require('uuid');
+const GeminiLiveManager = require('./gemini-live/manager');
+
+const CONVERSATION_ENGINE = process.env.CONVERSATION_ENGINE || 'stt-tts';
+const WS_PORT = parseInt(process.env.WS_PORT || '3001');
+const MAX_CALL_DURATION_MS = parseInt(process.env.MAX_CALL_DURATION_MS || '300000');
+
+const geminiManager = new GeminiLiveManager();
+
+function stripVideoFromSdp(sdp) {
+  if (!sdp) return sdp;
+  const lines = sdp.split('\n');
+  let skipVideo = false;
+  return lines.filter(line => {
+    if (line.startsWith('m=video')) { skipVideo = true; return false; }
+    if (line.startsWith('m=') && !line.startsWith('m=video')) skipVideo = false;
+    return !skipVideo;
+  }).join('\n');
+}
 
 class CallHandler {
-  constructor(srf, sessionManager, sttTtsManager, metrics) {
+  constructor(srf, sessionManager, sttTtsManager, metrics, audioForkServer, audioConfig = {}) {
     this.srf = srf;
     this.sessionManager = sessionManager;
     this.sttTts = sttTtsManager;
     this.metrics = metrics;
+    this.audioForkServer = audioForkServer;
+    this.audioDir = audioConfig.audioDir || '/tmp/voice-worker-audio';
+    this.audioPort = audioConfig.audioPort || 3101;
+    this.mediaServer = null;
   }
 
-  /**
-   * Handle inbound call with full flow
-   */
+  setMediaServer(mediaServer) {
+    this.mediaServer = mediaServer;
+  }
+
   async handleInvite(req, res) {
     const callId = req.get('Call-ID');
-    const from = req.getParsedHeader('From').uri.user;
-    const to = req.getParsedHeader('To').uri.user;
-    
-    logger.info('Inbound call received', { callId, from, to });
-    
-    // Initialize metrics
+    logger.info('Inbound call received', { callId, engine: CONVERSATION_ENGINE });
     this.metrics.initCall(callId);
-    this.metrics.record(callId, 'answerLatency', Date.now());
 
-    // Phase 1b: Answer and handle call
+    if (!this.mediaServer) {
+      logger.error('Media server not ready', { callId });
+      try { res.send(503); } catch (_) {}
+      return;
+    }
+
     try {
-      const dialog = await this.srf.createUAC(req.get('Call-ID'), req, {
-        localSdp: req.body
+      const audioOnlySdp = stripVideoFromSdp(req.body);
+      const { endpoint, dialog } = await this.mediaServer.connectCaller(req, res, {
+        remoteSdp: audioOnlySdp
       });
 
-      logger.info('Call answered', { callId });
-      this.metrics.record(callId, 'answerLatency', Date.now() - this.metrics.get(callId).startTime);
+      logger.info('Call connected', { callId, uuid: endpoint.uuid });
 
-      // Send greeting
-      await this.speak(dialog, 'שלום, זהו בדיקה מערכת קול חדשה. איך אני יכול לעזור?', callId);
+      dialog.on('destroy', () => {
+        logger.info('Call ended', { callId });
+        geminiManager.close(callId);
+        this.audioForkServer.unregister(callId);
+        endpoint.destroy().catch(() => {});
+        this.metrics.record(callId, 'endCall', 'hangup');
+        this.metrics.finalize(callId);
+      });
 
-      // Phase 1b: Simple echo (no conversation yet)
-      await this.listenAndRespond(dialog, callId);
+      if (CONVERSATION_ENGINE === 'gemini-live') {
+        await this._handleGeminiLiveCall(endpoint, dialog, callId);
+      } else {
+        await this._handleSttTtsCall(endpoint, dialog, callId);
+      }
 
     } catch (err) {
       logger.error('Call handling error', { callId, error: err.message });
-      try {
-        res.send(500);
-      } catch (e) {}
+      try { res.send(500); } catch (_) {}
       this.metrics.record(callId, 'endCall', 'error');
     }
   }
 
-  /**
-   * Speak text to caller
-   */
-  async speak(dialog, text, callId) {
+  // ── Outbound call ────────────────────────────────────────────────────────
+
+  async makeOutboundCall(target, from) {
+    if (!this.mediaServer) throw new Error('Media server not ready');
+
+    const callId = `outbound-${Date.now()}`;
+    logger.info('Initiating outbound call', { callId, target, from });
+
+    const { endpoint, dialog } = await this.mediaServer.createEndpoint({});
+
+    const sip = await this.srf.createUAC(target, {
+      localSipUri: `sip:${from}@${process.env.SIP_DOMAIN}`,
+      headers: { 'From': `sip:${from}@${process.env.SIP_DOMAIN}` }
+    });
+
+    dialog.on('destroy', () => {
+      logger.info('Outbound call ended', { callId });
+      geminiManager.close(callId);
+      this.audioForkServer.unregister(callId);
+      endpoint.destroy().catch(() => {});
+    });
+
+    if (CONVERSATION_ENGINE === 'gemini-live') {
+      this._handleGeminiLiveCall(endpoint, sip, callId).catch((err) => {
+        logger.error('Outbound Gemini call error', { callId, error: err.message });
+      });
+    }
+
+    return { endpoint, dialog: sip };
+  }
+
+  // ── Gemini Live path ─────────────────────────────────────────────────────
+
+  async _handleGeminiLiveCall(endpoint, dialog, callId) {
+    const systemPrompt = process.env.GEMINI_SYSTEM_PROMPT ||
+      'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
+
+    const session = await geminiManager.getOrCreate(callId, {
+      systemPrompt,
+      language: process.env.CALL_LANGUAGE || 'he',
+    });
+
+    let audioChunks = [];
+
+    session.on('audio', (chunk) => {
+      audioChunks.push(chunk);
+    });
+
+    session.on('error', (err) => {
+      logger.error('GeminiLive session error', { callId, error: err.message });
+    });
+
+    session.on('input_transcript', (text) => {
+      logger.info('Caller said', { callId, text });
+    });
+
+    session.on('output_transcript', (text) => {
+      logger.info('Bot said', { callId, text });
+    });
+
+    // Suppress audio input until the first greeting has been played, then during
+    // bot playback + 1.5s after (to avoid echo feeding back into Gemini)
+    let isPlaying = false;
+    let postPlaySuppressUntil = 0;
+    let firstPlayDone = false;
+    const ECHO_SUPPRESS_MS = 1500; // suppress input for 1.5s after playback ends
+
+    session.on('turn_complete', async () => {
+      if (!audioChunks.length) return;
+      const pcm = Buffer.concat(audioChunks);
+      audioChunks = [];
+      logger.info('Playing Gemini response', { callId, bytes: pcm.length });
+      try {
+        const wavFile = await this._savePcmAsWav(pcm, callId);
+        isPlaying = true;
+        await endpoint.play(wavFile);
+        isPlaying = false;
+        firstPlayDone = true;
+        postPlaySuppressUntil = Date.now() + ECHO_SUPPRESS_MS;
+        fs.unlink(wavFile, () => {});
+      } catch (err) {
+        isPlaying = false;
+        firstPlayDone = true;
+        logger.error('Playback error', { callId, error: err.message });
+      }
+    });
+
+    session.on('interrupted', () => {
+      audioChunks = [];
+      isPlaying = false;
+      logger.info('Barge-in detected', { callId });
+    });
+
+    // Send initial greeting to make Gemini speak first
+    session.sendText('שלום! ברך את המשתמש בקצרה בעברית.');
+
+    // Energy-based VAD with manual activity markers.
+    // Gemini's automatic VAD is disabled — we tell it exactly when speech starts/ends
+    // so it processes the full utterance as one context instead of tiny 20ms fragments.
+    const SPEECH_RMS_THRESHOLD = 300;
+    const SILENCE_FRAMES_NEEDED = 30;  // ~600ms silence = end of utterance
+    const MIN_SPEECH_FRAMES = 8;       // ~160ms minimum to count as speech
+
+    const calcRms = (buf) => {
+      let sum = 0;
+      for (let i = 0; i + 1 < buf.length; i += 2) {
+        const s = buf.readInt16LE(i);
+        sum += s * s;
+      }
+      return Math.sqrt(sum / (buf.length / 2));
+    };
+
+    let speaking = false;
+    let silenceCount = 0;
+    let speechCount = 0;
+
+    this.audioForkServer.register(callId, {
+      onAudio: (buf) => {
+        if (!firstPlayDone || isPlaying || Date.now() < postPlaySuppressUntil) return;
+
+        const rms = calcRms(buf);
+
+        if (rms > SPEECH_RMS_THRESHOLD) {
+          silenceCount = 0;
+          speechCount++;
+          if (!speaking && speechCount >= 2) {
+            speaking = true;
+            session.sendActivityStart();
+            logger.debug('Speech start', { callId, rms: rms.toFixed(0) });
+          }
+          if (speaking) session.sendAudio(buf);
+        } else {
+          if (speaking) {
+            silenceCount++;
+            session.sendAudio(buf); // send trailing silence too
+            if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+              if (speechCount >= MIN_SPEECH_FRAMES) {
+                session.sendActivityEnd();
+                logger.info('Speech end → sent to Gemini', { callId, speechFrames: speechCount });
+              }
+              speaking = false;
+              silenceCount = 0;
+              speechCount = 0;
+            }
+          } else {
+            speechCount = 0;
+          }
+        }
+      },
+      onClose: () => {
+        if (speaking) session.sendActivityEnd();
+        session.close();
+      }
+    });
+
+    // Start audio fork — FreeSWITCH will connect to our shared WS server
+    const wsUrl = `ws://127.0.0.1:${WS_PORT}/${encodeURIComponent(callId)}`;
+    logger.info('Starting audio fork', { callId, wsUrl });
+
+    await new Promise((resolve) => {
+      endpoint.forkAudioStart({
+        wsUrl,
+        mixType: 'mono',
+        sampling: '16k',
+      }).then(() => {
+        logger.info('Audio fork started', { callId });
+      }).catch((err) => {
+        logger.error('forkAudioStart failed', { callId, error: err.message });
+        resolve();
+      });
+
+      // Wait until call ends
+      const onDestroy = () => resolve();
+      dialog.once('destroy', onDestroy);
+
+      setTimeout(() => {
+        dialog.removeListener('destroy', onDestroy);
+        logger.warn('Call max duration reached', { callId });
+        resolve();
+      }, MAX_CALL_DURATION_MS);
+    });
+  }
+
+  async _savePcmAsWav(pcmBuffer, callId) {
+    const { WaveFile } = require('wavefile');
+    const wav = new WaveFile();
+    const samples = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, Math.floor(pcmBuffer.length / 2));
+    wav.fromScratch(1, 24000, '16', samples);
+    const wavBuf = Buffer.from(wav.toBuffer());
+    const filename = `gemini-${Date.now()}.wav`;
+    const filePath = path.join(this.audioDir, filename);
+    fs.writeFileSync(filePath, wavBuf);
+    // Return HTTP URL so FreeSWITCH can fetch it
+    const url = `http://127.0.0.1:${this.audioPort}/audio/${filename}`;
+    // Schedule cleanup after 60s
+    setTimeout(() => fs.unlink(filePath, () => {}), 60000);
+    return url;
+  }
+
+  // ── Legacy STT+TTS path ──────────────────────────────────────────────────
+
+  async _handleSttTtsCall(endpoint, dialog, callId) {
     try {
-      const result = await this.sttTts.synthesize(text, callId, {
+      const result = await this.sttTts.synthesize('שלום, איך אני יכול לעזור?', callId, {
         languageCode: 'he-IL',
         voiceName: 'he-IL-Wavenet-A'
       });
-
       if (result.success) {
-        logger.info('TTS synthesized', { callId, audioSize: result.audio.length });
-        this.metrics.record(callId, 'ttsSuccess');
-        // In real implementation: play audio to dialog
-        return result.audio;
+        const tmpFile = path.join(os.tmpdir(), `tts-${callId}.mp3`);
+        fs.writeFileSync(tmpFile, result.audio);
+        await endpoint.play(tmpFile);
+        fs.unlink(tmpFile, () => {});
       }
     } catch (err) {
-      logger.error('TTS failed', { callId, error: err.message });
-      this.metrics.record(callId, 'ttsError', err.message);
+      logger.error('STT/TTS call error', { callId, error: err.message });
     }
-  }
-
-  /**
-   * Listen and respond loop
-   */
-  async listenAndRespond(dialog, callId) {
-    // Phase 1b: Mock listening - just wait 5 seconds
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    logger.info('Listen phase complete (Phase 1b)', { callId });
-    
-    // Send to Claude for response
-    const response = await this.sessionManager.sendToClaude(callId, 'hello', 'inbound');
-    
-    if (response.success) {
-      const reply = response.data?.reply || 'תודה, זהו כל מה שיש לי עכשיו.';
-      await this.speak(dialog, reply, callId);
-    }
-    
     this.metrics.record(callId, 'endCall', 'completed');
     this.metrics.finalize(callId);
   }
