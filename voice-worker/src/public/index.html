@@ -94,6 +94,29 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button></div>
   </div>
 
+  <!-- SIP Trunk -->
+  <div class="card">
+    <h2>SIP Trunk — ספק טלפוני</h2>
+    <div class="form-row"><label>ספק</label>
+      <select id="s-sipProvider" onchange="onProviderChange()">
+        <option value="">— בחר ספק —</option>
+        <option value="3cx">3CX (נוכחי)</option>
+        <option value="zadarma">Zadarma</option>
+        <option value="twilio">Twilio SIP</option>
+        <option value="custom">Custom SIP</option>
+      </select>
+    </div>
+    <div id="sip-help" style="font-size:12px;color:#60a5fa;margin-bottom:12px;display:none"></div>
+    <div class="form-row"><label>SIP Server / Domain</label><input id="s-sipServer" placeholder="sip.zadarma.com"></div>
+    <div class="form-row"><label>SIP Registrar</label><input id="s-sipRegistrar" placeholder="sip.zadarma.com"></div>
+    <div class="form-row"><label>Extension / Username</label><input id="s-sipExtension" placeholder="12345"></div>
+    <div class="form-row"><label>Auth ID</label><input id="s-sipAuthId" placeholder="12345"></div>
+    <div class="form-row"><label>סיסמה</label><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="form-row"><label>מספר DID</label><input id="s-sipDid" placeholder="+972501234567"></div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:12px">שינוי הגדרות SIP ייכנס לתוקף בהפעלה הבאה של הבוט.</div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות SIP</button></div>
+  </div>
+
   <!-- Chat test -->
   <div class="card">
     <h2>בדיקת צ'אט (ללא שיחה)</h2>
@@ -124,6 +147,20 @@ function toast(msg, err) {
   setTimeout(() => t.className = 'toast', 2500);
 }
 
+const SIP_HINTS = {
+  '3cx': 'SIP Domain: 1664.3cx.cloud | Registrar: 127.0.0.1 (via SBC)',
+  'zadarma': 'SIP Server: sip.zadarma.com | Registrar: sip.zadarma.com | Extension: your Zadarma account number',
+  'twilio': 'SIP Server: your-domain.pstn.twilio.com | Auth: Twilio SIP credentials | DID: Twilio number',
+  'custom': 'Enter your SIP provider details manually.',
+};
+
+function onProviderChange() {
+  const v = document.getElementById('s-sipProvider').value;
+  const h = document.getElementById('sip-help');
+  if (v && SIP_HINTS[v]) { h.textContent = SIP_HINTS[v]; h.style.display = ''; }
+  else h.style.display = 'none';
+}
+
 async function loadSettings() {
   try {
     const r = await fetch(API + '/api/settings');
@@ -133,6 +170,14 @@ async function loadSettings() {
     document.getElementById('s-persona').value = s.persona || '';
     document.getElementById('s-voice').value = s.voice || 'Kore';
     document.getElementById('s-language').value = s.language || 'he';
+    document.getElementById('s-sipProvider').value = s.sipProvider || '';
+    document.getElementById('s-sipServer').value = s.sipServer || '';
+    document.getElementById('s-sipRegistrar').value = s.sipRegistrar || '';
+    document.getElementById('s-sipExtension').value = s.sipExtension || '';
+    document.getElementById('s-sipAuthId').value = s.sipAuthId || '';
+    document.getElementById('s-sipDid').value = s.sipDid || '';
+    if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = s.sipPassword; // shows '✓ set'
+    onProviderChange();
   } catch(e) { console.error(e); }
 }
 
@@ -143,10 +188,17 @@ async function saveSettings() {
     persona: document.getElementById('s-persona').value,
     voice: document.getElementById('s-voice').value,
     language: document.getElementById('s-language').value,
+    sipProvider: document.getElementById('s-sipProvider').value,
+    sipServer: document.getElementById('s-sipServer').value,
+    sipRegistrar: document.getElementById('s-sipRegistrar').value,
+    sipExtension: document.getElementById('s-sipExtension').value,
+    sipAuthId: document.getElementById('s-sipAuthId').value,
+    sipPassword: document.getElementById('s-sipPassword').value, // empty = don't update
+    sipDid: document.getElementById('s-sipDid').value,
   };
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) toast('הגדרות נשמרו ✓');
+    if (r.ok) { toast('הגדרות נשמרו ✓'); document.getElementById('s-sipPassword').value = ''; }
     else toast('שגיאה בשמירה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }

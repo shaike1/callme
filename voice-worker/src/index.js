@@ -106,6 +106,14 @@ const defaultSettings = {
   extension: process.env.SIP_EXTENSION || '12611',
   greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
   voice: 'Kore',
+  // SIP trunk config (optional — overrides env vars when set)
+  sipProvider: '',       // '3cx' | 'zadarma' | 'twilio' | 'custom'
+  sipServer: process.env.SIP_DOMAIN || '',
+  sipRegistrar: process.env.SIP_REGISTRAR || '',
+  sipExtension: process.env.SIP_EXTENSION || '',
+  sipAuthId: process.env.SIP_AUTH_ID || '',
+  sipPassword: '',       // never stored in plaintext after first load
+  sipDid: '',            // DID phone number (e.g. +972XXXXXXXXX)
 };
 
 let botSettings = { ...defaultSettings };
@@ -124,20 +132,29 @@ const saveSettings = () => {
 global.botSettings = botSettings;
 
 app.get('/api/settings', (req, res) => {
-  res.json(botSettings);
+  res.json({ ...botSettings, sipPassword: botSettings.sipPassword ? '✓ set' : '' });
 });
 
 app.post('/api/settings', (req, res) => {
-  const { name, persona, language, extension, greeting, voice } = req.body || {};
+  const { name, persona, language, extension, greeting, voice,
+          sipProvider, sipServer, sipRegistrar, sipExtension, sipAuthId, sipPassword, sipDid } = req.body || {};
   if (name !== undefined) botSettings.name = name;
   if (persona !== undefined) botSettings.persona = persona;
   if (language !== undefined) botSettings.language = language;
   if (extension !== undefined) botSettings.extension = extension;
   if (greeting !== undefined) botSettings.greeting = greeting;
   if (voice !== undefined) botSettings.voice = voice;
+  if (sipProvider !== undefined) botSettings.sipProvider = sipProvider;
+  if (sipServer !== undefined) botSettings.sipServer = sipServer;
+  if (sipRegistrar !== undefined) botSettings.sipRegistrar = sipRegistrar;
+  if (sipExtension !== undefined) botSettings.sipExtension = sipExtension;
+  if (sipAuthId !== undefined) botSettings.sipAuthId = sipAuthId;
+  if (sipPassword !== undefined && sipPassword !== '') botSettings.sipPassword = sipPassword;
+  if (sipDid !== undefined) botSettings.sipDid = sipDid;
   saveSettings();
-  logger.info('Bot settings updated', botSettings);
-  res.json({ success: true, settings: botSettings });
+  logger.info('Bot settings updated', { ...botSettings, sipPassword: botSettings.sipPassword ? '***' : '' });
+  // Return settings without exposing password
+  res.json({ success: true, settings: { ...botSettings, sipPassword: botSettings.sipPassword ? '✓ set' : '' } });
 });
 
 // ── Webhook: text chat with the bot ──────────────────────────────────────
