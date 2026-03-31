@@ -462,7 +462,7 @@ app.get('/api/status', async (req, res) => {
     }
   }
   res.json({
-    drachtio: (srf._conn && !srf._conn.destroyed) ? 'connected' : 'disconnected',
+    drachtio: global._drachtioConnected ? 'connected' : 'disconnected',
     sip: sipRegs,
     sipProvider: botSettings.sipProvider || '3cx',
     sipDomain: botSettings.sipServer || process.env.SIP_DOMAIN || '',
@@ -486,8 +486,10 @@ srf.connect({
 srf.on('connect', (err, hostport) => {
   if (err) {
     logger.error('Failed to connect to Drachtio', { error: err.message });
+    global._drachtioConnected = false;
     return;
   }
+  global._drachtioConnected = true;
   logger.info(`Connected to Drachtio at ${hostport}`);
 
   // Connect to FreeSWITCH media server
@@ -528,6 +530,7 @@ srf.on('connect', (err, hostport) => {
 
 srf.on('error', (err) => {
   logger.error('Drachtio error', { error: err.message });
+  global._drachtioConnected = false;
 });
 
 // Inbound call handler
