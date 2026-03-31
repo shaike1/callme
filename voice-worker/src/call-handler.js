@@ -112,7 +112,8 @@ class CallHandler {
   // ── Gemini Live path ─────────────────────────────────────────────────────
 
   async _handleGeminiLiveCall(endpoint, dialog, callId) {
-    const systemPrompt = process.env.GEMINI_SYSTEM_PROMPT ||
+    const settings = global.botSettings || {};
+    const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
 
     const session = await geminiManager.getOrCreate(callId, {
@@ -121,10 +122,6 @@ class CallHandler {
     });
 
     let audioChunks = [];
-
-    session.on('audio', (chunk) => {
-      audioChunks.push(chunk);
-    });
 
     session.on('error', (err) => {
       logger.error('GeminiLive session error', { callId, error: err.message });
@@ -139,46 +136,88 @@ class CallHandler {
     });
 
     // Suppress audio input until the first greeting has been played, then during
-    // bot playback + 1.5s after (to avoid echo feeding back into Gemini)
+    // bot playback + 800ms after (reduced from 1500ms for faster responsiveness)
     let isPlaying = false;
     let postPlaySuppressUntil = 0;
     let firstPlayDone = false;
-    const ECHO_SUPPRESS_MS = 1500; // suppress input for 1.5s after playback ends
+    const ECHO_SUPPRESS_MS = 800;
 
-    session.on('turn_complete', async () => {
+    // Serialized playback queue — only one WAV playing at a time
+    const playQueue = [];
+    let playBusy = false;
+
+    const drainQueue = async () => {
+      if (playBusy || !playQueue.length) return;
+      playBusy = true;
+      isPlaying = true;
+      while (playQueue.length) {
+        const pcm = playQueue.shift();
+        const t0 = Date.now();
+        logger.info('Playing Gemini response', { callId, bytes: pcm.length });
+        try {
+          const wavFile = await this._savePcmAsWav(pcm, callId);
+          await endpoint.play(wavFile);
+          fs.unlink(wavFile, () => {});
+          logger.debug('Playback done', { callId, ms: Date.now() - t0 });
+        } catch (err) {
+          logger.error('Playback error', { callId, error: err.message });
+        }
+      }
+      isPlaying = false;
+      firstPlayDone = true;
+      postPlaySuppressUntil = Date.now() + ECHO_SUPPRESS_MS;
+      playBusy = false;
+    };
+
+    const enqueueAudio = (pcm) => {
+      playQueue.push(pcm);
+      drainQueue();
+    };
+
+    // Stream playback: flush once we have 1s of audio, then again on turn_complete
+    const STREAM_THRESHOLD = 48000; // 1s at 24kHz 16-bit mono
+    let streamFired = false;
+
+    const flushAudio = () => {
       if (!audioChunks.length) return;
       const pcm = Buffer.concat(audioChunks);
       audioChunks = [];
-      logger.info('Playing Gemini response', { callId, bytes: pcm.length });
-      try {
-        const wavFile = await this._savePcmAsWav(pcm, callId);
-        isPlaying = true;
-        await endpoint.play(wavFile);
-        isPlaying = false;
-        firstPlayDone = true;
-        postPlaySuppressUntil = Date.now() + ECHO_SUPPRESS_MS;
-        fs.unlink(wavFile, () => {});
-      } catch (err) {
-        isPlaying = false;
-        firstPlayDone = true;
-        logger.error('Playback error', { callId, error: err.message });
+      enqueueAudio(pcm);
+    };
+
+    session.on('audio', (chunk) => {
+      audioChunks.push(chunk);
+      if (!streamFired) {
+        const total = audioChunks.reduce((s, c) => s + c.length, 0);
+        if (total >= STREAM_THRESHOLD) {
+          streamFired = true;
+          flushAudio();
+        }
       }
+    });
+
+    session.on('turn_complete', () => {
+      streamFired = false;
+      flushAudio();
     });
 
     session.on('interrupted', () => {
       audioChunks = [];
+      playQueue.length = 0;
+      streamFired = false;
       isPlaying = false;
       logger.info('Barge-in detected', { callId });
     });
 
-    // Send initial greeting to make Gemini speak first
-    session.sendText('שלום! ברך את המשתמש בקצרה בעברית.');
+    // Send initial greeting
+    const greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה בעברית.';
+    session.sendText(greeting);
 
     // Energy-based VAD with manual activity markers.
     // Gemini's automatic VAD is disabled — we tell it exactly when speech starts/ends
     // so it processes the full utterance as one context instead of tiny 20ms fragments.
     const SPEECH_RMS_THRESHOLD = 300;
-    const SILENCE_FRAMES_NEEDED = 30;  // ~600ms silence = end of utterance
+    const SILENCE_FRAMES_NEEDED = 20;  // ~400ms silence = end of utterance
     const MIN_SPEECH_FRAMES = 8;       // ~160ms minimum to count as speech
 
     const calcRms = (buf) => {

@@ -65,6 +65,93 @@ app.get('/metrics', (req, res) => {
 
 app.use(express.json());
 
+// ── Bot Settings (persisted to settings.json) ────────────────────────────
+const SETTINGS_FILE = path.join(AUDIO_DIR, '..', 'bot-settings.json');
+
+const defaultSettings = {
+  name: 'Luky',
+  persona: process.env.GEMINI_SYSTEM_PROMPT ||
+    'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew.',
+  language: process.env.CALL_LANGUAGE || 'he',
+  extension: process.env.SIP_EXTENSION || '12611',
+  greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
+};
+
+let botSettings = { ...defaultSettings };
+try {
+  if (fs.existsSync(SETTINGS_FILE)) {
+    botSettings = { ...defaultSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
+    logger.info('Loaded bot settings from file');
+  }
+} catch (_) {}
+
+const saveSettings = () => {
+  try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(botSettings, null, 2)); } catch (_) {}
+};
+
+// Export settings so call-handler can read them
+global.botSettings = botSettings;
+
+app.get('/api/settings', (req, res) => {
+  res.json(botSettings);
+});
+
+app.post('/api/settings', (req, res) => {
+  const { name, persona, language, extension, greeting } = req.body || {};
+  if (name !== undefined) botSettings.name = name;
+  if (persona !== undefined) botSettings.persona = persona;
+  if (language !== undefined) botSettings.language = language;
+  if (extension !== undefined) botSettings.extension = extension;
+  if (greeting !== undefined) botSettings.greeting = greeting;
+  saveSettings();
+  logger.info('Bot settings updated', botSettings);
+  res.json({ success: true, settings: botSettings });
+});
+
+// ── Webhook: text chat with the bot ──────────────────────────────────────
+const https = require('https');
+
+app.post('/api/chat', async (req, res) => {
+  const { message, sessionId } = req.body || {};
+  if (!message) return res.status(400).json({ error: 'missing "message" field' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
+  const systemPrompt = botSettings.persona;
+  const payload = JSON.stringify({
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: message }] }]
+  });
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const opts = {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+      };
+      const req2 = https.request(opts, (r) => {
+        let data = '';
+        r.on('data', c => data += c);
+        r.on('end', () => resolve({ status: r.statusCode, body: data }));
+      });
+      req2.on('error', reject);
+      req2.write(payload);
+      req2.end();
+    });
+
+    const result = JSON.parse(response.body);
+    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    logger.info('API chat response', { sessionId, message: message.slice(0, 50), responseLength: text.length });
+    res.json({ success: true, response: text, sessionId });
+  } catch (err) {
+    logger.error('API chat error', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Outbound call endpoint — triggers bot to call a SIP extension
 app.post('/call', async (req, res) => {
   const { to, callerId } = req.body || {};
