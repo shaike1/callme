@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CallMe Bot — Setup Wizard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 16px; }
+  .wizard { width: 100%; max-width: 680px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .subtitle { color: #8892a4; font-size: 14px; margin-bottom: 30px; }
+  /* Progress bar */
+  .progress { display: flex; gap: 0; margin-bottom: 32px; }
+  .step-pill { flex: 1; text-align: center; padding: 10px 4px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 3px solid #2d3148; transition: all 0.2s; }
+  .step-pill.active { color: #60a5fa; border-color: #60a5fa; }
+  .step-pill.done { color: #22c55e; border-color: #22c55e; }
+  /* Card */
+  .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 14px; padding: 28px; margin-bottom: 20px; }
+  .card h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .card .desc { font-size: 13px; color: #8892a4; margin-bottom: 20px; line-height: 1.6; }
+  /* Form */
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  input, select, textarea { width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 8px; padding: 10px 12px; color: #e2e8f0; font-size: 14px; outline: none; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { padding: 6px 14px; border-radius: 20px; border: 1px solid #2d3148; background: #0f1117; color: #94a3b8; font-size: 13px; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .chip.selected { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  /* Voice cards */
+  .voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+  .voice-card { background: #0f1117; border: 2px solid #2d3148; border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .voice-card:hover { border-color: #60a5fa; }
+  .voice-card.selected { border-color: #3b82f6; background: #1d4ed8; }
+  .voice-card .icon { font-size: 22px; margin-bottom: 4px; }
+  .voice-card .name { font-size: 12px; font-weight: 600; }
+  .voice-card .trait { font-size: 10px; color: #64748b; margin-top: 2px; }
+  .voice-card.selected .trait { color: #93c5fd; }
+  /* AI generate button */
+  .generate-btn { width: 100%; background: linear-gradient(135deg, #1d4ed8, #7c3aed); color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; transition: opacity 0.15s; }
+  .generate-btn:hover { opacity: 0.88; }
+  /* Navigation */
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .btn { padding: 10px 28px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 700; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-ghost { background: transparent; color: #8892a4; border: 1px solid #2d3148; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .skip { font-size: 13px; color: #64748b; cursor: pointer; text-decoration: underline; }
+  .skip:hover { color: #94a3b8; }
+  /* SIP provider cards */
+  .provider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .provider-card { background: #0f1117; border: 2px solid #2d3148; border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; }
+  .provider-card:hover { border-color: #60a5fa; }
+  .provider-card.selected { border-color: #3b82f6; }
+  .provider-card .pname { font-weight: 700; font-size: 14px; }
+  .provider-card .pdesc { font-size: 12px; color: #64748b; margin-top: 4px; }
+  /* Web call area */
+  #webcall-area { text-align: center; padding: 20px 0; }
+  #wc-btn { font-size: 16px; padding: 14px 36px; border-radius: 50px; border: none; background: #16a34a; color: #fff; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  #wc-btn.active { background: #c62828; }
+  #wc-status { margin-top: 14px; color: #8892a4; font-size: 14px; min-height: 22px; }
+  #wc-transcript { margin-top: 16px; background: #0f1117; border-radius: 10px; padding: 14px; min-height: 80px; font-size: 13px; line-height: 1.7; text-align: right; max-height: 200px; overflow-y: auto; }
+  #wc-rms { font-size: 12px; color: #4caf50; min-height: 16px; margin-top: 6px; }
+  .hidden { display: none; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #ef4444; }
+  /* Step 3 success */
+  .success-box { text-align: center; padding: 30px; }
+  .success-box .icon { font-size: 56px; margin-bottom: 16px; }
+  .success-box h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .success-box p { color: #8892a4; font-size: 14px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div class="wizard">
+  <h1>🤖 הגדרת CallMe Bot</h1>
+  <p class="subtitle">3 שלבים פשוטים — מוכן תוך דקות</p>
+
+  <div class="progress">
+    <div class="step-pill active" id="pill-1">1 · פרסונה</div>
+    <div class="step-pill" id="pill-2">2 · טלפון</div>
+    <div class="step-pill" id="pill-3">3 · בדיקה</div>
+  </div>
+
+  <!-- STEP 1: Persona Builder -->
+  <div id="step-1">
+    <div class="card">
+      <h2>🧠 מה הבוט שלך יעשה?</h2>
+      <p class="desc">תאר בכמה מילים את תפקיד הבוט — הAI יבנה עבורך system prompt מושלם.</p>
+
+      <div class="field">
+        <label>שם הבוט</label>
+        <input id="p-name" placeholder="CallMe Bot" value="CallMe Bot">
+      </div>
+
+      <div class="field">
+        <label>תיאור תפקיד</label>
+        <textarea id="p-role" placeholder="לדוגמה: עוזר אישי לניהול פגישות ותזכורות בעברית. עונה על שאלות, מזמין פגישות ושולח תזכורות."></textarea>
+        <button class="generate-btn" onclick="generatePersona()">✨ צור System Prompt אוטומטי עם AI</button>
+      </div>
+
+      <div class="field">
+        <label>שפה</label>
+        <div class="chips" id="lang-chips">
+          <div class="chip selected" data-val="he" onclick="selectChip('lang', this)">🇮🇱 עברית</div>
+          <div class="chip" data-val="en" onclick="selectChip('lang', this)">🇺🇸 English</div>
+          <div class="chip" data-val="ar" onclick="selectChip('lang', this)">🇸🇦 Arabic</div>
+          <div class="chip" data-val="auto" onclick="selectChip('lang', this)">🌍 אוטומטי</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>קול</label>
+        <div class="voice-grid">
+          <div class="voice-card selected" data-val="Kore" onclick="selectVoice(this)">
+            <div class="icon">👩</div><div class="name">Kore</div><div class="trait">חמה, ברורה</div>
+          </div>
+          <div class="voice-card" data-val="Puck" onclick="selectVoice(this)">
+            <div class="icon">👦</div><div class="name">Puck</div><div class="trait">צעיר, אנרגטי</div>
+          </div>
+          <div class="voice-card" data-val="Charon" onclick="selectVoice(this)">
+            <div class="icon">👨</div><div class="name">Charon</div><div class="trait">רציני, מקצועי</div>
+          </div>
+          <div class="voice-card" data-val="Aoede" onclick="selectVoice(this)">
+            <div class="icon">👩‍🎤</div><div class="name">Aoede</div><div class="trait">נעים, מרגיע</div>
+          </div>
+          <div class="voice-card" data-val="Fenrir" onclick="selectVoice(this)">
+            <div class="icon">🧔</div><div class="name">Fenrir</div><div class="trait">חזק, בטוח</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>אפשרויות</label>
+        <div class="chips" id="tools-chips">
+          <div class="chip selected" data-val="contacts" onclick="toggleChip(this)">📋 אנשי קשר</div>
+          <div class="chip selected" data-val="scheduler" onclick="toggleChip(this)">⏰ תזמון שיחות</div>
+          <div class="chip" data-val="calendar" onclick="toggleChip(this)">📅 יומן</div>
+          <div class="chip" data-val="ha" onclick="toggleChip(this)">🏠 בית חכם</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>ברכת פתיחה</label>
+        <input id="p-greeting" placeholder="שלום! איך אני יכול לעזור?" value="שלום! איך אני יכול לעזור?">
+      </div>
+
+      <div class="field hidden" id="prompt-preview-wrap">
+        <label>System Prompt שנוצר</label>
+        <textarea id="p-persona" style="min-height:120px;font-size:12px;direction:ltr"></textarea>
+      </div>
+    </div>
+
+    <div class="nav">
+      <a class="skip" href="/">דלג — כבר מוגדר</a>
+      <button class="btn btn-primary" onclick="savePersonaAndNext()">הבא ←</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Phone / SIP -->
+  <div id="step-2" class="hidden">
+    <div class="card">
+      <h2>📞 חיבור מספר טלפון</h2>
+      <p class="desc">בחר את ספק ה-SIP שלך. אם אין לך עדיין — לחץ "דלג" ותגדיר מאוחר יותר מהדשבורד.</p>
+
+      <div class="provider-grid" style="margin-bottom:20px">
+        <div class="provider-card selected" data-val="3cx" onclick="selectProvider(this)">
+          <div class="pname">3CX</div>
+          <div class="pdesc">3CX Cloud PBX</div>
+        </div>
+        <div class="provider-card" data-val="zadarma" onclick="selectProvider(this)">
+          <div class="pname">Zadarma</div>
+          <div class="pdesc">SIP trunk בינלאומי</div>
+        </div>
+        <div class="provider-card" data-val="twilio" onclick="selectProvider(this)">
+          <div class="pname">Twilio</div>
+          <div class="pdesc">DID + SIP elastic</div>
+        </div>
+        <div class="provider-card" data-val="custom" onclick="selectProvider(this)">
+          <div class="pname">Custom SIP</div>
+          <div class="pdesc">כל שרת SIP אחר</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>שרת SIP / Domain</label>
+        <input id="sip-domain" placeholder="pbx.example.com" style="direction:ltr">
+      </div>
+      <div class="field">
+        <label>שלוחה / Extension</label>
+        <input id="sip-ext" placeholder="12611" style="direction:ltr">
+      </div>
+      <div class="field">
+        <label>סיסמה</label>
+        <input id="sip-pass" type="password" placeholder="••••••••" style="direction:ltr">
+      </div>
+      <button class="generate-btn" style="background:#1a3a6b" onclick="testSip()">🔌 בדוק חיבור</button>
+      <div id="sip-result" style="margin-top:10px;font-size:13px;min-height:20px"></div>
+    </div>
+
+    <div class="nav">
+      <span class="skip" onclick="skipSip()">דלג — הגדר מאוחר יותר</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="goStep(1)">← חזור</button>
+        <button class="btn btn-primary" onclick="saveSipAndNext()">הבא ←</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: Test -->
+  <div id="step-3" class="hidden">
+    <div class="card">
+      <h2>🎙️ בדוק את הבוט שלך</h2>
+      <p class="desc">לחץ על הכפתור, דבר עם הבוט ישירות מהדפדפן — אין צורך בטלפון.</p>
+
+      <div id="webcall-area">
+        <button id="wc-btn" onclick="toggleWc()">📞 התחל שיחה</button>
+        <div id="wc-status">לחץ להתחיל</div>
+        <div id="wc-rms"></div>
+        <div id="wc-transcript"></div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-ghost" onclick="goStep(2)">← חזור</button>
+      <button class="btn btn-success" onclick="finish()">✅ סיים הגדרה</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="step-done" class="hidden card">
+    <div class="success-box">
+      <div class="icon">🎉</div>
+      <h3>CallMe Bot מוכן!</h3>
+      <p>הבוט שלך מוגדר ופועל.<br>תוכל לשנות הגדרות בכל עת מהדשבורד.</p>
+      <br>
+      <a href="/" style="display:inline-block;margin-top:8px;padding:12px 32px;background:#3b82f6;color:#fff;border-radius:8px;text-decoration:none;font-weight:700">
+        → עבור לדשבורד
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let selectedLang = 'he';
+let selectedVoice = 'Kore';
+let selectedProvider = '3cx';
+let wcWs = null, wcCtx = null, wcStream = null, wcProcessor = null;
+let wcActive = false, wcScheduled = 0;
+
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function goStep(n) {
+  [1,2,3,'done'].forEach(s => document.getElementById('step-' + s)?.classList.add('hidden'));
+  document.getElementById('step-' + n)?.classList.remove('hidden');
+  ['pill-1','pill-2','pill-3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (i + 1 < n) el.className = 'step-pill done';
+    else if (i + 1 === n) el.className = 'step-pill active';
+    else el.className = 'step-pill';
+  });
+}
+
+function selectChip(group, el) {
+  document.querySelectorAll('#lang-chips .chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedLang = el.dataset.val;
+}
+
+function toggleChip(el) { el.classList.toggle('selected'); }
+
+function selectVoice(el) {
+  document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedVoice = el.dataset.val;
+}
+
+function selectProvider(el) {
+  document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedProvider = el.dataset.val;
+}
+
+async function generatePersona() {
+  const name = document.getElementById('p-name').value.trim() || 'CallMe Bot';
+  const role = document.getElementById('p-role').value.trim();
+  if (!role) { toast('תאר קודם את תפקיד הבוט', true); return; }
+
+  const langLabels = { he: 'Hebrew', en: 'English', ar: 'Arabic', auto: 'the caller\'s language' };
+  const langLabel = langLabels[selectedLang] || 'Hebrew';
+  const tools = [...document.querySelectorAll('#tools-chips .chip.selected')].map(c => c.dataset.val);
+  const toolsDesc = tools.length ? `You have access to: ${tools.join(', ')}.` : '';
+
+  // Quick local template
+  const prompt = `You are ${name}, a voice assistant. ${role}. Always respond in ${langLabel}. Be concise and natural for voice conversations. ${toolsDesc}`.trim();
+  document.getElementById('p-persona').value = prompt;
+  document.getElementById('prompt-preview-wrap').classList.remove('hidden');
+
+  // Try AI generation
+  try {
+    const instruction = `Create a concise system prompt (max 3 sentences) for a voice AI assistant named "${name}". Role: ${role}. Language: ${langLabel}. ${toolsDesc} Make it professional and natural for phone conversations. Return only the system prompt text, no explanation.`;
+    const r = await fetch(API + '/api/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ message: instruction }) });
+    const d = await r.json();
+    if (d.response) {
+      document.getElementById('p-persona').value = d.response.trim();
+      toast('System prompt נוצר עם AI ✓');
+    }
+  } catch(e) { toast('AI לא זמין — נוצר prompt בסיסי'); }
+}
+
+async function savePersonaAndNext() {
+  const name = document.getElementById('p-name').value.trim() || 'CallMe Bot';
+  const greeting = document.getElementById('p-greeting').value.trim();
+  let persona = document.getElementById('p-persona').value.trim();
+  if (!persona) {
+    // Build from inputs without AI
+    const langLabels = { he: 'Hebrew', en: 'English', ar: 'Arabic', auto: "the caller's language" };
+    const role = document.getElementById('p-role').value.trim() || 'a helpful voice assistant';
+    persona = `You are ${name}, ${role}. Always respond in ${langLabels[selectedLang] || 'Hebrew'}. Be concise and natural for voice conversations.`;
+  }
+  const body = { name, persona, language: selectedLang, voice: selectedVoice };
+  if (greeting) body.greeting = greeting;
+  try {
+    await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('פרסונה נשמרה ✓');
+    setTimeout(() => goStep(2), 600);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function testSip() {
+  const result = document.getElementById('sip-result');
+  result.textContent = 'בודק...'; result.style.color = '#8892a4';
+  const domain = document.getElementById('sip-domain').value.trim();
+  const ext = document.getElementById('sip-ext').value.trim();
+  const pass = document.getElementById('sip-pass').value;
+  if (!domain || !ext) { result.textContent = '⚠️ מלא שרת ושלוחה'; result.style.color = '#f59e0b'; return; }
+  try {
+    const body = { sipServer: domain, sipExtension: ext, sipProvider: selectedProvider, sipAuthId: ext };
+    if (pass) body.sipPassword = pass;
+    await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    result.textContent = '✓ הגדרות SIP נשמרו — הבוט ינסה להתחבר'; result.style.color = '#22c55e';
+  } catch(e) { result.textContent = '✗ שגיאה: ' + e.message; result.style.color = '#ef4444'; }
+}
+
+function skipSip() { goStep(3); }
+
+async function saveSipAndNext() {
+  const domain = document.getElementById('sip-domain').value.trim();
+  const ext = document.getElementById('sip-ext').value.trim();
+  const pass = document.getElementById('sip-pass').value;
+  if (domain && ext) {
+    const body = { sipServer: domain, sipExtension: ext, sipProvider: selectedProvider, sipAuthId: ext };
+    if (pass) body.sipPassword = pass;
+    try { await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); } catch(e) {}
+  }
+  goStep(3);
+}
+
+function finish() {
+  if (wcActive) stopWc();
+  goStep('done');
+}
+
+// ── Web Call (same logic as dashboard) ────────────────────────────────────
+async function toggleWc() {
+  if (wcActive) { stopWc(); return; }
+  try { await startWc(); } catch(e) { toast('שגיאה: ' + e.message, true); updateWcStatus('שגיאה'); }
+}
+
+async function startWc() {
+  const tr = await fetch(API + '/api/live-token');
+  const { token } = await tr.json();
+  wcStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  wcCtx = new AudioContext();
+  wcScheduled = 0;
+  document.getElementById('wc-transcript').innerHTML = '';
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wcWs = new WebSocket(`${proto}://${location.host}/api/browser-call?token=${token}`);
+  wcWs.binaryType = 'arraybuffer';
+  wcWs.onopen = () => {
+    wcWs.send(JSON.stringify({ voice: selectedVoice, language: selectedLang }));
+    const source = wcCtx.createMediaStreamSource(wcStream);
+    wcProcessor = wcCtx.createScriptProcessor(4096, 1, 1);
+    const ratio = wcCtx.sampleRate / 16000;
+    wcProcessor.onaudioprocess = (e) => {
+      if (!wcWs || wcWs.readyState !== 1) return;
+      const inp = e.inputBuffer.getChannelData(0);
+      const outLen = Math.floor(inp.length / ratio);
+      const out = new Int16Array(outLen);
+      for (let i = 0; i < outLen; i++) { const s = inp[Math.round(i * ratio)]; out[i] = Math.max(-32768, Math.min(32767, s * 32767)); }
+      const rms = Math.sqrt(out.reduce((s,v)=>s+v*v,0)/out.length);
+      document.getElementById('wc-rms').textContent = '█'.repeat(Math.min(8, Math.round(rms / 500))) || '·';
+      wcWs.send(out.buffer);
+    };
+    source.connect(wcProcessor); wcProcessor.connect(wcCtx.destination);
+    wcActive = true;
+    const btn = document.getElementById('wc-btn');
+    btn.textContent = '⏹ סיים שיחה'; btn.classList.add('active');
+  };
+  wcWs.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      const i16 = new Int16Array(e.data); const f32 = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32767;
+      const buf = wcCtx.createBuffer(1, f32.length, 24000); buf.copyToChannel(f32, 0);
+      const src = wcCtx.createBufferSource(); src.buffer = buf; src.connect(wcCtx.destination);
+      const now = wcCtx.currentTime; const at = Math.max(now, wcScheduled);
+      src.start(at); wcScheduled = at + buf.duration;
+    } else {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'status') updateWcStatus({ ready: '🟢 מוכן', listening: '👂 מאזין', thinking: '💭 חושב...' }[msg.state] || msg.state);
+        if (msg.type === 'transcript') {
+          const d = document.getElementById('wc-transcript');
+          d.innerHTML += `<div><b>${msg.role === 'user' ? '👤' : '🤖'}</b> ${msg.text}</div>`;
+          d.scrollTop = d.scrollHeight;
+        }
+      } catch(_) {}
+    }
+  };
+  wcWs.onclose = stopWc; wcWs.onerror = () => { toast('WebCall נותק', true); stopWc(); };
+}
+
+function stopWc() {
+  wcActive = false;
+  if (wcProcessor) { try { wcProcessor.disconnect(); } catch(_) {} wcProcessor = null; }
+  if (wcStream) { wcStream.getTracks().forEach(t => t.stop()); wcStream = null; }
+  if (wcWs && wcWs.readyState < 2) wcWs.close(); wcWs = null;
+  if (wcCtx) { wcCtx.close().catch(()=>{}); wcCtx = null; }
+  const btn = document.getElementById('wc-btn');
+  btn.textContent = '📞 התחל שיחה'; btn.classList.remove('active');
+  document.getElementById('wc-rms').textContent = '';
+  updateWcStatus('לחץ להתחיל');
+}
+
+function updateWcStatus(text) { document.getElementById('wc-status').textContent = text; }
+
+// Add "Setup" link to dashboard if not already done
+</script>
+</body>
+</html>
