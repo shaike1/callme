@@ -114,7 +114,7 @@ class CallHandler {
   async _handleGeminiLiveCall(endpoint, dialog, callId) {
     const settings = global.botSettings || {};
     const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
-      'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
+      'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
 
     // Inject HA tool instructions into voice system prompt if enabled
     const integrations = global.integrations || {};

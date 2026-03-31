@@ -43,7 +43,7 @@ app.use('/audio', express.static(AUDIO_DIR));
 function getAdminCreds() {
   // botSettings overrides env vars (so dashboard-set password wins)
   const user = (botSettings && botSettings.adminUser) || process.env.ADMIN_USER || 'admin';
-  const pass = (botSettings && botSettings.adminPass) || process.env.ADMIN_PASS || 'luky2024';
+  const pass = (botSettings && botSettings.adminPass) || process.env.ADMIN_PASS || 'callme2024';
   return { user, pass };
 }
 
@@ -127,9 +127,9 @@ app.use(express.json());
 const SETTINGS_FILE = path.join(AUDIO_DIR, '..', 'bot-settings.json');
 
 const defaultSettings = {
-  name: 'Luky',
+  name: 'CallMe Bot',
   persona: process.env.GEMINI_SYSTEM_PROMPT ||
-    'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew.',
+    'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew.',
   language: process.env.CALL_LANGUAGE || 'he',
   extension: process.env.SIP_EXTENSION || '12611',
   greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
@@ -309,7 +309,7 @@ app.post('/api/ha/action', async (req, res) => {
   res.json(result);
 });
 
-// POST /api/ha/webhook — HA calls this to trigger Luky to make an outbound call
+// POST /api/ha/webhook — HA calls this to trigger CallMe Bot to make an outbound call
 app.post('/api/ha/webhook', async (req, res) => {
   const cfg = integrations.ha;
   const { to, callerId, webhookId } = req.body || {};
@@ -541,11 +541,11 @@ app.get('/api/status', async (req, res) => {
     const auth = req.headers.authorization;
     if (auth && auth.startsWith('Basic ')) {
       const [u, p] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
-      if (u === (process.env.ADMIN_USER || 'admin') && p === (process.env.ADMIN_PASS || 'luky2024')) {
+      if (u === (process.env.ADMIN_USER || 'admin') && p === (process.env.ADMIN_PASS || 'callme2024')) {
         res.writeHead(200); res.end(); return;
       }
     }
-    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Luky"' }); res.end();
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="CallMe Bot"' }); res.end();
   });
 
   const wss = new WebSocketServer({ server: liveServer, path: '/api/live' });
@@ -555,10 +555,10 @@ app.get('/api/status', async (req, res) => {
     // Basic auth via query token or header
     const url = new URL(req.url, 'http://localhost');
     const token = url.searchParams.get('token');
-    const expectedToken = Buffer.from(`${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'luky2024'}`).toString('base64');
+    const expectedToken = Buffer.from(`${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'callme2024'}`).toString('base64');
     const auth = req.headers.authorization;
     const authOk = token === expectedToken ||
-      (auth && auth.startsWith('Basic ') && Buffer.from(auth.slice(6), 'base64').toString() === `${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'luky2024'}`);
+      (auth && auth.startsWith('Basic ') && Buffer.from(auth.slice(6), 'base64').toString() === `${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'callme2024'}`);
     if (!authOk) { ws.close(4401, 'Unauthorized'); return; }
 
     const sessionId = `live-${Date.now()}`;
