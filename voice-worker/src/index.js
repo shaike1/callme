@@ -983,6 +983,44 @@ app.post('/api/calendar/test', async (req, res) => {
   }
 });
 
+// ── IVR Builder ───────────────────────────────────────────────────────────
+const IVR_FILE = path.join(AUDIO_DIR, '..', 'ivr.json');
+
+const defaultIvr = {
+  enabled: false,
+  greeting: 'ברוכים הבאים. לחצו 1 לשיחה עם הבוט. לחצו 2 להשארת הודעה.',
+  timeout: 5,
+  timeoutAction: 'ai',
+  nodes: [
+    { digit: '1', label: 'שיחה עם הבוט', action: 'ai', value: '' },
+    { digit: '2', label: 'השאר הודעה', action: 'voicemail', value: '' }
+  ]
+};
+
+let ivrConfig = { ...defaultIvr };
+try {
+  if (fs.existsSync(IVR_FILE)) ivrConfig = { ...defaultIvr, ...JSON.parse(fs.readFileSync(IVR_FILE, 'utf8')) };
+} catch (_) {}
+global.ivrConfig = ivrConfig;
+
+function saveIvr() {
+  try { fs.writeFileSync(IVR_FILE, JSON.stringify(ivrConfig, null, 2)); } catch (_) {}
+}
+
+app.get('/api/ivr', (req, res) => res.json(ivrConfig));
+
+app.post('/api/ivr', (req, res) => {
+  const { enabled, greeting, timeout, timeoutAction, nodes } = req.body || {};
+  if (enabled !== undefined) ivrConfig.enabled = !!enabled;
+  if (greeting !== undefined) ivrConfig.greeting = greeting;
+  if (timeout !== undefined) ivrConfig.timeout = Number(timeout);
+  if (timeoutAction !== undefined) ivrConfig.timeoutAction = timeoutAction;
+  if (nodes !== undefined) ivrConfig.nodes = nodes;
+  global.ivrConfig = ivrConfig;
+  saveIvr();
+  res.json({ success: true, ivr: ivrConfig });
+});
+
 // ── Recordings (call transcripts) ────────────────────────────────────────
 const RECORDINGS_DIR = path.join(AUDIO_DIR, 'recordings');
 if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR, { recursive: true });

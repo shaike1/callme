@@ -401,6 +401,45 @@
     <div id="webcall-transcript" style="margin-top:12px;max-height:220px;overflow-y:auto;font-size:13px;line-height:1.7"></div>
   </div>
 
+  <!-- IVR Builder -->
+  <div class="card">
+    <h2>🌳 IVR Builder — תפריט אוטומטי</h2>
+    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
+      כשמתקבלת שיחה נכנסת, הבוט ינגן תפריט ויחכה ללחיצת מקש. כל מקש מוביל לפעולה שונה.
+    </div>
+    <div class="form-row" style="align-items:center">
+      <label>הפעל IVR</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="ivr-enabled" style="width:18px;height:18px">
+        <span style="font-size:13px;color:#8892a4">פעיל</span>
+      </label>
+    </div>
+    <div class="form-row"><label>הודעת פתיחה</label>
+      <textarea id="ivr-greeting" rows="2" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:8px;color:#e2e8f0;font-size:14px;resize:vertical">ברוכים הבאים. לחצו 1 לשיחה עם הבוט. לחצו 2 להשארת הודעה.</textarea>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px">
+      <div style="flex:1"><label style="font-size:12px;color:#8892a4">Timeout (שניות)</label>
+        <input id="ivr-timeout" type="number" min="3" max="30" value="5" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:14px">
+      </div>
+      <div style="flex:1"><label style="font-size:12px;color:#8892a4">פעולה אם אין לחיצה</label>
+        <select id="ivr-timeout-action" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:14px">
+          <option value="ai">עבור לשיחה עם הבוט</option>
+          <option value="voicemail">קח הודעה</option>
+          <option value="hangup">נתק</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;color:#94a3b8;margin-bottom:8px">צמתי תפריט:</div>
+    <div id="ivr-nodes-list"></div>
+    <button class="btn" style="background:#2d3148;color:#e2e8f0;margin-top:8px;font-size:13px" onclick="addIvrNode()">+ הוסף מקש</button>
+
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-primary" onclick="saveIvr()">שמור IVR</button>
+    </div>
+    <div id="ivr-status" style="margin-top:8px;font-size:13px;color:#22c55e"></div>
+  </div>
+
   <!-- Recordings (transcripts) -->
   <div class="card">
     <h2>תמלולים — שיחות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadRecordings()">רענן</button></h2>
@@ -1291,12 +1330,79 @@ async function deleteVoicemail(file) {
   loadVoicemails();
 }
 
+// ── IVR Builder ────────────────────────────────────────────────────────────
+const IVR_ACTIONS = { ai: 'שיחה עם הבוט', voicemail: 'קח הודעה', transfer: 'העבר לשלוחה', message: 'נגן הודעה', hangup: 'נתק' };
+
+let ivrNodes = [];
+
+async function loadIvr() {
+  try {
+    const r = await fetch(API + '/api/ivr');
+    const d = await r.json();
+    document.getElementById('ivr-enabled').checked = !!d.enabled;
+    document.getElementById('ivr-greeting').value = d.greeting || '';
+    document.getElementById('ivr-timeout').value = d.timeout || 5;
+    document.getElementById('ivr-timeout-action').value = d.timeoutAction || 'ai';
+    ivrNodes = d.nodes || [];
+    renderIvrNodes();
+  } catch(e) {}
+}
+
+function renderIvrNodes() {
+  const el = document.getElementById('ivr-nodes-list');
+  if (!ivrNodes.length) { el.innerHTML = '<em style="color:#8892a4;font-size:13px">אין צמתים. לחץ "+ הוסף מקש"</em>'; return; }
+  el.innerHTML = ivrNodes.map((n, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#1a2236;border-radius:6px">
+      <input type="text" value="${n.digit}" maxlength="1" placeholder="מקש" style="width:44px;text-align:center;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:16px"
+        oninput="ivrNodes[${i}].digit=this.value">
+      <input type="text" value="${n.label || ''}" placeholder="תיאור (למשל: שירות לקוחות)" style="flex:1;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
+        oninput="ivrNodes[${i}].label=this.value">
+      <select style="background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
+        onchange="ivrNodes[${i}].action=this.value;renderIvrNodes()">
+        ${Object.entries(IVR_ACTIONS).map(([v,l]) => `<option value="${v}"${n.action===v?' selected':''}>${l}</option>`).join('')}
+      </select>
+      ${(n.action === 'transfer' || n.action === 'message') ? `
+        <input type="text" value="${n.value || ''}" placeholder="${n.action==='transfer'?'שלוחה/URI':'טקסט ההודעה'}"
+          style="flex:1;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
+          oninput="ivrNodes[${i}].value=this.value">` : '<span style="flex:1"></span>'}
+      <button class="btn btn-sm" style="background:#c62828;padding:4px 8px" onclick="removeIvrNode(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addIvrNode() {
+  ivrNodes.push({ digit: String(ivrNodes.length + 1), label: '', action: 'ai', value: '' });
+  renderIvrNodes();
+}
+
+function removeIvrNode(i) {
+  ivrNodes.splice(i, 1);
+  renderIvrNodes();
+}
+
+async function saveIvr() {
+  const body = {
+    enabled: document.getElementById('ivr-enabled').checked,
+    greeting: document.getElementById('ivr-greeting').value,
+    timeout: parseInt(document.getElementById('ivr-timeout').value) || 5,
+    timeoutAction: document.getElementById('ivr-timeout-action').value,
+    nodes: ivrNodes
+  };
+  try {
+    const r = await fetch(API + '/api/ivr', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    const st = document.getElementById('ivr-status');
+    if (d.success) { st.style.color='#22c55e'; st.textContent = 'IVR נשמר ✓' + (body.enabled ? ' — פעיל' : ' — כבוי'); }
+    else { st.style.color='#ef5350'; st.textContent = 'שגיאה'; }
+  } catch(e) { document.getElementById('ivr-status').textContent = e.message; }
+}
+
 loadSettings();
 loadIntegrations();
 loadContacts();
 loadScheduler();
 loadRecordings();
 loadVoicemails();
+loadIvr();
 refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);

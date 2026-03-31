@@ -106,7 +106,10 @@ class CallHandler {
         }
       });
 
-      if (CONVERSATION_ENGINE === 'gemini-live') {
+      const ivrCfg = global.ivrConfig;
+      if (CONVERSATION_ENGINE === 'gemini-live' && ivrCfg && ivrCfg.enabled) {
+        await this._handleIvrCall(endpoint, dialog, callId, callerName);
+      } else if (CONVERSATION_ENGINE === 'gemini-live') {
         await this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
       } else {
         await this._handleSttTtsCall(endpoint, dialog, callId);
@@ -685,6 +688,84 @@ class CallHandler {
     // Schedule cleanup after 60s
     setTimeout(() => fs.unlink(filePath, () => {}), 60000);
     return url;
+  }
+
+  // ── IVR handler ─────────────────────────────────────────────────────────
+
+  async _playTts(endpoint, callId, text, lang) {
+    try {
+      const result = await this.sttTts.synthesize(text, callId, { languageCode: lang || 'he-IL' });
+      if (result && result.success) {
+        const tmpFile = path.join(os.tmpdir(), `ivr-${callId}-${Date.now()}.mp3`);
+        fs.writeFileSync(tmpFile, result.audio);
+        await endpoint.play(tmpFile);
+        fs.unlink(tmpFile, () => {});
+      }
+    } catch (err) {
+      logger.error('IVR TTS error', { callId, error: err.message });
+    }
+  }
+
+  async _handleIvrCall(endpoint, dialog, callId, callerName) {
+    const ivr = global.ivrConfig || {};
+    const nodes = ivr.nodes || [];
+    const lang = (global.botSettings || {}).language || 'he-IL';
+    const greeting = ivr.greeting || 'ברוכים הבאים.';
+    const timeoutMs = ((ivr.timeout || 5) * 1000);
+
+    logger.info('IVR started', { callId, nodes: nodes.length });
+
+    // Play greeting via TTS
+    await this._playTts(endpoint, callId, greeting, lang);
+
+    // Enable in-band DTMF detection
+    try { await endpoint.execute('start_dtmf'); } catch (_) {}
+
+    // Wait for DTMF digit
+    const digit = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), timeoutMs);
+      endpoint.once('dtmf', (evt) => {
+        clearTimeout(timer);
+        resolve(evt && (evt.dtmf || evt.digit || ''));
+      });
+    });
+
+    logger.info('IVR digit received', { callId, digit });
+
+    if (!digit) {
+      // Timeout — use configured default action
+      const action = ivr.timeoutAction || 'ai';
+      if (action === 'ai') return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+      if (action === 'voicemail') return this._handleVoicemail(endpoint, dialog, callId, callerName);
+      await this._playTts(endpoint, callId, 'לא קיבלנו תגובה. להתראות.', lang);
+      try { dialog.destroy(); } catch (_) {}
+      return;
+    }
+
+    const node = nodes.find(n => String(n.digit) === String(digit));
+    if (!node) {
+      await this._playTts(endpoint, callId, 'בחירה לא חוקית. להתראות.', lang);
+      try { dialog.destroy(); } catch (_) {}
+      return;
+    }
+
+    switch (node.action) {
+      case 'ai':
+        return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+      case 'voicemail':
+        return this._handleVoicemail(endpoint, dialog, callId, callerName);
+      case 'transfer':
+        try { await endpoint.execute('transfer', node.value || ''); } catch (err) {
+          logger.error('IVR transfer error', { callId, error: err.message });
+        }
+        break;
+      case 'message':
+        await this._playTts(endpoint, callId, node.value || '', lang);
+        try { dialog.destroy(); } catch (_) {}
+        break;
+      default:
+        return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+    }
   }
 
   // ── Legacy STT+TTS path ──────────────────────────────────────────────────
