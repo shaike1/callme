@@ -239,7 +239,7 @@ class CallHandler {
     // Gemini from ever completing a response turn.
     let waitingForGemini = false;
     let waitingForGeminiTimer = null;
-    const GEMINI_RESPONSE_TIMEOUT_MS = 5000; // safety unlock after 5s if no response
+    const GEMINI_RESPONSE_TIMEOUT_MS = 10000; // safety unlock after 10s if no response
 
     this.audioForkServer.register(callId, {
       onAudio: (buf) => {
