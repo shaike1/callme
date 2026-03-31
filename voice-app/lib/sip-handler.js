@@ -4,6 +4,7 @@
  */
 
 const { setTimeout: sleep } = require('node:timers/promises');
+var liveV2Bridge = require('./live-v2-bridge');
 
 // Audio cue URLs
 const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
@@ -109,7 +110,7 @@ function extractVoiceLine(response) {
  * @param {Object} deviceConfig - Device configuration (name, prompt, voiceId, etc.) or null for default
  */
 async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig) {
-  const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer } = options;
+  const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer, saveAudio, conversationEngine = process.env.VOICE_CONVERSATION_ENGINE || 'classic' } = options;
 
   let session = null;
   let forkRunning = false;
@@ -207,6 +208,33 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
         const byeUrl = await ttsService.generateSpeech("Goodbye! Call again anytime.", voiceId, language);
         await endpoint.play(byeUrl);
         break;
+      }
+
+      if (conversationEngine === 'gemini-live') {
+        console.log('[' + new Date().toISOString() + '] GEMINI LIVE Processing...');
+        const liveResult = await liveV2Bridge.processTurn({
+          callId: callUuid,
+          audioBuffer: utterance.audio,
+          language,
+          systemPrompt: devicePrompt,
+          interruptible: true,
+          conversationEngine,
+          saveAudio,
+          sampleRate: 16000,
+        });
+
+        if (liveResult.audioUrl) {
+          await endpoint.play(liveResult.audioUrl);
+        } else if (liveResult.responseText) {
+          const fallbackUrl = await ttsService.generateSpeech(liveResult.responseText, voiceId, language);
+          await endpoint.play(fallbackUrl);
+        } else {
+          const clarifyUrl = await ttsService.generateSpeech("Sorry, I didn't get a voice response. Could you try again?", voiceId, language);
+          await endpoint.play(clarifyUrl);
+        }
+
+        console.log('[' + new Date().toISOString() + '] CONVERSATION Turn ' + turnCount + ' complete (Gemini Live)');
+        continue;
       }
 
       // THINKING FEEDBACK

@@ -204,7 +204,8 @@ function initializeServers() {
     whisperClient: whisperClient,
     claudeBridge: claudeBridge,
     ttsService: ttsService,
-    wsPort: config.ws_port
+    wsPort: config.ws_port,
+    saveAudio: httpServer.saveAudio
   });
 
   httpServer.app.use("/api", outboundRouter);
@@ -247,7 +248,9 @@ function checkReadyState() {
         claudeBridge: claudeBridge,
         ttsService: ttsService,
         wsPort: config.ws_port,
-        externalIp: config.external_ip
+        externalIp: config.external_ip,
+        saveAudio: httpServer.saveAudio,
+        conversationEngine: process.env.VOICE_CONVERSATION_ENGINE || 'classic'
       }).catch(function(err) {
         console.error("[" + new Date().toISOString() + "] CALL Error: " + err.message);
       });

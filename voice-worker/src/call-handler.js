@@ -116,6 +116,12 @@ class CallHandler {
     const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
 
+    // Inject HA tool instructions into voice system prompt if enabled
+    const integrations = global.integrations || {};
+    if (integrations.ha?.enabled && integrations.ha?.url) {
+      systemPrompt += '\n\nYou can control smart home devices. When the user asks to turn on/off lights, adjust temperature, etc., confirm verbally in Hebrew and append (at the very end of your response): <ha_action>{"domain":"light","service":"turn_on","entity_id":"light.living_room"}</ha_action>. Use the correct domain/service/entity_id for the requested action.';
+    }
+
     const voiceName = settings.voice || 'Kore';
     const session = await geminiManager.getOrCreate(callId, {
       systemPrompt,
@@ -139,6 +145,18 @@ class CallHandler {
 
     session.on('output_transcript', (text) => {
       logger.info('Bot said', { callId, text });
+      // Execute any Home Assistant actions embedded in the transcript
+      const haMatch = text.match(/<ha_action>([\s\S]*?)<\/ha_action>/);
+      if (haMatch && global.callHaService) {
+        try {
+          const action = JSON.parse(haMatch[1]);
+          global.callHaService(action.domain, action.service, action.serviceData || { entity_id: action.entity_id })
+            .then(r => logger.info('HA action executed', { callId, action, result: r }))
+            .catch(e => logger.error('HA action failed', { callId, error: e.message }));
+        } catch (e) {
+          logger.error('HA action parse error', { callId, error: e.message });
+        }
+      }
     });
 
     // Suppress audio input until the first greeting has been played, then during

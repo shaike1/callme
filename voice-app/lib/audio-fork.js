@@ -1,6 +1,12 @@
 const { EventEmitter } = require('node:events');
 const WebSocket = require('ws');
 
+const AUDIOFORK_END_SILENCE_MS = parseInt(process.env.AUDIOFORK_END_SILENCE_MS || '1200', 10);
+const AUDIOFORK_MIN_SPEECH_MS = parseInt(process.env.AUDIOFORK_MIN_SPEECH_MS || '180', 10);
+const AUDIOFORK_MIN_SPEECH_RATIO = parseFloat(process.env.AUDIOFORK_MIN_SPEECH_RATIO || '0.08');
+const AUDIOFORK_DTMF_MIN_SPEECH_MS = parseInt(process.env.AUDIOFORK_DTMF_MIN_SPEECH_MS || '100', 10);
+const AUDIOFORK_DTMF_MIN_SPEECH_RATIO = parseFloat(process.env.AUDIOFORK_DTMF_MIN_SPEECH_RATIO || '0.05');
+
 function pcmStats(buf, endian = 'LE') {
   const sampleCount = Math.floor(buf.length / 2);
   if (sampleCount <= 0) {
@@ -29,8 +35,8 @@ class AudioForkSession extends EventEmitter {
     ws,
     callUuid,
     sampleRate = 16000,
-    endSilenceMs = 1500,
-    minSpeechMs = 350,
+    endSilenceMs = AUDIOFORK_END_SILENCE_MS,
+    minSpeechMs = AUDIOFORK_MIN_SPEECH_MS,
     maxUtteranceMs = 60000
   }) {
     super();
@@ -136,8 +142,8 @@ class AudioForkSession extends EventEmitter {
 
     // For DTMF-triggered finalization, be more lenient with requirements
     const isDtmfTriggered = reason === 'dtmf_trigger';
-    const minSpeechRequired = isDtmfTriggered ? 100 : this.minSpeechMs;
-    const minRatioRequired = isDtmfTriggered ? 0.05 : 0.12;
+    const minSpeechRequired = isDtmfTriggered ? AUDIOFORK_DTMF_MIN_SPEECH_MS : this.minSpeechMs;
+    const minRatioRequired = isDtmfTriggered ? AUDIOFORK_DTMF_MIN_SPEECH_RATIO : AUDIOFORK_MIN_SPEECH_RATIO;
 
     if (speechMs < minSpeechRequired || speechRatio < minRatioRequired) {
       console.log('[AUDIO-DEBUG] Utterance REJECTED: speechMs=' + Math.round(speechMs) + ' < ' + minSpeechRequired + ' OR speechRatio=' + speechRatio.toFixed(2) + ' < ' + minRatioRequired);

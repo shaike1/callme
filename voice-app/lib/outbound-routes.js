@@ -22,6 +22,7 @@ var whisperClient = null;
 var claudeBridge = null;
 var ttsService = null;
 var wsPort = 3001;
+var httpSaveAudio = null;
 
 // v2 rollout router (percentage-based)
 const V2_ROLLOUT_PERCENT = Number(process.env.V2_ROLLOUT_PERCENT || 100);
@@ -143,6 +144,7 @@ router.post('/outbound-call', async function(req, res) {
     var callerId = req.body.callerId;
     var timeoutSeconds = req.body.timeoutSeconds || 30;
     var webhookUrl = req.body.webhookUrl;
+    var conversationEngine = req.body.conversationEngine || process.env.VOICE_CONVERSATION_ENGINE || 'classic';
 
     // v2 percentage rollout router (safe fallback to v1)
     if (shouldRouteToV2(req)) {
@@ -161,7 +163,8 @@ router.post('/outbound-call', async function(req, res) {
           device: deviceParam,
           callerId: callerId,
           timeoutSeconds: timeoutSeconds,
-          webhookUrl: webhookUrl
+          webhookUrl: webhookUrl,
+          conversationEngine: conversationEngine
         }, {
           timeout: timeoutSeconds * 1000,
           headers: {
@@ -328,7 +331,9 @@ router.post('/outbound-call', async function(req, res) {
               initialContext: message,
               context: context,           // NEW: pass structured context
               skipGreeting: true,
-              maxTurns: 20
+              maxTurns: 20,
+              conversationEngine: conversationEngine,
+              saveAudio: httpSaveAudio
             });
 
             await hangupCall(dialog, endpoint, callId);
@@ -465,6 +470,7 @@ function setupRoutes(deps) {
   claudeBridge = deps.claudeBridge || null;
   ttsService = deps.ttsService || null;
   wsPort = deps.wsPort || 3001;
+  httpSaveAudio = deps.saveAudio || null;
 
   var conversationReady = !!(audioForkServer && whisperClient && claudeBridge && ttsService);
 

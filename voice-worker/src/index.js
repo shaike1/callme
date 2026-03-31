@@ -234,6 +234,56 @@ app.post('/api/integrations/test/:name', async (req, res) => {
   }
 });
 
+// ── Home Assistant helper ─────────────────────────────────────────────────
+async function callHaService(domain, service, serviceData) {
+  const cfg = integrations.ha;
+  if (!cfg?.enabled || !cfg?.url || !cfg?.token) return { ok: false, error: 'HA not configured' };
+  const payload = JSON.stringify(serviceData || {});
+  const urlStr = `${cfg.url.replace(/\/$/, '')}/api/services/${domain}/${service}`;
+  const urlObj = new URL(urlStr);
+  const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: urlObj.hostname, port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+      path: urlObj.pathname, method: 'POST',
+      headers: { 'Authorization': `Bearer ${cfg.token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      timeout: 5000
+    };
+    const req2 = mod.request(opts, r => { r.resume(); resolve({ ok: r.statusCode < 300 }); });
+    req2.on('error', e => resolve({ ok: false, error: e.message }));
+    req2.on('timeout', () => resolve({ ok: false, error: 'timeout' }));
+    req2.write(payload); req2.end();
+  });
+}
+global.callHaService = callHaService;
+
+// POST /api/ha/action — proxy to HA service call (used by external integrations or tests)
+app.post('/api/ha/action', async (req, res) => {
+  const { domain, service, serviceData } = req.body || {};
+  if (!domain || !service) return res.status(400).json({ error: 'domain and service required' });
+  const result = await callHaService(domain, service, serviceData);
+  res.json(result);
+});
+
+// POST /api/ha/webhook — HA calls this to trigger Luky to make an outbound call
+app.post('/api/ha/webhook', async (req, res) => {
+  const cfg = integrations.ha;
+  const { to, callerId, webhookId } = req.body || {};
+  if (cfg?.webhookId && webhookId !== cfg.webhookId) {
+    return res.status(403).json({ error: 'invalid webhook id' });
+  }
+  if (!to) return res.status(400).json({ error: 'missing "to"' });
+  const from = callerId || process.env.SIP_EXTENSION || '12611';
+  const target = `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
+  logger.info('HA webhook: outbound call', { to, target });
+  try {
+    const { dialog } = await callHandler.makeOutboundCall(target, from);
+    res.json({ success: true, callId: dialog.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Webhook: text chat with the bot ──────────────────────────────────────
 const https = require('https');
 
@@ -244,7 +294,11 @@ app.post('/api/chat', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
 
-  const systemPrompt = botSettings.persona;
+  let systemPrompt = botSettings.persona;
+  // Inject HA tool instructions if enabled
+  if (integrations.ha?.enabled && integrations.ha?.url) {
+    systemPrompt += '\n\nYou can control smart home devices. When the user asks to turn on/off lights, change temperature, etc., respond with a JSON action block:\n<ha_action>{"domain":"light","service":"turn_on","entity_id":"light.living_room"}</ha_action>\nThen also respond verbally confirming the action in Hebrew.';
+  }
   const payload = JSON.stringify({
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: 'user', parts: [{ text: message }] }]

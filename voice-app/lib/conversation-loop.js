@@ -13,6 +13,7 @@
  */
 
 const logger = require('./logger');
+const liveV2Bridge = require('./live-v2-bridge');
 
 // Audio cue URLs
 const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
@@ -134,7 +135,9 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     initialContext = null,
     skipGreeting = false,
     deviceConfig = null,
-    maxTurns = 20
+    maxTurns = 20,
+    conversationEngine = process.env.VOICE_CONVERSATION_ENGINE || 'classic',
+    saveAudio = null
   } = options;
 
   // Extract devicePrompt, voiceId, language, thinkingPhrase and referenceAudio from deviceConfig
@@ -175,9 +178,9 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       await endpoint.play(greetingUrl);
     }
 
-    // Prime Claude with context if this is an outbound call (NON-BLOCKING)
-    // Fire-and-forget: we don't use the response, just establishing session context
-    if (initialContext && callActive) {
+    // Prime Claude only for the classic engine.
+    // Gemini Live manages its own realtime session/instructions.
+    if (initialContext && callActive && conversationEngine !== 'gemini-live') {
       logger.info('Priming Claude with outbound context (non-blocking)', { callUuid });
       claudeBridge.query(
         `[SYSTEM CONTEXT - DO NOT REPEAT]: You just called the user to tell them: "${initialContext}". They have answered. Now listen to their response and help them.`,
@@ -312,6 +315,54 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       } catch (e) {
         if (!callActive) break;
         logger.warn('Got-it beep failed', { callUuid, error: e.message });
+      }
+
+      if (conversationEngine === 'gemini-live') {
+        logger.info('Processing turn via Gemini Live bridge', {
+          callUuid,
+          audioBytes: utterance.audio.length,
+          reason: utterance.reason
+        });
+        const liveResult = await liveV2Bridge.processTurn({
+          callId: callUuid,
+          audioBuffer: utterance.audio,
+          language,
+          systemPrompt: devicePrompt,
+          interruptible: true,
+          conversationEngine,
+          saveAudio,
+          sampleRate: 16000,
+        });
+
+        if (!callActive) {
+          logger.info('Call ended during Gemini Live processing', { callUuid });
+          break;
+        }
+
+        logger.info('Gemini Live responded', {
+          callUuid,
+          transcript: liveResult.transcript,
+          responseText: liveResult.responseText,
+          hasAudio: !!liveResult.audioUrl,
+        });
+
+        if (liveResult.audioUrl) {
+          await endpoint.play(liveResult.audioUrl);
+        } else if (liveResult.responseText) {
+          const fallbackUrl = await ttsService.generateSpeech(liveResult.responseText, voiceId, language, referenceAudio);
+          if (callActive) await endpoint.play(fallbackUrl);
+        } else {
+          const clarifyUrl = await ttsService.generateSpeech(
+            "לא קיבלתי תשובה קולית, אפשר לנסות שוב.",
+            voiceId,
+            language,
+            referenceAudio
+          );
+          if (callActive) await endpoint.play(clarifyUrl);
+        }
+
+        logger.info('Turn complete', { callUuid, turn: turnCount, engine: conversationEngine });
+        continue;
       }
 
       // Transcribe
