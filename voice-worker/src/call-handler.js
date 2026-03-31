@@ -226,10 +226,15 @@ class CallHandler {
     let speaking = false;
     let silenceCount = 0;
     let speechCount = 0;
+    // After sending activityEnd, suppress new input for 1.5s so Gemini can process
+    // without being interrupted by the tail of the utterance or mic echo
+    let postUtteranceSuppressUntil = 0;
+    const POST_UTTERANCE_SUPPRESS_MS = 1500;
 
     this.audioForkServer.register(callId, {
       onAudio: (buf) => {
         if (!firstPlayDone || isPlaying || Date.now() < postPlaySuppressUntil) return;
+        if (Date.now() < postUtteranceSuppressUntil) return;
 
         const rms = calcRms(buf);
 
@@ -249,6 +254,7 @@ class CallHandler {
             if (silenceCount >= SILENCE_FRAMES_NEEDED) {
               if (speechCount >= MIN_SPEECH_FRAMES) {
                 session.sendActivityEnd();
+                postUtteranceSuppressUntil = Date.now() + POST_UTTERANCE_SUPPRESS_MS;
                 logger.info('Speech end → sent to Gemini', { callId, speechFrames: speechCount });
               }
               speaking = false;
