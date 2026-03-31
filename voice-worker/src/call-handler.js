@@ -120,10 +120,67 @@ class CallHandler {
     const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
 
-    // Inject HA tool instructions into voice system prompt if enabled
     const integrations = global.integrations || {};
+
+    const toolDeclarations = [
+      {
+        name: 'find_contact',
+        description: 'Search the contacts book by name. Returns phone number and contact info.',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Contact name to search for' }
+          },
+          required: ['name']
+        }
+      },
+      {
+        name: 'add_scheduled_call',
+        description: 'Schedule a future outbound call. Use when user says "remind me", "call me at", "call X tomorrow", etc.',
+        parameters: {
+          type: 'object',
+          properties: {
+            target: { type: 'string', description: 'Phone number or contact name to call' },
+            time: { type: 'string', description: 'Time in HH:MM format (24h)' },
+            message: { type: 'string', description: 'What the bot should say when the call is answered' },
+            repeat: { type: 'string', description: 'once, daily, or weekdays', enum: ['once', 'daily', 'weekdays'] }
+          },
+          required: ['target', 'time']
+        }
+      },
+      {
+        name: 'get_bot_status',
+        description: 'Get current bot statistics: active calls, total calls today, SIP registration status.',
+        parameters: { type: 'object', properties: {} }
+      },
+      {
+        name: 'add_contact',
+        description: 'Save a new contact to the address book.',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Contact name' },
+            phone: { type: 'string', description: 'Phone number or SIP URI' }
+          },
+          required: ['name', 'phone']
+        }
+      }
+    ];
+
     if (integrations.ha?.enabled && integrations.ha?.url) {
-      systemPrompt += '\n\nYou can control smart home devices. When the user asks to turn on/off lights, adjust temperature, etc., confirm verbally in Hebrew and append (at the very end of your response): <ha_action>{"domain":"light","service":"turn_on","entity_id":"light.living_room"}</ha_action>. Use the correct domain/service/entity_id for the requested action.';
+      toolDeclarations.push({
+        name: 'control_home_assistant',
+        description: 'Control smart home devices via Home Assistant. Turn lights on/off, adjust temperature, lock doors, etc.',
+        parameters: {
+          type: 'object',
+          properties: {
+            domain: { type: 'string', description: 'HA domain: light, switch, climate, lock, script, etc.' },
+            service: { type: 'string', description: 'HA service: turn_on, turn_off, toggle, set_temperature, etc.' },
+            entity_id: { type: 'string', description: 'HA entity ID, e.g. light.living_room' }
+          },
+          required: ['domain', 'service']
+        }
+      });
     }
 
     const voiceName = settings.voice || 'Kore';
@@ -134,7 +191,8 @@ class CallHandler {
         voice_config: {
           prebuilt_voice_config: { voice_name: voiceName }
         }
-      }
+      },
+      tools: toolDeclarations,
     });
 
     let audioChunks = [];
@@ -149,18 +207,6 @@ class CallHandler {
 
     session.on('output_transcript', (text) => {
       logger.info('Bot said', { callId, text });
-      // Execute any Home Assistant actions embedded in the transcript
-      const haMatch = text.match(/<ha_action>([\s\S]*?)<\/ha_action>/);
-      if (haMatch && global.callHaService) {
-        try {
-          const action = JSON.parse(haMatch[1]);
-          global.callHaService(action.domain, action.service, action.serviceData || { entity_id: action.entity_id })
-            .then(r => logger.info('HA action executed', { callId, action, result: r }))
-            .catch(e => logger.error('HA action failed', { callId, error: e.message }));
-        } catch (e) {
-          logger.error('HA action parse error', { callId, error: e.message });
-        }
-      }
     });
 
     // Suppress audio input until the first greeting has been played, then during
@@ -245,6 +291,72 @@ class CallHandler {
         isPlaying = false;
       }
       logger.info('Barge-in detected', { callId, wasPlaying });
+    });
+
+    session.on('tool_call', async (functionCalls) => {
+      const responses = [];
+      for (const fc of functionCalls) {
+        logger.info('Tool call', { callId, tool: fc.name, args: fc.args });
+        let result = {};
+        try {
+          if (fc.name === 'find_contact') {
+            const query = (fc.args.name || '').toLowerCase();
+            const found = (global.contacts || []).filter(c => c.name.toLowerCase().includes(query));
+            if (found.length === 0) {
+              result = { found: false, message: 'No contact found with that name' };
+            } else if (found.length === 1) {
+              result = { found: true, name: found[0].name, phone: found[0].phone };
+            } else {
+              result = { found: true, multiple: true, contacts: found.map(c => ({ name: c.name, phone: c.phone })) };
+            }
+          } else if (fc.name === 'add_scheduled_call') {
+            const { target, time, message, repeat } = fc.args;
+            let resolvedTarget = target;
+            if (!/\d{5,}/.test(target) && !target.startsWith('sip:')) {
+              const contact = (global.contacts || []).find(c => c.name.toLowerCase().includes(target.toLowerCase()));
+              if (contact) resolvedTarget = contact.phone;
+            }
+            const job = { id: `j-${Date.now()}`, name: target, target: resolvedTarget, message: message || '', time, repeat: repeat || 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+            const [hh, mm] = time.split(':').map(Number);
+            const next = new Date(); next.setHours(hh, mm, 0, 0);
+            if (next <= new Date()) next.setDate(next.getDate() + 1);
+            job.nextAt = next.getTime();
+            (global.scheduledJobs || []).push(job);
+            if (global.saveScheduler) global.saveScheduler();
+            result = { success: true, scheduledFor: next.toLocaleTimeString('he-IL'), target: resolvedTarget };
+          } else if (fc.name === 'get_bot_status') {
+            const stats = global.metrics ? global.metrics.getStats() : {};
+            result = {
+              activeCalls: global.activeCalls ? global.activeCalls.size : 0,
+              totalCalls: stats.totalCalls || 0,
+              successfulCalls: stats.successfulCalls || 0,
+              contacts: (global.contacts || []).length,
+              scheduledJobs: (global.scheduledJobs || []).filter(j => j.enabled).length,
+            };
+          } else if (fc.name === 'add_contact') {
+            const { name, phone } = fc.args;
+            const contact = { id: `c-${Date.now()}`, name, phone, notes: '', createdAt: Date.now() };
+            (global.contacts || []).push(contact);
+            if (global.saveContacts) global.saveContacts();
+            result = { success: true, message: `Saved ${name} as ${phone}` };
+          } else if (fc.name === 'control_home_assistant') {
+            const { domain, service, entity_id } = fc.args;
+            if (global.callHaService) {
+              const r = await global.callHaService(domain, service, entity_id ? { entity_id } : {});
+              result = { success: true, response: r };
+            } else {
+              result = { success: false, error: 'Home Assistant not configured' };
+            }
+          } else {
+            result = { error: 'Unknown tool: ' + fc.name };
+          }
+        } catch (e) {
+          logger.error('Tool call error', { callId, tool: fc.name, error: e.message });
+          result = { error: e.message };
+        }
+        responses.push({ id: fc.id, name: fc.name, response: { output: result } });
+      }
+      session.sendToolResponse(responses);
     });
 
     // Send initial greeting

@@ -562,6 +562,14 @@ try {
 } catch (_) {}
 const saveScheduler = () => { try { fs.writeFileSync(SCHEDULER_FILE, JSON.stringify(scheduledJobs, null, 2)); } catch (_) {} };
 
+// Expose globals for tool calling in call-handler
+global.contacts = contacts;
+global.scheduledJobs = scheduledJobs;
+global.activeCalls = activeCalls;
+global.saveContacts = saveContacts;
+global.saveScheduler = saveScheduler;
+global.metrics = metrics;
+
 function computeNextAt(job) {
   const now = new Date();
   if (!job.time) return null; // HH:MM in local time

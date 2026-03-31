@@ -18,7 +18,7 @@ const GEMINI_WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.gen
 const DEFAULT_MODEL = 'models/gemini-2.5-flash-native-audio-latest';
 
 class GeminiLiveSession extends EventEmitter {
-  constructor({ callId, apiKey, model, systemPrompt, language, voiceConfig }) {
+  constructor({ callId, apiKey, model, systemPrompt, language, voiceConfig, tools }) {
     super();
     this.callId = callId;
     this.apiKey = apiKey;
@@ -26,6 +26,7 @@ class GeminiLiveSession extends EventEmitter {
     this.systemPrompt = systemPrompt || null;
     this.language = language || 'he';
     this.voiceConfig = voiceConfig || null;
+    this.tools = tools || null;
 
     this.ws = null;
     this.ready = false;
@@ -90,6 +91,10 @@ class GeminiLiveSession extends EventEmitter {
       };
     }
 
+    if (this.tools && this.tools.length > 0) {
+      setup.setup.tools = [{ functionDeclarations: this.tools }];
+    }
+
     this.ws.send(JSON.stringify(setup));
     logger.debug('GeminiLive setup sent', { callId: this.callId, model: this.model });
   }
@@ -111,6 +116,12 @@ class GeminiLiveSession extends EventEmitter {
       // Flush any audio buffered before ready
       for (const chunk of this._pendingAudio) this._sendAudioChunk(chunk);
       this._pendingAudio = [];
+      return;
+    }
+
+    // Tool call from Gemini
+    if (msg.toolCall) {
+      this.emit('tool_call', msg.toolCall.functionCalls);
       return;
     }
 
@@ -251,6 +262,23 @@ class GeminiLiveSession extends EventEmitter {
     } catch (err) {
       logger.warn('GeminiLive: failed to send speech', { callId: this.callId, error: err.message });
     }
+  }
+
+  /**
+   * Send tool call responses back to Gemini.
+   * @param {Array<{id, name, response}>} responses
+   */
+  sendToolResponse(responses) {
+    if (!this.ws) return;
+    this.ws.send(JSON.stringify({
+      tool_response: {
+        function_responses: responses.map(r => ({
+          id: r.id,
+          name: r.name,
+          response: r.response,
+        }))
+      }
+    }));
   }
 
   close() {
