@@ -471,6 +471,197 @@ app.get('/api/status', async (req, res) => {
   });
 });
 
+// ── Gemini Live WebSocket bridge for Teamy ───────────────────────────────
+// Teamy connects here to get a full bidirectional Gemini Live voice session.
+// Protocol:
+//   Client → Server: first message = JSON config {"voice","language","systemPrompt"}
+//                    subsequent binary messages = PCM 16-bit LE 16kHz mono frames
+//   Server → Client: binary = PCM 16-bit LE 24kHz mono (Gemini output)
+//                    text JSON = {"type":"transcript","role":"user"|"bot","text":"..."}
+//                             or {"type":"status","state":"ready"|"listening"|"thinking"}
+{
+  const WebSocketServer = require('ws').Server;
+  const GeminiLiveSession = require('./gemini-live/session');
+  const http = require('http');
+
+  const liveServer = http.createServer((req, res) => {
+    // Basic auth check for HTTP upgrade requests
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith('Basic ')) {
+      const [u, p] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+      if (u === (process.env.ADMIN_USER || 'admin') && p === (process.env.ADMIN_PASS || 'luky2024')) {
+        res.writeHead(200); res.end(); return;
+      }
+    }
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Luky"' }); res.end();
+  });
+
+  const wss = new WebSocketServer({ server: liveServer, path: '/api/live' });
+  const LIVE_PORT = parseInt(process.env.LIVE_PORT || '3102');
+
+  wss.on('connection', (ws, req) => {
+    // Basic auth via query token or header
+    const url = new URL(req.url, 'http://localhost');
+    const token = url.searchParams.get('token');
+    const expectedToken = Buffer.from(`${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'luky2024'}`).toString('base64');
+    const auth = req.headers.authorization;
+    const authOk = token === expectedToken ||
+      (auth && auth.startsWith('Basic ') && Buffer.from(auth.slice(6), 'base64').toString() === `${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASS || 'luky2024'}`);
+    if (!authOk) { ws.close(4401, 'Unauthorized'); return; }
+
+    const sessionId = `live-${Date.now()}`;
+    logger.info('Teamy Live connection', { sessionId });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+
+    let session = null;
+    let configured = false;
+    let audioChunks = [];
+    let isPlaying = false;
+
+    // VAD state (same as call-handler.js)
+    const SPEECH_RMS_THRESHOLD = 400;
+    const SILENCE_FRAMES_NEEDED = 20;
+    const MIN_SPEECH_FRAMES = 15;
+    let speaking = false, silenceCount = 0, speechCount = 0;
+    let waitingForGemini = false;
+    let waitingTimer = null;
+
+    const calcRms = (buf) => {
+      let sum = 0;
+      for (let i = 0; i + 1 < buf.length; i += 2) { const s = buf.readInt16LE(i); sum += s * s; }
+      return Math.sqrt(sum / (buf.length / 2));
+    };
+
+    const sendStatus = (state) => { try { ws.send(JSON.stringify({ type: 'status', state })); } catch(_) {} };
+    const sendTranscript = (role, text) => { try { ws.send(JSON.stringify({ type: 'transcript', role, text })); } catch(_) {} };
+
+    ws.on('message', async (data, isBinary) => {
+      if (!configured) {
+        // First message must be JSON config
+        try {
+          const cfg = JSON.parse(data.toString());
+          const settings = global.botSettings || {};
+          const systemPrompt = cfg.systemPrompt || settings.persona ||
+            'You are a helpful voice assistant. Speak in the language the user uses.';
+          const voiceName = cfg.voice || settings.voice || 'Kore';
+          const language = cfg.language || settings.language || 'he';
+
+          session = new GeminiLiveSession({
+            callId: sessionId, apiKey,
+            systemPrompt,
+            language,
+            voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: voiceName } } }
+          });
+
+          session.on('audio', (chunk) => {
+            audioChunks.push(chunk);
+            const total = audioChunks.reduce((s, c) => s + c.length, 0);
+            if (total >= 48000) { // flush after 1s
+              const pcm = Buffer.concat(audioChunks);
+              audioChunks = [];
+              if (ws.readyState === ws.OPEN) ws.send(pcm);
+            }
+          });
+
+          session.on('turn_complete', () => {
+            waitingForGemini = false;
+            if (audioChunks.length) {
+              const pcm = Buffer.concat(audioChunks);
+              audioChunks = [];
+              if (ws.readyState === ws.OPEN) ws.send(pcm);
+            }
+            isPlaying = false;
+            sendStatus('listening');
+          });
+
+          session.on('interrupted', () => {
+            audioChunks = [];
+            waitingForGemini = false;
+            isPlaying = false;
+            sendStatus('listening');
+          });
+
+          session.on('input_transcript', (text) => sendTranscript('user', text));
+          session.on('output_transcript', (text) => {
+            sendTranscript('bot', text);
+            // Execute HA actions if present
+            const haMatch = text.match(/<ha_action>([\s\S]*?)<\/ha_action>/);
+            if (haMatch && global.callHaService) {
+              try {
+                const action = JSON.parse(haMatch[1]);
+                global.callHaService(action.domain, action.service, action.serviceData || { entity_id: action.entity_id });
+              } catch(_) {}
+            }
+          });
+          session.on('error', (err) => logger.error('Live session error', { sessionId, error: err.message }));
+
+          await session.connect();
+          configured = true;
+          sendStatus('ready');
+          logger.info('Teamy Live session ready', { sessionId, voice: voiceName, language });
+
+          // Send greeting
+          const greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה.';
+          session.sendText(greeting);
+          isPlaying = true;
+          sendStatus('thinking');
+        } catch (err) {
+          logger.error('Live session setup error', { sessionId, error: err.message });
+          ws.close(4500, err.message);
+        }
+        return;
+      }
+
+      if (!isBinary || !session) return;
+      if (waitingForGemini || isPlaying) return;
+
+      // VAD processing of incoming PCM
+      const rms = calcRms(data);
+      if (rms > SPEECH_RMS_THRESHOLD) {
+        silenceCount = 0; speechCount++;
+        if (!speaking && speechCount >= 2) {
+          speaking = true;
+          session.sendActivityStart();
+          sendStatus('listening');
+        }
+        if (speaking) session.sendAudio(data);
+      } else {
+        if (speaking) {
+          silenceCount++;
+          session.sendAudio(data);
+          if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+            if (speechCount >= MIN_SPEECH_FRAMES) {
+              session.sendActivityEnd();
+              waitingForGemini = true;
+              isPlaying = true;
+              sendStatus('thinking');
+              if (waitingTimer) clearTimeout(waitingTimer);
+              waitingTimer = setTimeout(() => { waitingForGemini = false; isPlaying = false; }, 10000);
+            } else {
+              session.sendActivityEnd();
+            }
+            speaking = false; silenceCount = 0; speechCount = 0;
+          }
+        } else { speechCount = 0; }
+      }
+    });
+
+    ws.on('close', () => {
+      logger.info('Teamy Live disconnected', { sessionId });
+      if (waitingTimer) clearTimeout(waitingTimer);
+      if (session) { try { if (speaking) session.sendActivityEnd(); session.close(); } catch(_) {} }
+    });
+
+    ws.on('error', (err) => logger.error('Live WS error', { sessionId, error: err.message }));
+  });
+
+  liveServer.listen(LIVE_PORT, '0.0.0.0', () => {
+    logger.info(`Gemini Live WS bridge listening on port ${LIVE_PORT}`);
+  });
+}
+
 // Start health server
 app.listen(config.healthPort, '0.0.0.0', () => {
   logger.info(`Health server listening on port ${config.healthPort}`);
