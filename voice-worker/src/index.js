@@ -52,6 +52,10 @@ function requireAuth(req, res, next) {
   if (['/health', '/ready', '/metrics'].includes(req.path) || req.path.startsWith('/audio/')) {
     return next();
   }
+  // /admin and /t/:tenantId routes handle their own auth
+  if (req.path.startsWith('/admin') || req.path.startsWith('/t/')) {
+    return next();
+  }
   const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Basic ')) {
@@ -1019,6 +1023,203 @@ app.post('/api/ivr', (req, res) => {
   global.ivrConfig = ivrConfig;
   saveIvr();
   res.json({ success: true, ivr: ivrConfig });
+});
+
+// ── Multi-tenant SaaS ─────────────────────────────────────────────────────
+const TENANTS_FILE = path.join(AUDIO_DIR, '..', 'tenants.json');
+let tenants = [];
+try { if (fs.existsSync(TENANTS_FILE)) tenants = JSON.parse(fs.readFileSync(TENANTS_FILE, 'utf8')); } catch (_) {}
+
+function saveTenants() {
+  try { fs.writeFileSync(TENANTS_FILE, JSON.stringify(tenants, null, 2)); } catch (_) {}
+}
+
+function getTenantDir(id) {
+  const dir = path.join(AUDIO_DIR, 'tenants', id);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  ['recordings', 'voicemails'].forEach(sub => {
+    const s = path.join(dir, sub);
+    if (!fs.existsSync(s)) fs.mkdirSync(s, { recursive: true });
+  });
+  return dir;
+}
+
+function loadTenantData(id, file, fallback) {
+  try { return JSON.parse(fs.readFileSync(path.join(getTenantDir(id), file), 'utf8')); } catch (_) { return fallback; }
+}
+function saveTenantData(id, file, data) {
+  fs.writeFileSync(path.join(getTenantDir(id), file), JSON.stringify(data, null, 2));
+}
+
+// Resolve tenant from a called DID or SIP extension
+global.resolveTenantForCall = function(calledNumber, calledExtension) {
+  for (const t of tenants) {
+    const s = loadTenantData(t.id, 'settings.json', {});
+    if (calledNumber) {
+      const norm = n => (n || '').replace(/[^0-9+]/g, '');
+      if (s.twilioPhoneNumber && norm(s.twilioPhoneNumber) === norm(calledNumber)) return { tenant: t, settings: s };
+      if (s.vonagePhoneNumber && norm(s.vonagePhoneNumber) === norm(calledNumber)) return { tenant: t, settings: s };
+      if (s.sipDid && norm(s.sipDid) === norm(calledNumber)) return { tenant: t, settings: s };
+    }
+    if (calledExtension && s.extension && String(s.extension) === String(calledExtension)) {
+      return { tenant: t, settings: s };
+    }
+  }
+  return null;
+};
+
+// Super-admin auth
+function requireSuperAdmin(req, res, next) {
+  const user = process.env.SUPER_ADMIN_USER || 'superadmin';
+  const pass = process.env.SUPER_ADMIN_PASS || 'superadmin2024';
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Basic ')) {
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+    const idx = decoded.indexOf(':');
+    if (decoded.slice(0, idx) === user && decoded.slice(idx + 1) === pass) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Super Admin"');
+  res.status(401).send('Super Admin authentication required');
+}
+
+// Tenant-level auth
+function requireTenantAuth(req, res, next) {
+  const s = req.tenantSettings || {};
+  const user = s.adminUser || 'admin';
+  const pass = s.adminPass || 'callme2024';
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Basic ')) {
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+    const idx = decoded.indexOf(':');
+    if (decoded.slice(0, idx) === user && decoded.slice(idx + 1) === pass) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="Tenant Dashboard"');
+  res.status(401).send('Authentication required');
+}
+
+// Tenant middleware — load tenant context
+app.param('tenantId', (req, res, next, tenantId) => {
+  const tenant = tenants.find(t => t.id === tenantId);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+  req.tenantId = tenantId;
+  req.tenant = tenant;
+  req.tenantDir = getTenantDir(tenantId);
+  req.tenantSettings = loadTenantData(tenantId, 'settings.json', {});
+  next();
+});
+
+// Super-admin panel
+app.get('/admin', requireSuperAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/admin/tenants', requireSuperAdmin, (req, res) => {
+  res.json(tenants.map(t => {
+    const s = loadTenantData(t.id, 'settings.json', {});
+    return { ...t, dashboardUrl: `/t/${t.id}/`, botName: s.name || 'CallMe Bot', extension: s.extension || '' };
+  }));
+});
+
+app.post('/admin/tenants', requireSuperAdmin, (req, res) => {
+  const { name, id: rawId } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const id = (rawId || name).toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 32);
+  if (tenants.find(t => t.id === id)) return res.status(409).json({ error: 'Tenant ID already exists' });
+  const tenant = { id, name, createdAt: new Date().toISOString() };
+  tenants.push(tenant);
+  saveTenants();
+  getTenantDir(id);
+  saveTenantData(id, 'settings.json', { ...defaultSettings, name, adminUser: 'admin', adminPass: 'callme2024' });
+  logger.info('Tenant created', { id, name });
+  res.json({ success: true, tenant, dashboardUrl: `/t/${id}/` });
+});
+
+app.delete('/admin/tenants/:tenantId', requireSuperAdmin, (req, res) => {
+  const { tenantId } = req.params;
+  tenants = tenants.filter(t => t.id !== tenantId);
+  saveTenants();
+  res.json({ success: true });
+});
+
+// Tenant dashboard — serve index.html with injected API prefix
+app.get('/t/:tenantId', requireTenantAuth, (req, res) => {
+  let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  html = html.replace("const API = '';", `const API = '/t/${req.tenantId}';`);
+  res.send(html);
+});
+app.get('/t/:tenantId/', requireTenantAuth, (req, res) => {
+  let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  html = html.replace("const API = '';", `const API = '/t/${req.tenantId}';`);
+  res.send(html);
+});
+
+// Tenant API — settings
+app.get('/t/:tenantId/api/settings', requireTenantAuth, (req, res) => {
+  const s = req.tenantSettings;
+  res.json({ ...s, sipPassword: s.sipPassword ? '✓ set' : '', adminPass: s.adminPass ? '✓ set' : '' });
+});
+
+app.post('/t/:tenantId/api/settings', requireTenantAuth, (req, res) => {
+  const merged = { ...req.tenantSettings };
+  const skip = ['sipPassword', 'adminPass', 'twilioAuthToken', 'vonageApiSecret', 'whatsappApiKey'];
+  Object.entries(req.body || {}).forEach(([k, v]) => {
+    if (skip.includes(k) && !v) return; // keep existing if empty
+    merged[k] = v;
+  });
+  saveTenantData(req.tenantId, 'settings.json', merged);
+  res.json({ success: true });
+});
+
+// Tenant API — IVR
+app.get('/t/:tenantId/api/ivr', requireTenantAuth, (req, res) => {
+  res.json(loadTenantData(req.tenantId, 'ivr.json', defaultIvr));
+});
+app.post('/t/:tenantId/api/ivr', requireTenantAuth, (req, res) => {
+  saveTenantData(req.tenantId, 'ivr.json', req.body);
+  res.json({ success: true, ivr: req.body });
+});
+
+// Tenant API — contacts
+app.get('/t/:tenantId/api/contacts', requireTenantAuth, (req, res) => {
+  res.json(loadTenantData(req.tenantId, 'contacts.json', []));
+});
+app.post('/t/:tenantId/api/contacts', requireTenantAuth, (req, res) => {
+  const contacts = loadTenantData(req.tenantId, 'contacts.json', []);
+  contacts.push({ ...req.body, id: Date.now().toString() });
+  saveTenantData(req.tenantId, 'contacts.json', contacts);
+  res.json({ success: true });
+});
+app.delete('/t/:tenantId/api/contacts/:contactId', requireTenantAuth, (req, res) => {
+  let contacts = loadTenantData(req.tenantId, 'contacts.json', []);
+  contacts = contacts.filter(c => c.id !== req.params.contactId);
+  saveTenantData(req.tenantId, 'contacts.json', contacts);
+  res.json({ success: true });
+});
+
+// Tenant API — recordings
+app.get('/t/:tenantId/api/recordings', requireTenantAuth, (req, res) => {
+  try {
+    const dir = path.join(req.tenantDir, 'recordings');
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+    res.json(files.map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (_) { return null; } }).filter(Boolean));
+  } catch (_) { res.json([]); }
+});
+
+// Tenant API — voicemails
+app.get('/t/:tenantId/api/voicemails', requireTenantAuth, (req, res) => {
+  try {
+    const dir = path.join(req.tenantDir, 'voicemails');
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+    res.json(files.map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (_) { return null; } }).filter(Boolean));
+  } catch (_) { res.json([]); }
+});
+
+// Tenant API — live token (for browser web call auth)
+app.get('/t/:tenantId/api/live-token', requireTenantAuth, (req, res) => {
+  const s = req.tenantSettings;
+  const user = s.adminUser || 'admin';
+  const pass = s.adminPass || 'callme2024';
+  res.json({ token: Buffer.from(`${user}:${pass}`).toString('base64') });
 });
 
 // ── Recordings (call transcripts) ────────────────────────────────────────

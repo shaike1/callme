@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CallMe — Super Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1623;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:24px}
+h1{font-size:22px;font-weight:700;margin-bottom:4px}
+.subtitle{color:#8892a4;font-size:13px;margin-bottom:28px}
+.card{background:#141b2d;border:1px solid #1e2d47;border-radius:12px;padding:20px;margin-bottom:20px}
+h2{font-size:15px;font-weight:600;color:#94a3b8;margin-bottom:14px}
+.form-row{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+input{background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:14px;flex:1}
+input:focus{outline:none;border-color:#3b82f6}
+.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
+.btn-primary{background:#3b82f6;color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-danger{background:#ef4444;color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-ghost{background:#2d3148;color:#e2e8f0}
+.btn-ghost:hover{background:#3d4168}
+.tenant-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e2d47}
+.tenant-row:last-child{border-bottom:none}
+.tenant-name{font-weight:600;font-size:15px}
+.tenant-meta{font-size:12px;color:#8892a4;margin-top:2px}
+.tenant-actions{display:flex;gap:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-green{background:#14532d;color:#86efac}
+.badge-gray{background:#1e293b;color:#64748b}
+#status{margin-top:10px;font-size:13px;color:#22c55e;min-height:18px}
+.empty{color:#8892a4;font-size:13px;padding:16px 0;text-align:center}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+.logo{display:flex;align-items:center;gap:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <span style="font-size:28px">📞</span>
+    <div>
+      <h1>CallMe Super Admin</h1>
+      <div class="subtitle">ניהול Tenants — Multi-tenant SaaS</div>
+    </div>
+  </div>
+  <a href="/" class="btn btn-ghost" style="text-decoration:none">← לוח ראשי</a>
+</header>
+
+<div class="card">
+  <h2>➕ צור Tenant חדש</h2>
+  <div class="form-row">
+    <input id="t-name" placeholder="שם הלקוח (למשל: Acme Corp)" style="direction:rtl">
+    <input id="t-id" placeholder="מזהה (acme-corp) — אופציונלי" style="direction:ltr;max-width:200px">
+    <button class="btn btn-primary" onclick="createTenant()">צור</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<div class="card">
+  <h2>🏢 Tenants פעילים</h2>
+  <div id="tenants-list"><div class="empty">טוען...</div></div>
+</div>
+
+<script>
+const API = '';
+
+async function loadTenants() {
+  try {
+    const r = await fetch(API + '/admin/tenants');
+    if (!r.ok) { document.getElementById('tenants-list').innerHTML = '<div class="empty">שגיאת אימות</div>'; return; }
+    const tenants = await r.json();
+    const el = document.getElementById('tenants-list');
+    if (!tenants.length) { el.innerHTML = '<div class="empty">אין tenants עדיין. צור את הראשון.</div>'; return; }
+    el.innerHTML = tenants.map(t => `
+      <div class="tenant-row">
+        <div>
+          <div class="tenant-name">${t.name} <span class="badge badge-green">פעיל</span></div>
+          <div class="tenant-meta">
+            ID: <code style="background:#1e2535;padding:1px 5px;border-radius:3px">${t.id}</code>
+            ${t.extension ? ` | שלוחה: ${t.extension}` : ''}
+            ${t.botName ? ` | בוט: ${t.botName}` : ''}
+            | נוצר: ${new Date(t.createdAt).toLocaleDateString('he-IL')}
+          </div>
+        </div>
+        <div class="tenant-actions">
+          <a href="${t.dashboardUrl}" target="_blank" class="btn btn-ghost" style="text-decoration:none;font-size:13px">פתח דשבורד ↗</a>
+          <button class="btn btn-danger" style="font-size:13px" onclick="deleteTenant('${t.id}','${t.name}')">מחק</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('tenants-list').innerHTML = `<div class="empty" style="color:#ef4444">${e.message}</div>`;
+  }
+}
+
+async function createTenant() {
+  const name = document.getElementById('t-name').value.trim();
+  const id = document.getElementById('t-id').value.trim();
+  if (!name) { showStatus('נדרש שם', true); return; }
+  try {
+    const r = await fetch(API + '/admin/tenants', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, id: id || undefined })
+    });
+    const d = await r.json();
+    if (d.success) {
+      showStatus(`✓ Tenant "${d.tenant.name}" נוצר — ${d.dashboardUrl}`);
+      document.getElementById('t-name').value = '';
+      document.getElementById('t-id').value = '';
+      loadTenants();
+    } else {
+      showStatus(d.error || 'שגיאה', true);
+    }
+  } catch(e) { showStatus(e.message, true); }
+}
+
+async function deleteTenant(id, name) {
+  if (!confirm(`למחוק את tenant "${name}" (${id})?\nהנתונים בדיסק לא יימחקו.`)) return;
+  const r = await fetch(`${API}/admin/tenants/${id}`, { method: 'DELETE' });
+  const d = await r.json();
+  if (d.success) { showStatus(`"${name}" הוסר.`); loadTenants(); }
+  else showStatus('שגיאה', true);
+}
+
+function showStatus(msg, isErr = false) {
+  const el = document.getElementById('status');
+  el.style.color = isErr ? '#ef4444' : '#22c55e';
+  el.textContent = msg;
+  setTimeout(() => el.textContent = '', 5000);
+}
+
+loadTenants();
+</script>
+</body>
+</html>

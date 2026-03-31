@@ -57,15 +57,32 @@ class CallHandler {
       return;
     }
 
-    // Extract caller number/URI for contact lookup
+    // Extract caller/called number for tenant resolution + contact lookup
     const fromHeader = req.get('From') || '';
+    const toHeader = req.get('To') || '';
     const callerMatch = fromHeader.match(/sip:([^@>]+)@/);
+    const calledMatch = toHeader.match(/sip:([^@>]+)@/);
     const callerRaw = callerMatch ? callerMatch[1] : '';
+    const calledRaw = calledMatch ? calledMatch[1] : '';
+
+    // Resolve tenant (multi-tenant mode) — falls back to global settings
+    let tenantSettings = null;
+    if (global.resolveTenantForCall) {
+      const resolved = global.resolveTenantForCall(calledRaw, calledRaw);
+      if (resolved) {
+        tenantSettings = resolved.settings;
+        logger.info('Tenant resolved for call', { callId, tenantId: resolved.tenant.id });
+      }
+    }
+    // Use tenant settings if resolved, otherwise fall back to global
+    const effectiveSettings = tenantSettings || global.botSettings || {};
+    const effectiveContacts = tenantSettings ? (global.tenantContacts && global.tenantContacts[calledRaw]) : global.contacts;
 
     // Look up in contacts
-    const callerContact = callerRaw && global.contacts
-      ? global.contacts.find(c => {
-          const normalized = c.phone.replace(/[^0-9+]/g, '');
+    const contactList = effectiveContacts || global.contacts || [];
+    const callerContact = callerRaw
+      ? contactList.find(c => {
+          const normalized = (c.phone || '').replace(/[^0-9+]/g, '');
           const rawNorm = callerRaw.replace(/[^0-9+]/g, '');
           return normalized && rawNorm && (normalized.endsWith(rawNorm) || rawNorm.endsWith(normalized));
         })
@@ -106,11 +123,12 @@ class CallHandler {
         }
       });
 
-      const ivrCfg = global.ivrConfig;
+      // Use per-tenant IVR config if tenant was resolved, else fall back to global
+      const ivrCfg = tenantSettings ? null : global.ivrConfig; // tenant IVR not loaded here yet — use global for now
       if (CONVERSATION_ENGINE === 'gemini-live' && ivrCfg && ivrCfg.enabled) {
-        await this._handleIvrCall(endpoint, dialog, callId, callerName);
+        await this._handleIvrCall(endpoint, dialog, callId, callerName, effectiveSettings);
       } else if (CONVERSATION_ENGINE === 'gemini-live') {
-        await this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+        await this._handleGeminiLiveCall(endpoint, dialog, callId, callerName, effectiveSettings);
       } else {
         await this._handleSttTtsCall(endpoint, dialog, callId);
       }
@@ -155,10 +173,10 @@ class CallHandler {
 
   // ── Gemini Live path ─────────────────────────────────────────────────────
 
-  async _handleGeminiLiveCall(endpoint, dialog, callId, callerName = null) {
+  async _handleGeminiLiveCall(endpoint, dialog, callId, callerName = null, overrideSettings = null) {
     const callStartedAt = Date.now();
     const transcript = [];
-    const settings = global.botSettings || {};
+    const settings = overrideSettings || global.botSettings || {};
     let systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
     if (callerName) {
@@ -706,10 +724,10 @@ class CallHandler {
     }
   }
 
-  async _handleIvrCall(endpoint, dialog, callId, callerName) {
+  async _handleIvrCall(endpoint, dialog, callId, callerName, overrideSettings = null) {
     const ivr = global.ivrConfig || {};
     const nodes = ivr.nodes || [];
-    const lang = (global.botSettings || {}).language || 'he-IL';
+    const lang = (overrideSettings || global.botSettings || {}).language || 'he-IL';
     const greeting = ivr.greeting || 'ברוכים הבאים.';
     const timeoutMs = ((ivr.timeout || 5) * 1000);
 
@@ -735,7 +753,7 @@ class CallHandler {
     if (!digit) {
       // Timeout — use configured default action
       const action = ivr.timeoutAction || 'ai';
-      if (action === 'ai') return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+      if (action === 'ai') return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName, overrideSettings);
       if (action === 'voicemail') return this._handleVoicemail(endpoint, dialog, callId, callerName);
       await this._playTts(endpoint, callId, 'לא קיבלנו תגובה. להתראות.', lang);
       try { dialog.destroy(); } catch (_) {}
@@ -751,7 +769,7 @@ class CallHandler {
 
     switch (node.action) {
       case 'ai':
-        return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName);
+        return this._handleGeminiLiveCall(endpoint, dialog, callId, callerName, overrideSettings);
       case 'voicemail':
         return this._handleVoicemail(endpoint, dialog, callId, callerName);
       case 'transfer':
