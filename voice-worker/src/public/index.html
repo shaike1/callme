@@ -117,6 +117,58 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות SIP</button></div>
   </div>
 
+  <!-- Integrations -->
+  <div class="card">
+    <h2>אינטגרציות</h2>
+
+    <!-- Teamy -->
+    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:16px">🤝</span>
+        <span style="font-weight:600;font-size:14px">Teamy — Teams Meeting Bot</span>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="int-teamy-enabled" onchange="saveIntegrations()"> פעיל
+        </label>
+        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('teamy')">בדוק חיבור</button>
+      </div>
+      <div class="form-row"><label>Teamy Server URL</label><input id="int-teamy-url" placeholder="http://100.64.0.12:3069" onblur="saveIntegrations()"></div>
+      <div class="form-row"><label>API Token (אם נדרש)</label><input id="int-teamy-token" type="password" placeholder="(ריק = ללא auth)" onblur="saveIntegrations()"></div>
+      <div style="font-size:12px;color:#64748b">כאשר פעיל: Luky ישמש כ-voice engine של Teamy. Teamy ימשיך לנהל פגישות Teams, Luky יספק קול Gemini Live.</div>
+    </div>
+
+    <!-- OpenClaw -->
+    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:16px">🧠</span>
+        <span style="font-weight:600;font-size:14px">OpenClaw — AI Gateway</span>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="int-openclaw-enabled" onchange="saveIntegrations()"> פעיל
+        </label>
+        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('openclaw')">בדוק חיבור</button>
+      </div>
+      <div class="form-row"><label>OpenClaw URL</label><input id="int-openclaw-url" placeholder="http://127.0.0.1:18790" onblur="saveIntegrations()"></div>
+      <div class="form-row"><label>API Token</label><input id="int-openclaw-token" type="password" placeholder="token" onblur="saveIntegrations()"></div>
+      <div style="font-size:12px;color:#64748b">כאשר פעיל: הבוט יוכל לקרוא לOpenClaw כ-tool בזמן שיחה (חיפוש מידע, ביצוע פעולות).</div>
+    </div>
+
+    <!-- Home Assistant -->
+    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:16px">🏠</span>
+        <span style="font-weight:600;font-size:14px">Home Assistant</span>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="int-ha-enabled" onchange="saveIntegrations()"> פעיל
+        </label>
+        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('ha')">בדוק חיבור</button>
+      </div>
+      <div class="form-row"><label>HA URL</label><input id="int-ha-url" placeholder="http://homeassistant.local:8123" onblur="saveIntegrations()"></div>
+      <div class="form-row"><label>Long-lived Token</label><input id="int-ha-token" type="password" placeholder="eyJ..." onblur="saveIntegrations()"></div>
+      <div class="form-row"><label>Webhook ID (נכנס)</label><input id="int-ha-webhook" placeholder="luky_call_webhook" onblur="saveIntegrations()"></div>
+      <div style="font-size:12px;color:#64748b">כאשר פעיל: HA יכול להפעיל שיחה יוצאת. הבוט יכול לשלוח אירועים ל-HA.</div>
+    </div>
+    <div id="int-status" style="font-size:12px;color:#22c55e;margin-top:10px;min-height:16px"></div>
+  </div>
+
   <!-- Chat test -->
   <div class="card">
     <h2>בדיקת צ'אט (ללא שיחה)</h2>
@@ -292,12 +344,66 @@ async function pollLogs() {
   } catch(_) {}
 }
 
+async function loadIntegrations() {
+  try {
+    const r = await fetch(API + '/api/integrations');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('int-teamy-enabled').checked = !!d.teamy?.enabled;
+    document.getElementById('int-teamy-url').value = d.teamy?.url || '';
+    document.getElementById('int-openclaw-enabled').checked = !!d.openclaw?.enabled;
+    document.getElementById('int-openclaw-url').value = d.openclaw?.url || '';
+    document.getElementById('int-ha-enabled').checked = !!d.ha?.enabled;
+    document.getElementById('int-ha-url').value = d.ha?.url || '';
+    document.getElementById('int-ha-webhook').value = d.ha?.webhookId || '';
+  } catch(e) {}
+}
+
+async function saveIntegrations() {
+  const body = {
+    teamy: {
+      enabled: document.getElementById('int-teamy-enabled').checked,
+      url: document.getElementById('int-teamy-url').value,
+      token: document.getElementById('int-teamy-token').value || undefined,
+    },
+    openclaw: {
+      enabled: document.getElementById('int-openclaw-enabled').checked,
+      url: document.getElementById('int-openclaw-url').value,
+      token: document.getElementById('int-openclaw-token').value || undefined,
+    },
+    ha: {
+      enabled: document.getElementById('int-ha-enabled').checked,
+      url: document.getElementById('int-ha-url').value,
+      token: document.getElementById('int-ha-token').value || undefined,
+      webhookId: document.getElementById('int-ha-webhook').value,
+    }
+  };
+  try {
+    const r = await fetch(API + '/api/integrations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const el = document.getElementById('int-status');
+    if (r.ok) { el.style.color = '#22c55e'; el.textContent = 'הגדרות נשמרו ✓'; setTimeout(() => el.textContent = '', 2000); }
+    else { el.style.color = '#ef4444'; el.textContent = 'שגיאה בשמירה'; }
+  } catch(e) {}
+}
+
+async function testIntegration(name) {
+  const el = document.getElementById('int-status');
+  el.style.color = '#f59e0b'; el.textContent = `בודק ${name}...`;
+  try {
+    const r = await fetch(API + '/api/integrations/test/' + name, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) { el.style.color = '#22c55e'; el.textContent = `${name}: חיבור תקין ✓`; }
+    else { el.style.color = '#ef4444'; el.textContent = `${name}: ${d.error || 'שגיאה'}`; }
+  } catch(e) { el.style.color = '#ef4444'; el.textContent = `${name}: ${e.message}`; }
+}
+
 function refresh() {
   loadHealth();
   loadMetrics();
 }
 
 loadSettings();
+loadIntegrations();
 refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);

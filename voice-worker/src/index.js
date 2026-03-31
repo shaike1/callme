@@ -157,6 +157,83 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings: { ...botSettings, sipPassword: botSettings.sipPassword ? '✓ set' : '' } });
 });
 
+// ── Integrations (teamy, openclaw, home assistant) ───────────────────────
+const INTEGRATIONS_FILE = path.join(AUDIO_DIR, '..', 'integrations.json');
+
+const defaultIntegrations = {
+  teamy: { enabled: false, url: '', token: '' },
+  openclaw: { enabled: false, url: '', token: '' },
+  ha: { enabled: false, url: '', token: '', webhookId: '' },
+};
+
+let integrations = { ...defaultIntegrations };
+try {
+  if (fs.existsSync(INTEGRATIONS_FILE)) {
+    integrations = { ...defaultIntegrations, ...JSON.parse(fs.readFileSync(INTEGRATIONS_FILE, 'utf8')) };
+    logger.info('Loaded integrations from file');
+  }
+} catch (_) {}
+
+const saveIntegrations = () => {
+  try { fs.writeFileSync(INTEGRATIONS_FILE, JSON.stringify(integrations, null, 2)); } catch (_) {}
+};
+
+global.integrations = integrations;
+
+app.get('/api/integrations', (req, res) => {
+  // Mask tokens in response
+  const masked = JSON.parse(JSON.stringify(integrations));
+  if (masked.teamy?.token) masked.teamy.token = '✓ set';
+  if (masked.openclaw?.token) masked.openclaw.token = '✓ set';
+  if (masked.ha?.token) masked.ha.token = '✓ set';
+  res.json(masked);
+});
+
+app.post('/api/integrations', (req, res) => {
+  const { teamy, openclaw, ha } = req.body || {};
+  if (teamy) {
+    integrations.teamy = { ...integrations.teamy, ...teamy };
+    if (!teamy.token) delete integrations.teamy.token;
+  }
+  if (openclaw) {
+    integrations.openclaw = { ...integrations.openclaw, ...openclaw };
+    if (!openclaw.token) delete integrations.openclaw.token;
+  }
+  if (ha) {
+    integrations.ha = { ...integrations.ha, ...ha };
+    if (!ha.token) delete integrations.ha.token;
+  }
+  saveIntegrations();
+  global.integrations = integrations;
+  logger.info('Integrations updated');
+  res.json({ success: true });
+});
+
+app.post('/api/integrations/test/:name', async (req, res) => {
+  const name = req.params.name;
+  const cfg = integrations[name === 'ha' ? 'ha' : name];
+  if (!cfg?.url) return res.json({ ok: false, error: 'URL לא מוגדר' });
+  try {
+    const testUrl = name === 'teamy' ? cfg.url + '/api/bots' :
+                    name === 'openclaw' ? cfg.url + '/health' :
+                    cfg.url + '/api/config'; // HA
+    const resp = await new Promise((resolve, reject) => {
+      const urlObj = new URL(testUrl);
+      const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
+      const options = { hostname: urlObj.hostname, port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80), path: urlObj.pathname, method: 'GET', timeout: 5000 };
+      if (cfg.token && cfg.token !== '✓ set') options.headers = { Authorization: `Bearer ${cfg.token}` };
+      const req2 = mod.request(options, r => resolve({ status: r.statusCode }));
+      req2.on('error', reject);
+      req2.on('timeout', () => reject(new Error('timeout')));
+      req2.end();
+    });
+    if (resp.status < 500) res.json({ ok: true, status: resp.status });
+    else res.json({ ok: false, error: `HTTP ${resp.status}` });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── Webhook: text chat with the bot ──────────────────────────────────────
 const https = require('https');
 
