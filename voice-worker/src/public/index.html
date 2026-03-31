@@ -53,6 +53,19 @@
   .conn-dot.na { background: #64748b; }
   .conn-item .conn-label { font-size: 13px; font-weight: 600; }
   .conn-item .conn-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+  @media (max-width: 600px) {
+    .container { padding: 12px 10px; gap: 14px; }
+    .card { padding: 14px 12px; }
+    .form-row { grid-template-columns: 1fr; gap: 4px; }
+    .form-row label { padding-top: 0; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .conn-grid { grid-template-columns: repeat(2, 1fr); }
+    .btn-row { justify-content: stretch; }
+    .btn-row .btn { flex: 1; }
+    header { padding: 12px 14px; }
+    header h1 { font-size: 17px; }
+    #uptime { display: none; }
+  }
 </style>
 </head>
 <body>
