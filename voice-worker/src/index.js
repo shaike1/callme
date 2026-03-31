@@ -38,6 +38,25 @@ const callHandler = new CallHandler(srf, sessionManager, sttTtsManager, metrics,
 // Serve audio files so FreeSWITCH can fetch them via HTTP
 app.use('/audio', express.static(AUDIO_DIR));
 
+// ── Basic auth for dashboard & API ───────────────────────────────────────
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'luky2024';
+
+function requireAuth(req, res, next) {
+  // Skip auth for health/ready/metrics (used by infra) and audio (FreeSWITCH)
+  if (['/health', '/ready', '/metrics'].includes(req.path) || req.path.startsWith('/audio/')) {
+    return next();
+  }
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Basic ')) {
+    const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+    if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="Luky Dashboard"');
+  res.status(401).send('Authentication required');
+}
+app.use(requireAuth);
+
 // Serve dashboard
 app.use('/', express.static(path.join(__dirname, 'public')));
 
@@ -280,6 +299,54 @@ app.post('/api/ha/webhook', async (req, res) => {
     const { dialog } = await callHandler.makeOutboundCall(target, from);
     res.json({ success: true, callId: dialog.id });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── TTS endpoint — text → WAV audio (for teamy / external integrations) ─
+app.post('/api/tts', async (req, res) => {
+  const { text, voice, language } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'missing "text"' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
+  const GeminiLiveSession = require('./gemini-live/session');
+  const session = new GeminiLiveSession({
+    callId: `tts-${Date.now()}`,
+    apiKey,
+    systemPrompt: 'You are a text-to-speech engine. Speak exactly and only what the user sends, verbatim. Do not add anything.',
+    language: language || botSettings.language || 'he',
+    voiceConfig: {
+      voice_config: {
+        prebuilt_voice_config: { voice_name: voice || botSettings.voice || 'Kore' }
+      }
+    }
+  });
+
+  try {
+    await session.connect();
+    const chunks = [];
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('TTS timeout')), 15000);
+      session.on('audio', c => chunks.push(c));
+      session.on('turn_complete', () => { clearTimeout(timeout); resolve(); });
+      session.on('error', err => { clearTimeout(timeout); reject(err); });
+      session.sendText(text);
+    });
+    session.close();
+
+    const { WaveFile } = require('wavefile');
+    const pcm = Buffer.concat(chunks);
+    const wav = new WaveFile();
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2));
+    wav.fromScratch(1, 24000, '16', samples);
+    const wavBuf = Buffer.from(wav.toBuffer());
+    res.set('Content-Type', 'audio/wav');
+    res.send(wavBuf);
+  } catch (err) {
+    try { session.close(); } catch (_) {}
+    logger.error('TTS endpoint error', { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
