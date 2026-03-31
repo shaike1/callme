@@ -214,6 +214,44 @@
     <div id="int-status" style="font-size:12px;color:#22c55e;margin-top:10px;min-height:16px"></div>
   </div>
 
+  <!-- Contacts -->
+  <div class="card">
+    <h2>אנשי קשר</h2>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input id="c-name" placeholder="שם" style="flex:1;min-width:100px">
+      <input id="c-phone" placeholder="מספר / SIP URI" style="flex:2;min-width:140px;direction:ltr">
+      <button class="btn btn-primary btn-sm" onclick="addContact()">הוסף</button>
+    </div>
+    <div id="contacts-list" style="font-size:13px;color:#94a3b8">טוען...</div>
+  </div>
+
+  <!-- Scheduler -->
+  <div class="card">
+    <h2>שיחות מתוזמנות</h2>
+    <div style="background:#0f1117;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div class="form-row"><label>שם / תיאור</label><input id="sc-name" placeholder="תזכורת בוקר"></div>
+      <div class="form-row">
+        <label>יעד</label>
+        <div style="display:flex;gap:6px">
+          <input id="sc-target" placeholder="מספר או SIP URI" style="flex:2;direction:ltr">
+          <select id="sc-contact" style="flex:1" onchange="onScContact()"><option value="">— מאנשי קשר —</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label>שעה (HH:MM)</label><input id="sc-time" type="time" style="direction:ltr"></div>
+      <div class="form-row">
+        <label>חזרה</label>
+        <select id="sc-repeat">
+          <option value="once">פעם אחת</option>
+          <option value="daily">כל יום</option>
+          <option value="weekdays">ימי חול</option>
+        </select>
+      </div>
+      <div class="form-row"><label>הודעה קולית</label><textarea id="sc-message" placeholder="מה יגיד הבוט כשמרימים? (ריק = ברכת ברירת מחדל)" style="min-height:60px"></textarea></div>
+      <button class="btn btn-primary" onclick="addScheduledJob()">צור תזמון</button>
+    </div>
+    <div id="scheduler-list" style="font-size:13px;color:#94a3b8">טוען...</div>
+  </div>
+
   <!-- Dialer -->
   <div class="card">
     <h2>Dialer — שיחה יוצאת</h2>
@@ -372,6 +410,135 @@ async function loadMetrics() {
     document.getElementById('stat-avg').textContent = avg;
     document.getElementById('stat-errors').textContent = s.totalErrors ?? '0';
   } catch(e) {}
+}
+
+// ── Contacts ─────────────────────────────────────────────────────────────
+let contactsData = [];
+
+async function loadContacts() {
+  try {
+    const r = await fetch('/api/contacts');
+    const d = await r.json();
+    contactsData = d.contacts || [];
+    renderContacts();
+    populateContactSelect();
+  } catch(e) { document.getElementById('contacts-list').textContent = 'שגיאה בטעינה'; }
+}
+
+function renderContacts() {
+  const el = document.getElementById('contacts-list');
+  if (!contactsData.length) { el.textContent = 'אין אנשי קשר עדיין.'; return; }
+  el.innerHTML = contactsData.map(c => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #2d3148">
+      <div style="flex:1"><b style="color:#e2e8f0">${c.name}</b> <span style="color:#64748b;direction:ltr">${c.phone}</span></div>
+      <button class="btn btn-sm" style="background:#3b82f6;color:#fff;padding:4px 10px" onclick="dialContact('${c.phone}')">חייג</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;padding:4px 10px" onclick="deleteContact('${c.id}')">✕</button>
+    </div>`).join('');
+}
+
+function populateContactSelect() {
+  const sel = document.getElementById('sc-contact');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— מאנשי קשר —</option>' +
+    contactsData.map(c => `<option value="${c.phone}">${c.name}</option>`).join('');
+}
+
+async function addContact() {
+  const name = document.getElementById('c-name').value.trim();
+  const phone = document.getElementById('c-phone').value.trim();
+  if (!name || !phone) { toast('נדרשים שם ומספר', true); return; }
+  try {
+    const r = await fetch('/api/contacts', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, phone }) });
+    if (!r.ok) throw new Error((await r.json()).error);
+    document.getElementById('c-name').value = '';
+    document.getElementById('c-phone').value = '';
+    toast('איש קשר נוסף ✓');
+    loadContacts();
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function deleteContact(id) {
+  try {
+    await fetch('/api/contacts/' + id, { method: 'DELETE' });
+    toast('נמחק ✓');
+    loadContacts();
+  } catch(e) { toast('שגיאה', true); }
+}
+
+function dialContact(phone) {
+  document.getElementById('dial-target').value = phone;
+  document.getElementById('dial-target').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── Scheduler ─────────────────────────────────────────────────────────────
+
+function onScContact() {
+  const val = document.getElementById('sc-contact').value;
+  if (val) document.getElementById('sc-target').value = val;
+}
+
+async function loadScheduler() {
+  try {
+    const r = await fetch('/api/scheduler');
+    const d = await r.json();
+    renderScheduler(d.jobs || []);
+  } catch(e) { document.getElementById('scheduler-list').textContent = 'שגיאה'; }
+}
+
+function renderScheduler(jobs) {
+  const el = document.getElementById('scheduler-list');
+  if (!jobs.length) { el.textContent = 'אין תזמונים פעילים.'; return; }
+  const repeatLabel = { once: 'פעם אחת', daily: 'יומי', weekdays: 'ימי חול' };
+  el.innerHTML = jobs.map(j => {
+    const nextStr = j.nextAt ? new Date(j.nextAt).toLocaleString('he-IL') : '—';
+    const lastStr = j.lastRan ? new Date(j.lastRan).toLocaleTimeString('he-IL') : 'טרם הופעל';
+    return `
+    <div style="background:#0f1117;border-radius:8px;padding:10px;margin-bottom:8px;${j.enabled ? '' : 'opacity:0.5'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <b style="color:#e2e8f0">${j.name}</b>
+          <span style="color:#64748b;font-size:12px"> · ${j.time} · ${repeatLabel[j.repeat]||j.repeat}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="background:${j.enabled?'#64748b':'#22c55e'};color:#fff;padding:4px 10px" onclick="toggleJob('${j.id}',${!j.enabled})">${j.enabled?'השבת':'הפעל'}</button>
+          <button class="btn btn-sm btn-danger" style="padding:4px 10px" onclick="deleteJob('${j.id}')">מחק</button>
+        </div>
+      </div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px">יעד: <span style="direction:ltr">${j.target}</span> · הבא: ${nextStr} · אחרון: ${lastStr}</div>
+      ${j.message ? `<div style="color:#94a3b8;font-size:12px;margin-top:2px">"${j.message.slice(0,80)}"</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function addScheduledJob() {
+  const body = {
+    name: document.getElementById('sc-name').value.trim() || document.getElementById('sc-target').value.trim(),
+    target: document.getElementById('sc-target').value.trim(),
+    message: document.getElementById('sc-message').value.trim(),
+    time: document.getElementById('sc-time').value,
+    repeat: document.getElementById('sc-repeat').value,
+  };
+  if (!body.target || !body.time) { toast('נדרשים יעד ושעה', true); return; }
+  try {
+    const r = await fetch('/api/scheduler', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json()).error);
+    toast('תזמון נוצר ✓');
+    document.getElementById('sc-name').value = '';
+    document.getElementById('sc-target').value = '';
+    document.getElementById('sc-message').value = '';
+    loadScheduler();
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function toggleJob(id, enabled) {
+  await fetch('/api/scheduler/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled }) });
+  loadScheduler();
+}
+
+async function deleteJob(id) {
+  await fetch('/api/scheduler/' + id, { method: 'DELETE' });
+  toast('תזמון נמחק ✓');
+  loadScheduler();
 }
 
 // ── Dialer ────────────────────────────────────────────────────────────────
@@ -602,9 +769,12 @@ function refresh() {
 
 loadSettings();
 loadIntegrations();
+loadContacts();
+loadScheduler();
 refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);
+setInterval(loadScheduler, 30000);
 </script>
 </body>
 </html>

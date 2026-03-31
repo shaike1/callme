@@ -469,6 +469,143 @@ app.delete('/call/:callId', (req, res) => {
   }
 });
 
+// ── Contacts ──────────────────────────────────────────────────────────────
+const CONTACTS_FILE = path.join(AUDIO_DIR, '..', 'contacts.json');
+let contacts = [];
+try {
+  if (fs.existsSync(CONTACTS_FILE)) contacts = JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf8'));
+} catch (_) {}
+const saveContacts = () => { try { fs.writeFileSync(CONTACTS_FILE, JSON.stringify(contacts, null, 2)); } catch (_) {} };
+
+app.get('/api/contacts', (req, res) => res.json({ contacts }));
+
+app.post('/api/contacts', (req, res) => {
+  const { name, phone, notes } = req.body || {};
+  if (!name || !phone) return res.status(400).json({ error: 'name and phone required' });
+  const id = `c-${Date.now()}`;
+  const contact = { id, name, phone: phone.trim(), notes: notes || '', createdAt: Date.now() };
+  contacts.push(contact);
+  saveContacts();
+  res.json({ success: true, contact });
+});
+
+app.put('/api/contacts/:id', (req, res) => {
+  const idx = contacts.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  const { name, phone, notes } = req.body || {};
+  if (name) contacts[idx].name = name;
+  if (phone) contacts[idx].phone = phone.trim();
+  if (notes !== undefined) contacts[idx].notes = notes;
+  saveContacts();
+  res.json({ success: true, contact: contacts[idx] });
+});
+
+app.delete('/api/contacts/:id', (req, res) => {
+  const idx = contacts.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  contacts.splice(idx, 1);
+  saveContacts();
+  res.json({ success: true });
+});
+
+// ── Scheduler ─────────────────────────────────────────────────────────────
+// Each job: { id, name, target (phone/sip), message (spoken on pickup), at (ISO or cron-like HH:MM), repeat ('once'|'daily'|'weekdays'), nextAt (ms timestamp), lastRan, enabled }
+const SCHEDULER_FILE = path.join(AUDIO_DIR, '..', 'scheduler.json');
+let scheduledJobs = [];
+try {
+  if (fs.existsSync(SCHEDULER_FILE)) scheduledJobs = JSON.parse(fs.readFileSync(SCHEDULER_FILE, 'utf8'));
+} catch (_) {}
+const saveScheduler = () => { try { fs.writeFileSync(SCHEDULER_FILE, JSON.stringify(scheduledJobs, null, 2)); } catch (_) {} };
+
+function computeNextAt(job) {
+  const now = new Date();
+  if (!job.time) return null; // HH:MM in local time
+  const [hh, mm] = job.time.split(':').map(Number);
+  const next = new Date(now);
+  next.setHours(hh, mm, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1); // if already passed today, next day
+  // For weekdays only, skip to Monday if landing on weekend
+  if (job.repeat === 'weekdays') {
+    while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+  }
+  return next.getTime();
+}
+
+app.get('/api/scheduler', (req, res) => res.json({ jobs: scheduledJobs }));
+
+app.post('/api/scheduler', (req, res) => {
+  const { name, target, message, time, repeat } = req.body || {};
+  if (!target || !time) return res.status(400).json({ error: 'target and time required' });
+  const id = `j-${Date.now()}`;
+  const job = { id, name: name || target, target, message: message || '', time, repeat: repeat || 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+  job.nextAt = computeNextAt(job);
+  scheduledJobs.push(job);
+  saveScheduler();
+  logger.info('Scheduled job created', { id, name: job.name, time, repeat });
+  res.json({ success: true, job });
+});
+
+app.put('/api/scheduler/:id', (req, res) => {
+  const job = scheduledJobs.find(j => j.id === req.params.id);
+  if (!job) return res.status(404).json({ error: 'not found' });
+  const { name, target, message, time, repeat, enabled } = req.body || {};
+  if (name !== undefined) job.name = name;
+  if (target !== undefined) job.target = target;
+  if (message !== undefined) job.message = message;
+  if (time !== undefined) { job.time = time; job.nextAt = computeNextAt(job); }
+  if (repeat !== undefined) job.repeat = repeat;
+  if (enabled !== undefined) job.enabled = enabled;
+  saveScheduler();
+  res.json({ success: true, job });
+});
+
+app.delete('/api/scheduler/:id', (req, res) => {
+  const idx = scheduledJobs.findIndex(j => j.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  scheduledJobs.splice(idx, 1);
+  saveScheduler();
+  res.json({ success: true });
+});
+
+// Scheduler tick — check every 30s for due jobs
+setInterval(async () => {
+  const now = Date.now();
+  for (const job of scheduledJobs) {
+    if (!job.enabled || !job.nextAt || job.nextAt > now) continue;
+    logger.info('Scheduler firing job', { id: job.id, name: job.name, target: job.target });
+    job.lastRan = now;
+
+    // Inject the job's message as the greeting for this call
+    const prevGreeting = (global.botSettings || {}).greeting;
+    if (job.message && global.botSettings) global.botSettings.greeting = job.message;
+
+    try {
+      const from = process.env.SIP_EXTENSION || '12611';
+      const target = job.target.startsWith('sip:') ? job.target : `sip:${job.target}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
+      const { dialog } = await callHandler.makeOutboundCall(target, from);
+      const callId = dialog.id || `sched-${Date.now()}`;
+      activeCalls.set(callId, { callId, to: job.target, from, target, startedAt: now, dialog });
+      dialog.once('destroy', () => {
+        activeCalls.delete(callId);
+        if (global.botSettings && job.message) global.botSettings.greeting = prevGreeting;
+      });
+      logger.info('Scheduler call initiated', { job: job.id, callId });
+    } catch (err) {
+      logger.error('Scheduler call failed', { job: job.id, error: err.message });
+      if (global.botSettings && job.message) global.botSettings.greeting = prevGreeting;
+    }
+
+    // Compute next run
+    if (job.repeat === 'once') {
+      job.enabled = false;
+      job.nextAt = null;
+    } else {
+      job.nextAt = computeNextAt(job);
+    }
+    saveScheduler();
+  }
+}, 30000);
+
 // ── Connection status ─────────────────────────────────────────────────────
 // Tracks SIP registration + integration test results for the dashboard
 let sipRegistrar = null;
