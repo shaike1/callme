@@ -54,15 +54,19 @@ class CallHandler {
         remoteSdp: audioOnlySdp
       });
 
+      const callStartedAt = Date.now();
       logger.info('Call connected', { callId, uuid: endpoint.uuid });
+      if (global.fireWebhook) global.fireWebhook('call.started', { callId, direction: 'inbound', startedAt: callStartedAt });
 
       dialog.on('destroy', () => {
-        logger.info('Call ended', { callId });
+        const durationS = Math.round((Date.now() - callStartedAt) / 1000);
+        logger.info('Call ended', { callId, durationS });
         geminiManager.close(callId);
         this.audioForkServer.unregister(callId);
         endpoint.destroy().catch(() => {});
         this.metrics.record(callId, 'endCall', 'hangup');
         this.metrics.finalize(callId);
+        if (global.fireWebhook) global.fireWebhook('call.ended', { callId, direction: 'inbound', startedAt: callStartedAt, durationS });
       });
 
       if (CONVERSATION_ENGINE === 'gemini-live') {

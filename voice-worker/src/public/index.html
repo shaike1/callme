@@ -126,6 +126,11 @@
       </select>
     </div>
     <div class="form-row"><label>Persona</label><textarea id="s-persona" rows="4"></textarea></div>
+    <div class="form-row">
+      <label>Webhook URL <span style="color:#64748b;font-weight:normal">(call events)</span></label>
+      <input id="s-callWebhookUrl" placeholder="https://your-server/webhook" style="direction:ltr">
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:10px">POST JSON לכתובת זו בכל call.started / call.ended / call.failed</div>
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button></div>
   </div>
 
@@ -332,6 +337,7 @@ async function loadSettings() {
     if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = s.sipPassword; // shows '✓ set'
     if (s.adminUser) document.getElementById('s-adminUser').value = s.adminUser;
     if (s.adminPass) document.getElementById('s-adminPass').placeholder = s.adminPass; // shows '✓ set'
+    document.getElementById('s-callWebhookUrl').value = s.callWebhookUrl || '';
     onProviderChange();
   } catch(e) { console.error(e); }
 }
@@ -376,6 +382,7 @@ async function saveSettings() {
     sipAuthId: document.getElementById('s-sipAuthId').value,
     sipPassword: document.getElementById('s-sipPassword').value, // empty = don't update
     sipDid: document.getElementById('s-sipDid').value,
+    callWebhookUrl: document.getElementById('s-callWebhookUrl').value,
   };
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });

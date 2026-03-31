@@ -145,6 +145,8 @@ const defaultSettings = {
   // Admin credentials (override ADMIN_USER / ADMIN_PASS env vars when set)
   adminUser: '',
   adminPass: '',
+  // Webhook URL for call events (call.started, call.ended, call.failed)
+  callWebhookUrl: process.env.CALL_WEBHOOK_URL || '',
 };
 
 let botSettings = { ...defaultSettings };
@@ -191,6 +193,8 @@ app.post('/api/settings', (req, res) => {
   if (sipDid !== undefined) botSettings.sipDid = sipDid;
   if (adminUser !== undefined && adminUser !== '') botSettings.adminUser = adminUser;
   if (adminPass !== undefined && adminPass !== '') botSettings.adminPass = adminPass;
+  const { callWebhookUrl } = req.body || {};
+  if (callWebhookUrl !== undefined) botSettings.callWebhookUrl = callWebhookUrl;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -424,12 +428,39 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// ── Webhook helpers ───────────────────────────────────────────────────────
+function fireWebhook(event, payload) {
+  const url = botSettings.callWebhookUrl || process.env.CALL_WEBHOOK_URL;
+  if (!url) return;
+  const body = JSON.stringify({ event, timestamp: new Date().toISOString(), ...payload });
+  try {
+    const urlObj = new URL(url);
+    const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
+    const req2 = mod.request({
+      hostname: urlObj.hostname,
+      port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 5000,
+    }, () => {});
+    req2.on('error', (e) => logger.warn('Webhook delivery failed', { url, error: e.message }));
+    req2.write(body);
+    req2.end();
+    logger.debug('Webhook fired', { event, url });
+  } catch (e) {
+    logger.warn('Webhook error', { error: e.message });
+  }
+}
+// Make fireWebhook available to call-handler via global
+global.fireWebhook = fireWebhook;
+
 // Active call registry — for Dialer panel and /api/calls
 const activeCalls = new Map(); // callId → { callId, to, from, startedAt, dialog }
 
 // Outbound call endpoint — triggers bot to call a SIP extension
 app.post('/call', async (req, res) => {
-  const { to, callerId } = req.body || {};
+  const { to, callerId, webhookUrl } = req.body || {};
   if (!to) return res.status(400).json({ error: 'missing "to" field' });
 
   const from = callerId || process.env.SIP_EXTENSION || '12611';
@@ -439,11 +470,25 @@ app.post('/call', async (req, res) => {
   try {
     const { endpoint, dialog } = await callHandler.makeOutboundCall(target, from);
     const callId = dialog.id || `out-${Date.now()}`;
-    activeCalls.set(callId, { callId, to, from, target, startedAt: Date.now(), dialog });
-    dialog.once('destroy', () => activeCalls.delete(callId));
+    const startedAt = Date.now();
+    activeCalls.set(callId, { callId, to, from, target, startedAt, dialog });
+    fireWebhook('call.started', { callId, direction: 'outbound', to, from, startedAt });
+    dialog.once('destroy', () => {
+      const durationS = Math.round((Date.now() - startedAt) / 1000);
+      activeCalls.delete(callId);
+      fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
+      if (webhookUrl) {
+        // Per-call webhook override
+        const orig = botSettings.callWebhookUrl;
+        botSettings.callWebhookUrl = webhookUrl;
+        fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
+        botSettings.callWebhookUrl = orig;
+      }
+    });
     res.json({ success: true, callId });
   } catch (err) {
     logger.error('Outbound call failed', { error: err.message });
+    fireWebhook('call.failed', { direction: 'outbound', to, from, error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
