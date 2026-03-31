@@ -180,10 +180,7 @@ class CallHandler {
       drainQueue();
     };
 
-    // Stream playback: flush once we have 1s of audio, then again on turn_complete
-    const STREAM_THRESHOLD = 48000; // 1s at 24kHz 16-bit mono
-    let streamFired = false;
-
+    // Accumulate all audio until turn_complete, then play as one file — avoids choppy gaps
     const flushAudio = () => {
       if (!audioChunks.length) return;
       const pcm = Buffer.concat(audioChunks);
@@ -193,24 +190,15 @@ class CallHandler {
 
     session.on('audio', (chunk) => {
       audioChunks.push(chunk);
-      if (!streamFired) {
-        const total = audioChunks.reduce((s, c) => s + c.length, 0);
-        if (total >= STREAM_THRESHOLD) {
-          streamFired = true;
-          flushAudio();
-        }
-      }
     });
 
     session.on('turn_complete', () => {
-      streamFired = false;
       flushAudio();
     });
 
     session.on('interrupted', () => {
       audioChunks = [];
       playQueue.length = 0;
-      streamFired = false;
       isPlaying = false;
       logger.info('Barge-in detected', { callId });
     });
