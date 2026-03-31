@@ -399,20 +399,47 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Active call registry — for Dialer panel and /api/calls
+const activeCalls = new Map(); // callId → { callId, to, from, startedAt, dialog }
+
 // Outbound call endpoint — triggers bot to call a SIP extension
 app.post('/call', async (req, res) => {
   const { to, callerId } = req.body || {};
   if (!to) return res.status(400).json({ error: 'missing "to" field' });
 
   const from = callerId || process.env.SIP_EXTENSION || '12611';
-  const target = `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
+  const target = to.startsWith('sip:') ? to : `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
 
   logger.info('Outbound call requested', { to, target, from });
   try {
     const { endpoint, dialog } = await callHandler.makeOutboundCall(target, from);
-    res.json({ success: true, callId: dialog.id });
+    const callId = dialog.id || `out-${Date.now()}`;
+    activeCalls.set(callId, { callId, to, from, target, startedAt: Date.now(), dialog });
+    dialog.once('destroy', () => activeCalls.delete(callId));
+    res.json({ success: true, callId });
   } catch (err) {
     logger.error('Outbound call failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List active calls
+app.get('/api/calls', (req, res) => {
+  const calls = [...activeCalls.values()].map(({ callId, to, from, startedAt }) => ({
+    callId, to, from, startedAt, durationS: Math.round((Date.now() - startedAt) / 1000)
+  }));
+  res.json({ calls });
+});
+
+// Hangup a specific call
+app.delete('/call/:callId', (req, res) => {
+  const entry = activeCalls.get(req.params.callId);
+  if (!entry) return res.status(404).json({ error: 'call not found' });
+  try {
+    entry.dialog.destroy();
+    activeCalls.delete(req.params.callId);
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

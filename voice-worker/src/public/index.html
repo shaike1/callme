@@ -204,6 +204,24 @@
     <div id="int-status" style="font-size:12px;color:#22c55e;margin-top:10px;min-height:16px"></div>
   </div>
 
+  <!-- Dialer -->
+  <div class="card">
+    <h2>Dialer — שיחה יוצאת</h2>
+    <div class="form-row">
+      <label>מספר / SIP URI</label>
+      <input id="dial-target" placeholder="05XXXXXXXX או sip:ext@domain" style="direction:ltr">
+    </div>
+    <div class="form-row">
+      <label>Caller ID</label>
+      <input id="dial-from" placeholder="ברירת מחדל: הגדרות SIP" style="direction:ltr">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="dial-btn" onclick="dialOut()">התקשר</button>
+      <button class="btn btn-danger" id="hangup-btn" onclick="hangupCall()" style="display:none">נתק</button>
+    </div>
+    <div id="dial-status" style="margin-top:10px;font-size:13px;color:#94a3b8;min-height:18px"></div>
+  </div>
+
   <!-- Chat test -->
   <div class="card">
     <h2>בדיקת צ'אט (ללא שיחה)</h2>
@@ -316,6 +334,73 @@ async function loadMetrics() {
     document.getElementById('stat-avg').textContent = avg;
     document.getElementById('stat-errors').textContent = s.totalErrors ?? '0';
   } catch(e) {}
+}
+
+// ── Dialer ────────────────────────────────────────────────────────────────
+let activeCallId = null;
+let dialPollTimer = null;
+
+async function dialOut() {
+  const target = document.getElementById('dial-target').value.trim();
+  const from = document.getElementById('dial-from').value.trim();
+  if (!target) { toast('הכנס מספר יעד', true); return; }
+
+  const body = { to: target };
+  if (from) body.callerId = from;
+
+  setDialStatus('מתחבר...', '#60a5fa');
+  document.getElementById('dial-btn').disabled = true;
+
+  try {
+    const r = await fetch('/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    activeCallId = d.callId;
+    setDialStatus('שיחה פעילה ✓ — ' + target, '#22c55e');
+    document.getElementById('hangup-btn').style.display = '';
+    document.getElementById('dial-btn').style.display = 'none';
+    startDialPoll();
+  } catch(e) {
+    setDialStatus('שגיאה: ' + e.message, '#ef4444');
+    document.getElementById('dial-btn').disabled = false;
+  }
+}
+
+async function hangupCall() {
+  if (!activeCallId) return;
+  try {
+    await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' });
+  } catch {}
+  dialReset();
+}
+
+function dialReset() {
+  activeCallId = null;
+  if (dialPollTimer) { clearInterval(dialPollTimer); dialPollTimer = null; }
+  setDialStatus('', '#94a3b8');
+  document.getElementById('dial-btn').disabled = false;
+  document.getElementById('dial-btn').style.display = '';
+  document.getElementById('hangup-btn').style.display = 'none';
+}
+
+function setDialStatus(msg, color) {
+  const el = document.getElementById('dial-status');
+  el.textContent = msg;
+  el.style.color = color || '#94a3b8';
+}
+
+function startDialPoll() {
+  if (dialPollTimer) clearInterval(dialPollTimer);
+  dialPollTimer = setInterval(async () => {
+    if (!activeCallId) return;
+    try {
+      const r = await fetch('/api/calls');
+      if (!r.ok) return;
+      const d = await r.json();
+      const call = d.calls?.find(c => c.callId === activeCallId);
+      if (!call) { dialReset(); setDialStatus('שיחה הסתיימה', '#94a3b8'); }
+    } catch {}
+  }, 3000);
 }
 
 async function sendChat() {

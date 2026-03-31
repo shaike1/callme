@@ -1,0 +1,12 @@
+{
+  "name": "callme-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing CallMe Bot (Gemini Live voice) as tools for Claude Code",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
