@@ -75,6 +75,7 @@ const defaultSettings = {
   language: process.env.CALL_LANGUAGE || 'he',
   extension: process.env.SIP_EXTENSION || '12611',
   greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
+  voice: 'Kore',
 };
 
 let botSettings = { ...defaultSettings };
@@ -97,12 +98,13 @@ app.get('/api/settings', (req, res) => {
 });
 
 app.post('/api/settings', (req, res) => {
-  const { name, persona, language, extension, greeting } = req.body || {};
+  const { name, persona, language, extension, greeting, voice } = req.body || {};
   if (name !== undefined) botSettings.name = name;
   if (persona !== undefined) botSettings.persona = persona;
   if (language !== undefined) botSettings.language = language;
   if (extension !== undefined) botSettings.extension = extension;
   if (greeting !== undefined) botSettings.greeting = greeting;
+  if (voice !== undefined) botSettings.voice = voice;
   saveSettings();
   logger.info('Bot settings updated', botSettings);
   res.json({ success: true, settings: botSettings });

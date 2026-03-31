@@ -116,9 +116,15 @@ class CallHandler {
     const systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named Luky. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
 
+    const voiceName = settings.voice || 'Kore';
     const session = await geminiManager.getOrCreate(callId, {
       systemPrompt,
       language: process.env.CALL_LANGUAGE || 'he',
+      voiceConfig: {
+        voice_config: {
+          prebuilt_voice_config: { voice_name: voiceName }
+        }
+      }
     });
 
     let audioChunks = [];
