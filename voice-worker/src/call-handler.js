@@ -180,7 +180,12 @@ class CallHandler {
       drainQueue();
     };
 
-    // Accumulate all audio until turn_complete, then play as one file — avoids choppy gaps
+    // Streaming playback: flush once we have 1s of audio (48000 bytes at 24kHz 16-bit),
+    // then flush the remainder on turn_complete. This starts playback ~1-2s earlier than
+    // waiting for the full response, while still avoiding choppy tiny-fragment gaps.
+    const STREAM_START_BYTES = 48000; // 1 second of 24kHz 16-bit PCM
+    let streamStartFlushed = false;
+
     const flushAudio = () => {
       if (!audioChunks.length) return;
       const pcm = Buffer.concat(audioChunks);
@@ -190,17 +195,26 @@ class CallHandler {
 
     session.on('audio', (chunk) => {
       audioChunks.push(chunk);
+      if (!streamStartFlushed) {
+        const totalBytes = audioChunks.reduce((s, c) => s + c.length, 0);
+        if (totalBytes >= STREAM_START_BYTES) {
+          streamStartFlushed = true;
+          flushAudio();
+        }
+      }
     });
 
     session.on('turn_complete', () => {
       waitingForGemini = false;
-      flushAudio();
+      streamStartFlushed = false;
+      flushAudio(); // flush any remaining audio not yet played
     });
 
     session.on('interrupted', () => {
       const wasPlaying = isPlaying;
       audioChunks = [];
       waitingForGemini = false;
+      streamStartFlushed = false;
       // Only clear the play queue if we're actually playing audio.
       // If Gemini sends 'interrupted' while we're NOT playing (e.g. it interrupted
       // its own generation before we started playing), preserve the queued audio.
