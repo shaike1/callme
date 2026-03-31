@@ -301,6 +301,31 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
   </div>
 
+  <!-- Twilio DID -->
+  <div class="card">
+    <h2>📱 Twilio — מספר טלפון PSTN</h2>
+    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
+      חבר מספר טלפון אמיתי — שיחות PSTN מופנות ישירות לGemini Live דרך Twilio Media Streams.
+    </div>
+    <div class="form-row"><label>Account SID</label><input id="s-twilioSid" placeholder="ACxxxxxxxx" style="direction:ltr"></div>
+    <div class="form-row"><label>Auth Token</label><input id="s-twilioToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="form-row"><label>Public URL</label><input id="s-twilioUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div class="btn-row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveTwilioSettings()">שמור</button>
+      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadTwilioNumbers()">טען מספרים</button>
+    </div>
+    <div id="twilio-numbers" style="margin-top:12px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #2d3148;padding-top:14px">
+      <b style="font-size:13px">חפש מספר חדש</b>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <input id="twilio-country" placeholder="US" style="width:60px;direction:ltr">
+        <input id="twilio-area" placeholder="Area Code (אופציונלי)" style="flex:1;direction:ltr">
+        <button class="btn btn-sm btn-primary" onclick="searchTwilioNumbers()">חפש</button>
+      </div>
+      <div id="twilio-search-results" style="margin-top:10px;font-size:13px"></div>
+    </div>
+  </div>
+
   <!-- WhatsApp notifications -->
   <div class="card">
     <h2>💬 WhatsApp — התראות</h2>
@@ -425,6 +450,8 @@ async function loadSettings() {
     document.getElementById('s-whatsappPhone').value = s.whatsappPhone || '';
     if (s.whatsappApiKey) document.getElementById('s-whatsappApiKey').placeholder = '✓ set';
     document.getElementById('s-whatsappCallSummary').checked = !!s.whatsappCallSummary;
+    document.getElementById('s-twilioSid').value = s.twilioAccountSid || '';
+    document.getElementById('s-twilioUrl').value = s.twilioPublicUrl || location.origin;
     onProviderChange();
   } catch(e) { console.error(e); }
 }
@@ -874,6 +901,76 @@ function refresh() {
   loadHealth();
   loadMetrics();
   loadStatus();
+}
+
+// ── Twilio ────────────────────────────────────────────────────────────────
+async function saveTwilioSettings() {
+  const body = {
+    twilioAccountSid: document.getElementById('s-twilioSid').value.trim(),
+    twilioPublicUrl: document.getElementById('s-twilioUrl').value.trim(),
+  };
+  const token = document.getElementById('s-twilioToken').value;
+  if (token) body.twilioAuthToken = token;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('הגדרות Twilio נשמרו ✓'); document.getElementById('s-twilioToken').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadTwilioNumbers() {
+  const el = document.getElementById('twilio-numbers');
+  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/twilio/numbers');
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">אין מספרים בחשבון</em>'; return; }
+    el.innerHTML = '<b style="font-size:12px">מספרים קיימים:</b><br>' + nums.map(n => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2d3148">
+        <span style="direction:ltr">${n.phoneNumber} <span style="color:#8892a4">${n.friendlyName}</span></span>
+        <button class="btn btn-sm" style="background:#2d3148" onclick="configTwilioNumber('${n.sid}')">הפנה לבוט</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function configTwilioNumber(sid) {
+  try {
+    const r = await fetch(`${API}/api/twilio/configure/${sid}`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast('מספר הוגדר ✓ — Webhook: ' + d.voiceUrl);
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function searchTwilioNumbers() {
+  const el = document.getElementById('twilio-search-results');
+  const country = document.getElementById('twilio-country').value.trim() || 'US';
+  const area = document.getElementById('twilio-area').value.trim();
+  el.innerHTML = '<em style="color:#8892a4">מחפש...</em>';
+  try {
+    const r = await fetch(`${API}/api/twilio/search?country=${country}&areaCode=${area}`);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #2d3148">
+        <span style="direction:ltr">${n.phoneNumber} <span style="color:#8892a4">${n.region || ''}</span></span>
+        <button class="btn btn-sm btn-primary" onclick="buyTwilioNumber('${n.phoneNumber}')">קנה ~$1/חודש</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function buyTwilioNumber(phoneNumber) {
+  if (!confirm(`לקנות ${phoneNumber}?`)) return;
+  try {
+    const r = await fetch(`${API}/api/twilio/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phoneNumber }) });
+    const d = await r.json();
+    if (d.ok) { toast('נרכש ✓ ' + d.phoneNumber); loadTwilioNumbers(); }
+    else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────

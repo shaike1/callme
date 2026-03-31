@@ -159,6 +159,11 @@ const defaultSettings = {
   whatsappPhone: '',    // e.g. +972501234567
   whatsappApiKey: '',   // from callmebot.com
   whatsappCallSummary: false,
+  // Twilio integration (PSTN DID → Gemini Live via Media Streams)
+  twilioAccountSid: '',
+  twilioAuthToken: '',
+  twilioPhoneNumber: '',   // e.g. +19725551234
+  twilioPublicUrl: '',     // e.g. https://callme.right-api.com
 };
 
 let botSettings = { ...defaultSettings };
@@ -220,6 +225,11 @@ app.post('/api/settings', (req, res) => {
   if (whatsappPhone !== undefined) botSettings.whatsappPhone = whatsappPhone;
   if (whatsappApiKey !== undefined && whatsappApiKey !== '') botSettings.whatsappApiKey = whatsappApiKey;
   if (whatsappCallSummary !== undefined) botSettings.whatsappCallSummary = whatsappCallSummary;
+  const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber, twilioPublicUrl } = req.body || {};
+  if (twilioAccountSid !== undefined) botSettings.twilioAccountSid = twilioAccountSid;
+  if (twilioAuthToken !== undefined && twilioAuthToken !== '') botSettings.twilioAuthToken = twilioAuthToken;
+  if (twilioPhoneNumber !== undefined) botSettings.twilioPhoneNumber = twilioPhoneNumber;
+  if (twilioPublicUrl !== undefined) botSettings.twilioPublicUrl = twilioPublicUrl;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -742,6 +752,155 @@ setInterval(async () => {
   }
 }, 30000);
 
+// ── Twilio integration — PSTN DID → Gemini Live via Media Streams ─────────
+
+// μ-law codec helpers (G.711 8kHz ↔ PCM 16-bit)
+function mulawDecode(u) {
+  u = ~u & 0xFF;
+  const sign = u & 0x80;
+  const exp = (u >> 4) & 0x07;
+  const mantissa = u & 0x0F;
+  let v = ((mantissa << 1) | 1) << (exp + 2);
+  return sign ? -v : v;
+}
+function mulawEncode(s) {
+  const sign = s < 0 ? 0x80 : 0;
+  if (sign) s = -s;
+  if (s > 8191) s = 8191;
+  s += 33;
+  let exp = 7;
+  for (let m = 0x4000; (s & m) === 0 && exp > 0; exp--, m >>= 1) {}
+  const mantissa = (s >> (exp + 3)) & 0x0F;
+  return (~(sign | (exp << 4) | mantissa)) & 0xFF;
+}
+
+function upsample8to16(pcm8) {
+  const out = new Int16Array(pcm8.length * 2);
+  for (let i = 0; i < pcm8.length; i++) {
+    out[i * 2] = pcm8[i];
+    out[i * 2 + 1] = i + 1 < pcm8.length ? Math.round((pcm8[i] + pcm8[i + 1]) / 2) : pcm8[i];
+  }
+  return out;
+}
+function downsample24to8(pcm16) {
+  const ratio = 3; // 24000/8000
+  const out = new Int16Array(Math.floor(pcm16.length / ratio));
+  for (let i = 0; i < out.length; i++) out[i] = pcm16[i * ratio];
+  return out;
+}
+
+// Twilio API helper
+function twilioRequest(method, path, formData) {
+  const sid = botSettings.twilioAccountSid;
+  const token = botSettings.twilioAuthToken;
+  if (!sid || !token) return Promise.reject(new Error('Twilio not configured'));
+  return new Promise((resolve, reject) => {
+    const body = formData ? new URLSearchParams(formData).toString() : null;
+    const opts = {
+      hostname: 'api.twilio.com',
+      path: `/2010-04-01/Accounts/${sid}${path}`,
+      method,
+      headers: {
+        Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
+      },
+      timeout: 10000,
+    };
+    const req2 = require('https').request(opts, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks).toString()) }); }
+        catch { resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString() }); }
+      });
+    });
+    req2.on('error', reject);
+    req2.on('timeout', () => { req2.destroy(); reject(new Error('Twilio timeout')); });
+    if (body) req2.write(body);
+    req2.end();
+  });
+}
+
+// TwiML webhook — Twilio calls this when a call arrives on the DID
+app.post('/api/twilio/voice', express.urlencoded({ extended: false }), (req, res) => {
+  const publicUrl = botSettings.twilioPublicUrl || `https://${req.headers.host}`;
+  const streamUrl = publicUrl.replace(/^https?/, 'wss') + '/api/twilio/stream';
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${streamUrl}"/>
+  </Connect>
+</Response>`;
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml);
+  logger.info('Twilio voice webhook — streaming to', { streamUrl });
+});
+
+// List Twilio phone numbers
+app.get('/api/twilio/numbers', async (req, res) => {
+  try {
+    const r = await twilioRequest('GET', '/IncomingPhoneNumbers.json');
+    if (r.status !== 200) return res.status(r.status).json({ error: r.data?.message || 'Twilio error' });
+    const numbers = (r.data.incoming_phone_numbers || []).map(n => ({
+      sid: n.sid, phoneNumber: n.phone_number, friendlyName: n.friendly_name, voiceUrl: n.voice_url
+    }));
+    res.json({ numbers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Configure a Twilio number to route to our webhook
+app.post('/api/twilio/configure/:sid', async (req, res) => {
+  const publicUrl = botSettings.twilioPublicUrl || `https://${req.headers.host}`;
+  const voiceUrl = publicUrl.replace(/\/+$/, '') + '/api/twilio/voice';
+  try {
+    const r = await twilioRequest('POST', `/IncomingPhoneNumbers/${req.params.sid}.json`, { VoiceUrl: voiceUrl, VoiceMethod: 'POST' });
+    if (r.status < 300) res.json({ ok: true, voiceUrl });
+    else res.status(r.status).json({ error: r.data?.message || 'Twilio error' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Search available Twilio numbers
+app.get('/api/twilio/search', async (req, res) => {
+  const country = req.query.country || 'US';
+  const areaCode = req.query.areaCode || '';
+  try {
+    const qs = areaCode ? `?AreaCode=${areaCode}&SmsEnabled=false` : '?SmsEnabled=false';
+    const r = await twilioRequest('GET', `/AvailablePhoneNumbers/${country}/Local.json${qs}`);
+    if (r.status !== 200) return res.status(r.status).json({ error: r.data?.message || 'Twilio error' });
+    const numbers = (r.data.available_phone_numbers || []).slice(0, 10).map(n => ({
+      phoneNumber: n.phone_number, friendlyName: n.friendly_name, region: n.region
+    }));
+    res.json({ numbers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Buy a Twilio number
+app.post('/api/twilio/buy', async (req, res) => {
+  const { phoneNumber } = req.body || {};
+  if (!phoneNumber) return res.status(400).json({ error: 'phoneNumber required' });
+  const publicUrl = botSettings.twilioPublicUrl || `https://${req.headers.host}`;
+  const voiceUrl = publicUrl.replace(/\/+$/, '') + '/api/twilio/voice';
+  try {
+    const r = await twilioRequest('POST', '/IncomingPhoneNumbers.json', { PhoneNumber: phoneNumber, VoiceUrl: voiceUrl, VoiceMethod: 'POST' });
+    if (r.status < 300) {
+      botSettings.twilioPhoneNumber = r.data.phone_number;
+      saveSettings();
+      res.json({ ok: true, phoneNumber: r.data.phone_number, sid: r.data.sid });
+    } else {
+      res.status(r.status).json({ error: r.data?.message || 'Twilio error' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Calendar integration (iCal URL reader) ───────────────────────────────
 function parseIcal(text) {
   const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -1242,6 +1401,119 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
   });
 
   logger.info('Browser WebCall WS attached to port', { port: config.healthPort });
+}
+
+// ── Twilio Media Streams WebSocket handler ─────────────────────────────────
+{
+  const { Server: WsServer } = require('ws');
+  const GeminiLiveSession = require('./gemini-live/session');
+
+  const twilioWss = new WsServer({ server: httpServer, path: '/api/twilio/stream' });
+
+  twilioWss.on('connection', (ws) => {
+    const callId = `twilio-${Date.now()}`;
+    logger.info('Twilio Media Stream connected', { callId });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { ws.close(1011, 'GEMINI_API_KEY not configured'); return; }
+
+    let streamSid = null;
+    let session = null;
+    let audioChunks24k = [];
+
+    const flushToTwilio = () => {
+      if (!audioChunks24k.length || !streamSid) return;
+      const pcm24 = Buffer.concat(audioChunks24k); audioChunks24k = [];
+      const samples24 = new Int16Array(pcm24.buffer, pcm24.byteOffset, Math.floor(pcm24.length / 2));
+      const samples8 = downsample24to8(samples24);
+      const mulaw = Buffer.alloc(samples8.length);
+      for (let i = 0; i < samples8.length; i++) mulaw[i] = mulawEncode(samples8[i]);
+      const payload = mulaw.toString('base64');
+      ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload } }));
+    };
+
+    let waitingForGemini = false;
+
+    const startSession = async () => {
+      const settings = global.botSettings || {};
+      session = new GeminiLiveSession({
+        callId, apiKey,
+        systemPrompt: settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+        language: settings.language || 'he',
+        voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: settings.voice || 'Kore' } } },
+      });
+      session.on('audio', (chunk) => {
+        audioChunks24k.push(chunk);
+        if (audioChunks24k.reduce((s, c) => s + c.length, 0) >= 24000) flushToTwilio();
+      });
+      session.on('turn_complete', () => { flushToTwilio(); waitingForGemini = false; });
+      session.on('interrupted', () => { audioChunks24k = []; waitingForGemini = false; });
+      session.on('input_transcript', (t) => logger.info('Twilio caller said', { callId, t }));
+      session.on('output_transcript', (t) => logger.info('Twilio bot said', { callId, t }));
+      session.on('error', (err) => logger.error('Twilio Gemini error', { callId, error: err.message }));
+      await session.connect();
+      const greeting = settings.greeting || 'שלום! איך אני יכול לעזור?';
+      session.sendText(greeting);
+      logger.info('Twilio Gemini session ready', { callId });
+    };
+
+    const SPEECH_RMS_THRESHOLD = 400;
+    const SILENCE_FRAMES_NEEDED = 20;
+    const MIN_SPEECH_FRAMES = 15;
+    let speaking = false, silenceCount = 0, speechCount = 0;
+    let waitingTimer = null;
+
+    const calcRmsI16 = (buf) => {
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      return Math.sqrt(sum / buf.length);
+    };
+
+    ws.on('message', async (data) => {
+      try {
+        const msg = JSON.parse(data);
+        if (msg.event === 'start') {
+          streamSid = msg.start.streamSid;
+          logger.info('Twilio stream started', { callId, streamSid });
+          try { await startSession(); } catch(err) { logger.error('Twilio session start failed', { callId, error: err.message }); }
+        } else if (msg.event === 'media' && session) {
+          const mulaw = Buffer.from(msg.media.payload, 'base64');
+          const pcm8 = new Int16Array(mulaw.length);
+          for (let i = 0; i < mulaw.length; i++) pcm8[i] = mulawDecode(mulaw[i]);
+          const pcm16 = upsample8to16(pcm8);
+          const buf16 = Buffer.from(pcm16.buffer);
+          if (waitingForGemini) return;
+          const rms = calcRmsI16(pcm16);
+          if (rms > SPEECH_RMS_THRESHOLD) {
+            silenceCount = 0; speechCount++;
+            if (!speaking && speechCount >= 2) { speaking = true; session.sendActivityStart(); }
+            if (speaking) session.sendAudio(buf16);
+          } else if (speaking) {
+            silenceCount++; session.sendAudio(buf16);
+            if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+              if (speechCount >= MIN_SPEECH_FRAMES) {
+                session.sendActivityEnd(); waitingForGemini = true;
+                if (waitingTimer) clearTimeout(waitingTimer);
+                waitingTimer = setTimeout(() => { waitingForGemini = false; }, 10000);
+              } else { session.sendActivityEnd(); }
+              speaking = false; silenceCount = 0; speechCount = 0;
+            }
+          } else { speechCount = 0; }
+        } else if (msg.event === 'stop') {
+          logger.info('Twilio stream stopped', { callId });
+        }
+      } catch(e) { logger.error('Twilio WS message error', { callId, error: e.message }); }
+    });
+
+    ws.on('close', () => {
+      logger.info('Twilio Media Stream closed', { callId });
+      if (waitingTimer) clearTimeout(waitingTimer);
+      if (session) { try { if (speaking) session.sendActivityEnd(); session.close(); } catch(_) {} }
+    });
+    ws.on('error', (err) => logger.error('Twilio WS error', { callId, error: err.message }));
+  });
+
+  logger.info('Twilio Media Streams WS attached to port', { port: config.healthPort });
 }
 
 // Connect to Drachtio
