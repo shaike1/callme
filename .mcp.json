@@ -2,12 +2,7 @@
   "mcpServers": {
     "callme": {
       "command": "node",
-      "args": ["/root/openclaw-3cx/callme-mcp/server.js"],
-      "env": {
-        "CALLME_URL": "http://127.0.0.1:3101",
-        "CALLME_USER": "admin",
-        "CALLME_PASS": "luky2024"
-      }
+      "args": ["/root/openclaw-3cx/callme-mcp/server.js"]
     },
     "telegram": {
       "command": "/root/.bun/bin/bun",

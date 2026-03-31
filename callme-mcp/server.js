@@ -23,6 +23,16 @@ const http = require('http');
 const https = require('https');
 const readline = require('readline');
 
+// Load .env from project root if present (so CALLME_PASS / ADMIN_PASS can be set there)
+const path = require('path');
+const envFile = path.join(__dirname, '..', '.env');
+if (require('fs').existsSync(envFile)) {
+  require('fs').readFileSync(envFile, 'utf-8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
+  });
+}
+
 const CALLME_URL = (process.env.CALLME_URL || 'http://127.0.0.1:3101').replace(/\/$/, '');
 const CALLME_USER = process.env.CALLME_USER || process.env.ADMIN_USER || 'admin';
 const CALLME_PASS = process.env.CALLME_PASS || process.env.ADMIN_PASS || '';
