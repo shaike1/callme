@@ -58,7 +58,7 @@ services:
     command: >
       drachtio
       --contact "sip:*:5070;transport=tcp,udp"
-      --external-ip ${EXTERNAL_IP}
+      --external-ip 127.0.0.1
       --secret ${DRACHTIO_SECRET:-cymru}
       --port 9022
       --loglevel info
@@ -78,7 +78,7 @@ services:
       freeswitch
       --sip-port 5080
       --rtp-range-start 30000
-      --rtp-range-end 30100
+      --rtp-range-end 30999
       --ext-rtp-ip ${EXTERNAL_IP}
       --ext-sip-ip ${EXTERNAL_IP}
       --advertise-external-ip
@@ -96,8 +96,9 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      - OPENCLAW_HOST=${OPENCLAW_HOST}
-      - OPENCLAW_PORT=${OPENCLAW_PORT:-18790}
+      - OPENCLAW_HOST=127.0.0.1
+      - OPENCLAW_GATEWAY_PORT=18789
+      - OPENCLAW_GATEWAY_TOKEN=OPENCLAW_GATEWAY_TOKEN_REDACTED
 
   # ─────────────────────────────────────────
   # Voice application
@@ -114,6 +115,45 @@ services:
     volumes:
       - ./voice-app/audio:/app/audio
       - ./voice-app/config:/app/config
+    depends_on:
+      - drachtio
+      - freeswitch
+
+  # ─────────────────────────────────────────
+  # Gemini Live voice worker (v2)
+  # Handles inbound SIP calls using Gemini Live API for real-time voice
+  # ─────────────────────────────────────────
+  voice-worker-gemini:
+    build:
+      context: ./voice-worker
+      dockerfile: Dockerfile
+    image: voice-worker-gemini-img
+    container_name: voice-worker-gemini
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /tmp/voice-worker-audio:/tmp/voice-worker-audio
+    environment:
+      - DRACHTIO_HOST=127.0.0.1
+      - DRACHTIO_PORT=9022
+      - DRACHTIO_SECRET=${DRACHTIO_SECRET:-cymru}
+      - FREESWITCH_HOST=127.0.0.1
+      - FREESWITCH_PORT=8021
+      - FREESWITCH_SECRET=${FREESWITCH_SECRET:-JambonzR0ck$}
+      - CONVERSATION_ENGINE=gemini-live
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SIP_EXTENSION=${SIP_EXTENSION:-12611}
+      - SIP_AUTH_ID=${SIP_AUTH_ID}
+      - SIP_AUTH_PASSWORD=${SIP_AUTH_PASSWORD}
+      - SIP_DOMAIN=${SIP_DOMAIN}
+      - SIP_REGISTRAR=127.0.0.1
+      - SIP_REGISTRAR_PORT=5060
+      - SIP_LOCAL_ADDRESS=127.0.0.1
+      - DRACHTIO_SIP_PORT=5070
+      - WS_PORT=3001
+      - HEALTH_PORT=3101
+      - AUDIO_DIR=/tmp/voice-worker-audio
+      - MAX_CALL_DURATION_MS=300000
     depends_on:
       - drachtio
       - freeswitch

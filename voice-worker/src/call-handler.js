@@ -197,10 +197,16 @@ class CallHandler {
     });
 
     session.on('interrupted', () => {
+      const wasPlaying = isPlaying;
       audioChunks = [];
-      playQueue.length = 0;
-      isPlaying = false;
-      logger.info('Barge-in detected', { callId });
+      // Only clear the play queue if we're actually playing audio.
+      // If Gemini sends 'interrupted' while we're NOT playing (e.g. it interrupted
+      // its own generation before we started playing), preserve the queued audio.
+      if (wasPlaying) {
+        playQueue.length = 0;
+        isPlaying = false;
+      }
+      logger.info('Barge-in detected', { callId, wasPlaying });
     });
 
     // Send initial greeting
