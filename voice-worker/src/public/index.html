@@ -300,6 +300,17 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
   </div>
 
+  <!-- Browser Web Call -->
+  <div class="card" id="webcall-card">
+    <h2>Web Call — שיחה מהדפדפן</h2>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="webcall-btn" class="btn btn-primary" onclick="toggleWebCall()">📞 התחל שיחה</button>
+      <span id="webcall-status" style="color:#8892a4;font-size:14px">לא מחובר</span>
+      <span id="webcall-rms" style="color:#4caf50;font-size:12px;direction:ltr;min-width:60px"></span>
+    </div>
+    <div id="webcall-transcript" style="margin-top:12px;max-height:220px;overflow-y:auto;font-size:13px;line-height:1.7"></div>
+  </div>
+
   <!-- Recordings (transcripts) -->
   <div class="card">
     <h2>תמלולים — שיחות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadRecordings()">רענן</button></h2>
@@ -818,6 +829,99 @@ function refresh() {
   loadHealth();
   loadMetrics();
   loadStatus();
+}
+
+// ── Browser Web Call ─────────────────────────────────────────────────────
+let wcWs = null, wcCtx = null, wcStream = null, wcProcessor = null;
+let wcActive = false, wcScheduled = 0;
+
+async function toggleWebCall() {
+  if (wcActive) { stopWebCall(); return; }
+  try { await startWebCall(); } catch(e) { toast('שגיאה: ' + e.message, true); updateWcStatus('שגיאה', '#ef5350'); }
+}
+
+async function startWebCall() {
+  const tr = await fetch('/api/live-token');
+  const { token } = await tr.json();
+  wcStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  wcCtx = new AudioContext();
+  wcScheduled = 0;
+  document.getElementById('webcall-transcript').innerHTML = '';
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wcWs = new WebSocket(`${proto}://${location.host}/api/browser-call?token=${token}`);
+  wcWs.binaryType = 'arraybuffer';
+  wcWs.onopen = () => {
+    wcWs.send(JSON.stringify({ voice: 'Kore', language: 'he' }));
+    const source = wcCtx.createMediaStreamSource(wcStream);
+    wcProcessor = wcCtx.createScriptProcessor(4096, 1, 1);
+    const ratio = wcCtx.sampleRate / 16000;
+    wcProcessor.onaudioprocess = (e) => {
+      if (!wcWs || wcWs.readyState !== 1) return;
+      const inp = e.inputBuffer.getChannelData(0);
+      const outLen = Math.floor(inp.length / ratio);
+      const out = new Int16Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        const s = inp[Math.round(i * ratio)];
+        out[i] = Math.max(-32768, Math.min(32767, s * 32767));
+      }
+      const rms = Math.sqrt(out.reduce((s,v)=>s+v*v,0)/out.length);
+      const bars = '█'.repeat(Math.min(8, Math.round(rms / 500)));
+      document.getElementById('webcall-rms').textContent = bars || '·';
+      wcWs.send(out.buffer);
+    };
+    source.connect(wcProcessor);
+    wcProcessor.connect(wcCtx.destination);
+    wcActive = true;
+    document.getElementById('webcall-btn').textContent = '⏹ סיים שיחה';
+    document.getElementById('webcall-btn').style.background = '#c62828';
+  };
+  wcWs.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      const i16 = new Int16Array(e.data);
+      const f32 = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32767;
+      const buf = wcCtx.createBuffer(1, f32.length, 24000);
+      buf.copyToChannel(f32, 0);
+      const src = wcCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(wcCtx.destination);
+      const now = wcCtx.currentTime;
+      const at = Math.max(now, wcScheduled);
+      src.start(at);
+      wcScheduled = at + buf.duration;
+    } else {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'status') updateWcStatus({ ready: 'מוכן', listening: 'מאזין', thinking: 'חושב...' }[msg.state] || msg.state, msg.state === 'listening' ? '#4caf50' : '#ff9800');
+        if (msg.type === 'transcript') {
+          const d = document.getElementById('webcall-transcript');
+          const icon = msg.role === 'user' ? '👤' : '🤖';
+          d.innerHTML += `<div><b>${icon}</b> ${msg.text}</div>`;
+          d.scrollTop = d.scrollHeight;
+        }
+      } catch(_) {}
+    }
+  };
+  wcWs.onclose = () => stopWebCall();
+  wcWs.onerror = () => { toast('WebCall נותק', true); stopWebCall(); };
+}
+
+function stopWebCall() {
+  wcActive = false;
+  if (wcProcessor) { try { wcProcessor.disconnect(); } catch(_) {} wcProcessor = null; }
+  if (wcStream) { wcStream.getTracks().forEach(t => t.stop()); wcStream = null; }
+  if (wcWs && wcWs.readyState < 2) wcWs.close();
+  wcWs = null;
+  if (wcCtx) { wcCtx.close().catch(()=>{}); wcCtx = null; }
+  document.getElementById('webcall-btn').textContent = '📞 התחל שיחה';
+  document.getElementById('webcall-btn').style.background = '';
+  document.getElementById('webcall-rms').textContent = '';
+  updateWcStatus('לא מחובר', '#8892a4');
+}
+
+function updateWcStatus(text, color) {
+  const el = document.getElementById('webcall-status');
+  el.textContent = text; el.style.color = color || '#8892a4';
 }
 
 // ── Recordings ────────────────────────────────────────────────────────────

@@ -1011,10 +1011,128 @@ app.get('/api/status', async (req, res) => {
   });
 }
 
-// Start health server
-app.listen(config.healthPort, '0.0.0.0', () => {
+// Live token endpoint — browser fetches this to auth the WS browser-call
+app.get('/api/live-token', (req, res) => {
+  const { user, pass } = getAdminCreds();
+  res.json({ token: Buffer.from(`${user}:${pass}`).toString('base64') });
+});
+
+// Start health server — keep reference so we can attach WS
+const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
   logger.info(`Health server listening on port ${config.healthPort}`);
 });
+
+// ── Browser WebCall WS bridge (same port as dashboard — works with Traefik WSS) ──
+{
+  const { Server: WsServer } = require('ws');
+  const GeminiLiveSession = require('./gemini-live/session');
+
+  const browserWss = new WsServer({ server: httpServer, path: '/api/browser-call' });
+
+  browserWss.on('connection', (ws, req) => {
+    const url = new URL(req.url, 'http://localhost');
+    const token = url.searchParams.get('token');
+    const { user, pass } = getAdminCreds();
+    const expectedToken = Buffer.from(`${user}:${pass}`).toString('base64');
+    if (token !== expectedToken) { ws.close(4401, 'Unauthorized'); return; }
+
+    const sessionId = `browser-${Date.now()}`;
+    logger.info('Browser WebCall connected', { sessionId });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+
+    let session = null;
+    let configured = false;
+    let audioChunks = [];
+    let scheduledTime = 0;
+
+    const SPEECH_RMS_THRESHOLD = 400;
+    const SILENCE_FRAMES_NEEDED = 20;
+    const MIN_SPEECH_FRAMES = 15;
+    let speaking = false, silenceCount = 0, speechCount = 0;
+    let waitingForGemini = false, waitingTimer = null;
+
+    const calcRms = (buf) => {
+      let sum = 0;
+      for (let i = 0; i + 1 < buf.length; i += 2) { const s = buf.readInt16LE(i); sum += s * s; }
+      return Math.sqrt(sum / (buf.length / 2));
+    };
+    const sendStatus = (state) => { try { ws.send(JSON.stringify({ type: 'status', state })); } catch(_) {} };
+    const sendTranscript = (role, text) => { try { ws.send(JSON.stringify({ type: 'transcript', role, text })); } catch(_) {} };
+
+    ws.on('message', async (data, isBinary) => {
+      if (!configured) {
+        try {
+          const cfg = JSON.parse(data.toString());
+          const settings = global.botSettings || {};
+          session = new GeminiLiveSession({
+            callId: sessionId, apiKey,
+            systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+            language: cfg.language || settings.language || 'he',
+            voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: cfg.voice || settings.voice || 'Kore' } } },
+          });
+
+          session.on('audio', (chunk) => {
+            audioChunks.push(chunk);
+            const total = audioChunks.reduce((s, c) => s + c.length, 0);
+            if (total >= 48000) {
+              const pcm = Buffer.concat(audioChunks); audioChunks = [];
+              if (ws.readyState === ws.OPEN) ws.send(pcm);
+            }
+          });
+          session.on('turn_complete', () => {
+            waitingForGemini = false;
+            if (audioChunks.length) { const pcm = Buffer.concat(audioChunks); audioChunks = []; if (ws.readyState === ws.OPEN) ws.send(pcm); }
+            sendStatus('listening');
+          });
+          session.on('interrupted', () => { audioChunks = []; waitingForGemini = false; sendStatus('listening'); });
+          session.on('input_transcript', (text) => sendTranscript('user', text));
+          session.on('output_transcript', (text) => sendTranscript('bot', text));
+          session.on('error', (err) => logger.error('BrowserCall session error', { sessionId, error: err.message }));
+
+          await session.connect();
+          configured = true;
+          sendStatus('ready');
+          const greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה בעברית.';
+          session.sendText(greeting);
+          sendStatus('thinking');
+        } catch (err) {
+          logger.error('BrowserCall setup error', { sessionId, error: err.message });
+          ws.close(4500, err.message);
+        }
+        return;
+      }
+
+      if (!isBinary || !session || waitingForGemini) return;
+      const rms = calcRms(data);
+      if (rms > SPEECH_RMS_THRESHOLD) {
+        silenceCount = 0; speechCount++;
+        if (!speaking && speechCount >= 2) { speaking = true; session.sendActivityStart(); sendStatus('listening'); }
+        if (speaking) session.sendAudio(data);
+      } else if (speaking) {
+        silenceCount++; session.sendAudio(data);
+        if (silenceCount >= SILENCE_FRAMES_NEEDED) {
+          if (speechCount >= MIN_SPEECH_FRAMES) {
+            session.sendActivityEnd(); waitingForGemini = true; sendStatus('thinking');
+            if (waitingTimer) clearTimeout(waitingTimer);
+            waitingTimer = setTimeout(() => { waitingForGemini = false; }, 10000);
+          } else { session.sendActivityEnd(); }
+          speaking = false; silenceCount = 0; speechCount = 0;
+        }
+      } else { speechCount = 0; }
+    });
+
+    ws.on('close', () => {
+      logger.info('BrowserCall disconnected', { sessionId });
+      if (waitingTimer) clearTimeout(waitingTimer);
+      if (session) { try { if (speaking) session.sendActivityEnd(); session.close(); } catch(_) {} }
+    });
+    ws.on('error', (err) => logger.error('BrowserCall WS error', { sessionId, error: err.message }));
+  });
+
+  logger.info('Browser WebCall WS attached to port', { port: config.healthPort });
+}
 
 // Connect to Drachtio
 srf.connect({
