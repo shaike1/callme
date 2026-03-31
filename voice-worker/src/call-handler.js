@@ -193,12 +193,14 @@ class CallHandler {
     });
 
     session.on('turn_complete', () => {
+      waitingForGemini = false;
       flushAudio();
     });
 
     session.on('interrupted', () => {
       const wasPlaying = isPlaying;
       audioChunks = [];
+      waitingForGemini = false;
       // Only clear the play queue if we're actually playing audio.
       // If Gemini sends 'interrupted' while we're NOT playing (e.g. it interrupted
       // its own generation before we started playing), preserve the queued audio.
@@ -232,15 +234,18 @@ class CallHandler {
     let speaking = false;
     let silenceCount = 0;
     let speechCount = 0;
-    // After sending activityEnd, suppress new input for 1.5s so Gemini can process
-    // without being interrupted by the tail of the utterance or mic echo
-    let postUtteranceSuppressUntil = 0;
-    const POST_UTTERANCE_SUPPRESS_MS = 1500;
+    // After sending activityEnd for real speech, block new activityStart until Gemini
+    // fires turn_complete or interrupted — prevents rapid interrupt cascade that stops
+    // Gemini from ever completing a response turn.
+    let waitingForGemini = false;
+    let waitingForGeminiTimer = null;
+    const GEMINI_RESPONSE_TIMEOUT_MS = 5000; // safety unlock after 5s if no response
 
     this.audioForkServer.register(callId, {
       onAudio: (buf) => {
-        if (!firstPlayDone || isPlaying || Date.now() < postPlaySuppressUntil) return;
-        if (Date.now() < postUtteranceSuppressUntil) return;
+        if (!firstPlayDone || isPlaying) return;
+        // Block new speech input while Gemini is generating its response
+        if (waitingForGemini) return;
 
         const rms = calcRms(buf);
 
@@ -258,13 +263,18 @@ class CallHandler {
             silenceCount++;
             session.sendAudio(buf); // send trailing silence too
             if (silenceCount >= SILENCE_FRAMES_NEEDED) {
-              // Always send activityEnd if we sent activityStart — never leave Gemini stuck waiting
               if (speechCount >= MIN_SPEECH_FRAMES) {
+                // Real speech — lock input until Gemini responds
                 session.sendActivityEnd();
-                postUtteranceSuppressUntil = Date.now() + POST_UTTERANCE_SUPPRESS_MS;
+                waitingForGemini = true;
+                if (waitingForGeminiTimer) clearTimeout(waitingForGeminiTimer);
+                waitingForGeminiTimer = setTimeout(() => {
+                  waitingForGemini = false;
+                  logger.warn('Gemini response timeout — unlocking input', { callId });
+                }, GEMINI_RESPONSE_TIMEOUT_MS);
                 logger.info('Speech end → sent to Gemini', { callId, speechFrames: speechCount });
               } else {
-                // Too short to be real speech, but still close the activity to unblock Gemini
+                // Too short — close activity to unblock Gemini, but don't lock
                 session.sendActivityEnd();
                 logger.debug('Speech too short, closing activity', { callId, speechFrames: speechCount });
               }
@@ -278,6 +288,7 @@ class CallHandler {
         }
       },
       onClose: () => {
+        if (waitingForGeminiTimer) clearTimeout(waitingForGeminiTimer);
         if (speaking) session.sendActivityEnd();
         session.close();
       }
