@@ -39,20 +39,29 @@ const callHandler = new CallHandler(srf, sessionManager, sttTtsManager, metrics,
 app.use('/audio', express.static(AUDIO_DIR));
 
 // ── Basic auth for dashboard & API ───────────────────────────────────────
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'luky2024';
+// Credentials resolved at request time so dashboard changes take effect immediately
+function getAdminCreds() {
+  // botSettings overrides env vars (so dashboard-set password wins)
+  const user = (botSettings && botSettings.adminUser) || process.env.ADMIN_USER || 'admin';
+  const pass = (botSettings && botSettings.adminPass) || process.env.ADMIN_PASS || 'luky2024';
+  return { user, pass };
+}
 
 function requireAuth(req, res, next) {
   // Skip auth for health/ready/metrics (used by infra) and audio (FreeSWITCH)
   if (['/health', '/ready', '/metrics'].includes(req.path) || req.path.startsWith('/audio/')) {
     return next();
   }
+  const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Basic ')) {
-    const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+    const colonIdx = decoded.indexOf(':');
+    const user = decoded.slice(0, colonIdx);
+    const pass = decoded.slice(colonIdx + 1);
     if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
   }
-  res.setHeader('WWW-Authenticate', 'Basic realm="Luky Dashboard"');
+  res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Bot Dashboard"');
   res.status(401).send('Authentication required');
 }
 app.use(requireAuth);
@@ -133,6 +142,9 @@ const defaultSettings = {
   sipAuthId: process.env.SIP_AUTH_ID || '',
   sipPassword: '',       // never stored in plaintext after first load
   sipDid: '',            // DID phone number (e.g. +972XXXXXXXXX)
+  // Admin credentials (override ADMIN_USER / ADMIN_PASS env vars when set)
+  adminUser: '',
+  adminPass: '',
 };
 
 let botSettings = { ...defaultSettings };
@@ -151,12 +163,19 @@ const saveSettings = () => {
 global.botSettings = botSettings;
 
 app.get('/api/settings', (req, res) => {
-  res.json({ ...botSettings, sipPassword: botSettings.sipPassword ? '✓ set' : '' });
+  const { user: adminUser } = getAdminCreds();
+  res.json({
+    ...botSettings,
+    sipPassword: botSettings.sipPassword ? '✓ set' : '',
+    adminPass: botSettings.adminPass ? '✓ set' : '',
+    adminUser: botSettings.adminUser || adminUser,
+  });
 });
 
 app.post('/api/settings', (req, res) => {
   const { name, persona, language, extension, greeting, voice,
-          sipProvider, sipServer, sipRegistrar, sipExtension, sipAuthId, sipPassword, sipDid } = req.body || {};
+          sipProvider, sipServer, sipRegistrar, sipExtension, sipAuthId, sipPassword, sipDid,
+          adminUser, adminPass } = req.body || {};
   if (name !== undefined) botSettings.name = name;
   if (persona !== undefined) botSettings.persona = persona;
   if (language !== undefined) botSettings.language = language;
@@ -170,10 +189,16 @@ app.post('/api/settings', (req, res) => {
   if (sipAuthId !== undefined) botSettings.sipAuthId = sipAuthId;
   if (sipPassword !== undefined && sipPassword !== '') botSettings.sipPassword = sipPassword;
   if (sipDid !== undefined) botSettings.sipDid = sipDid;
+  if (adminUser !== undefined && adminUser !== '') botSettings.adminUser = adminUser;
+  if (adminPass !== undefined && adminPass !== '') botSettings.adminPass = adminPass;
   saveSettings();
-  logger.info('Bot settings updated', { ...botSettings, sipPassword: botSettings.sipPassword ? '***' : '' });
-  // Return settings without exposing password
-  res.json({ success: true, settings: { ...botSettings, sipPassword: botSettings.sipPassword ? '✓ set' : '' } });
+  logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
+  // Return settings without exposing passwords
+  res.json({ success: true, settings: {
+    ...botSettings,
+    sipPassword: botSettings.sipPassword ? '✓ set' : '',
+    adminPass: botSettings.adminPass ? '✓ set' : '',
+  }});
 });
 
 // ── Integrations (teamy, openclaw, home assistant) ───────────────────────

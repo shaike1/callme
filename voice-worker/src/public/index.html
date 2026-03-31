@@ -152,6 +152,16 @@
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות SIP</button></div>
   </div>
 
+  <!-- Admin credentials -->
+  <div class="card">
+    <h2>אבטחה — כניסה לדשבורד</h2>
+    <div class="form-row"><label>שם משתמש</label><input id="s-adminUser" placeholder="admin"></div>
+    <div class="form-row"><label>סיסמה חדשה</label><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="form-row"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה החדשה"></div>
+    <div id="admin-pass-status" style="font-size:12px;min-height:16px;color:#94a3b8;margin-bottom:10px"></div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="saveAdminCreds()">שמור פרטי כניסה</button></div>
+  </div>
+
   <!-- Integrations -->
   <div class="card">
     <h2>אינטגרציות</h2>
@@ -282,8 +292,36 @@ async function loadSettings() {
     document.getElementById('s-sipAuthId').value = s.sipAuthId || '';
     document.getElementById('s-sipDid').value = s.sipDid || '';
     if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = s.sipPassword; // shows '✓ set'
+    if (s.adminUser) document.getElementById('s-adminUser').value = s.adminUser;
+    if (s.adminPass) document.getElementById('s-adminPass').placeholder = s.adminPass; // shows '✓ set'
     onProviderChange();
   } catch(e) { console.error(e); }
+}
+
+async function saveAdminCreds() {
+  const user = document.getElementById('s-adminUser').value.trim();
+  const pass = document.getElementById('s-adminPass').value;
+  const confirm = document.getElementById('s-adminPassConfirm').value;
+  const status = document.getElementById('admin-pass-status');
+
+  if (pass && pass !== confirm) {
+    status.textContent = 'הסיסמאות לא תואמות'; status.style.color = '#ef4444'; return;
+  }
+  if (!user) { status.textContent = 'שם משתמש לא יכול להיות ריק'; status.style.color = '#ef4444'; return; }
+
+  const body = { adminUser: user };
+  if (pass) body.adminPass = pass;
+
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      toast('פרטי כניסה עודכנו ✓');
+      document.getElementById('s-adminPass').value = '';
+      document.getElementById('s-adminPassConfirm').value = '';
+      status.textContent = pass ? 'סיסמה שונתה — הכנס מחדש בריענון הבא' : 'שם משתמש עודכן';
+      status.style.color = '#22c55e';
+    } else { toast('שגיאה בשמירה', true); }
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 async function saveSettings() {
