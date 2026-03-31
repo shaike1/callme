@@ -285,6 +285,21 @@
     </div>
   </div>
 
+  <!-- Telegram notifications -->
+  <div class="card">
+    <h2>Telegram — התראות</h2>
+    <div class="form-row"><label>Bot Token</label><input id="s-telegramBotToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="form-row"><label>Chat ID</label><input id="s-telegramChatId" placeholder="-100XXXXXXXXX" style="direction:ltr"></div>
+    <div class="form-row"><label>Thread ID</label><input id="s-telegramThreadId" placeholder="201 (אופציונלי)" style="direction:ltr"></div>
+    <div class="form-row">
+      <label>סיכום שיחה</label>
+      <label style="display:flex;align-items:center;gap:8px;padding-top:6px">
+        <input type="checkbox" id="s-telegramCallSummary"> שלח סיכום אחרי כל שיחה
+      </label>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
+  </div>
+
   <!-- Logs -->
   <div class="card">
     <h2>לוגים חיים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="clearLogs()">נקה</button></h2>
@@ -338,8 +353,27 @@ async function loadSettings() {
     if (s.adminUser) document.getElementById('s-adminUser').value = s.adminUser;
     if (s.adminPass) document.getElementById('s-adminPass').placeholder = s.adminPass; // shows '✓ set'
     document.getElementById('s-callWebhookUrl').value = s.callWebhookUrl || '';
+    document.getElementById('s-telegramChatId').value = s.telegramChatId || '';
+    document.getElementById('s-telegramThreadId').value = s.telegramThreadId || '';
+    document.getElementById('s-telegramCallSummary').checked = !!s.telegramCallSummary;
+    if (s.telegramBotToken) document.getElementById('s-telegramBotToken').placeholder = '✓ set';
     onProviderChange();
   } catch(e) { console.error(e); }
+}
+
+async function saveTelegramSettings() {
+  const body = {
+    telegramChatId: document.getElementById('s-telegramChatId').value,
+    telegramThreadId: document.getElementById('s-telegramThreadId').value,
+    telegramCallSummary: document.getElementById('s-telegramCallSummary').checked,
+  };
+  const token = document.getElementById('s-telegramBotToken').value;
+  if (token) body.telegramBotToken = token;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('הגדרות Telegram נשמרו ✓'); document.getElementById('s-telegramBotToken').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 async function saveAdminCreds() {

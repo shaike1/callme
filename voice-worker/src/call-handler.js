@@ -86,6 +86,11 @@ class CallHandler {
         this.metrics.record(callId, 'endCall', 'hangup');
         this.metrics.finalize(callId);
         if (global.fireWebhook) global.fireWebhook('call.ended', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt, durationS });
+        if (global.sendTelegramMessage && (global.botSettings || {}).telegramCallSummary) {
+          const callerInfo = callerName ? callerName : (callerRaw || 'לא ידוע');
+          const msg = `📞 <b>שיחה נכנסת הסתיימה</b>\n👤 מתקשר: ${callerInfo}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
+          global.sendTelegramMessage(msg);
+        }
       });
 
       if (CONVERSATION_ENGINE === 'gemini-live') {

@@ -147,6 +147,11 @@ const defaultSettings = {
   adminPass: '',
   // Webhook URL for call events (call.started, call.ended, call.failed)
   callWebhookUrl: process.env.CALL_WEBHOOK_URL || '',
+  // Telegram notifications
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  telegramThreadId: process.env.TELEGRAM_THREAD_ID || '',
+  telegramCallSummary: false,
 };
 
 let botSettings = { ...defaultSettings };
@@ -171,6 +176,7 @@ app.get('/api/settings', (req, res) => {
     sipPassword: botSettings.sipPassword ? '✓ set' : '',
     adminPass: botSettings.adminPass ? '✓ set' : '',
     adminUser: botSettings.adminUser || adminUser,
+    telegramBotToken: botSettings.telegramBotToken ? '✓ set' : '',
   });
 });
 
@@ -193,8 +199,12 @@ app.post('/api/settings', (req, res) => {
   if (sipDid !== undefined) botSettings.sipDid = sipDid;
   if (adminUser !== undefined && adminUser !== '') botSettings.adminUser = adminUser;
   if (adminPass !== undefined && adminPass !== '') botSettings.adminPass = adminPass;
-  const { callWebhookUrl } = req.body || {};
+  const { callWebhookUrl, telegramBotToken, telegramChatId, telegramThreadId, telegramCallSummary } = req.body || {};
   if (callWebhookUrl !== undefined) botSettings.callWebhookUrl = callWebhookUrl;
+  if (telegramBotToken) botSettings.telegramBotToken = telegramBotToken;
+  if (telegramChatId !== undefined) botSettings.telegramChatId = telegramChatId;
+  if (telegramThreadId !== undefined) botSettings.telegramThreadId = telegramThreadId;
+  if (telegramCallSummary !== undefined) botSettings.telegramCallSummary = telegramCallSummary;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -455,6 +465,35 @@ function fireWebhook(event, payload) {
 // Make fireWebhook available to call-handler via global
 global.fireWebhook = fireWebhook;
 
+function sendTelegramMessage(text) {
+  const token = botSettings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = botSettings.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const body = JSON.stringify({
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    ...(botSettings.telegramThreadId ? { message_thread_id: parseInt(botSettings.telegramThreadId) } : {}),
+  });
+
+  try {
+    const req2 = require('https').request({
+      hostname: 'api.telegram.org',
+      path: `/bot${token}/sendMessage`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 5000,
+    }, () => {});
+    req2.on('error', (e) => logger.warn('Telegram notification failed', { error: e.message }));
+    req2.write(body);
+    req2.end();
+  } catch(e) {
+    logger.warn('Telegram send error', { error: e.message });
+  }
+}
+global.sendTelegramMessage = sendTelegramMessage;
+
 // Active call registry — for Dialer panel and /api/calls
 const activeCalls = new Map(); // callId → { callId, to, from, startedAt, dialog }
 
@@ -477,6 +516,10 @@ app.post('/call', async (req, res) => {
       const durationS = Math.round((Date.now() - startedAt) / 1000);
       activeCalls.delete(callId);
       fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
+      if (global.sendTelegramMessage && botSettings.telegramCallSummary) {
+        const msg = `📞 <b>שיחה יוצאת הסתיימה</b>\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
+        global.sendTelegramMessage(msg);
+      }
       if (webhookUrl) {
         // Per-call webhook override
         const orig = botSettings.callWebhookUrl;
