@@ -47,6 +47,30 @@ function getAdminCreds() {
   return { user, pass };
 }
 
+// Role permissions:
+//   admin    — full access
+//   operator — calls + contacts + recordings + IVR; no settings/users/integrations write
+//   viewer   — GET only; no POST/PUT/DELETE, no settings write
+const ROLE_PERMISSIONS = {
+  admin:    { allowAll: true },
+  operator: { allowPaths: ['/api/calls', '/api/call', '/api/contacts', '/api/recordings', '/api/voicemails', '/api/ivr', '/api/logs', '/api/status'], allowGet: true },
+  viewer:   { allowGet: true, allowPaths: [] },
+};
+
+function getRequestRole(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Basic ')) return null;
+  const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+  const colonIdx = decoded.indexOf(':');
+  const user = decoded.slice(0, colonIdx);
+  const pass = decoded.slice(colonIdx + 1);
+  const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
+  if (user === ADMIN_USER && pass === ADMIN_PASS) return { role: 'admin', username: user };
+  const found = (botSettings.users || []).find(u => u.username === user && u.password === pass);
+  if (found) return { role: found.role || 'viewer', username: user };
+  return null;
+}
+
 function requireAuth(req, res, next) {
   // Skip auth for health/ready/metrics (used by infra) and audio (FreeSWITCH)
   if (['/health', '/ready', '/metrics'].includes(req.path) || req.path.startsWith('/audio/')) {
@@ -56,20 +80,18 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/admin') || req.path.startsWith('/t/')) {
     return next();
   }
-  const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Basic ')) {
-    const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-    const colonIdx = decoded.indexOf(':');
-    const user = decoded.slice(0, colonIdx);
-    const pass = decoded.slice(colonIdx + 1);
-    if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
-    // Check additional users list
-    const users = botSettings.users || [];
-    if (users.find(u => u.username === user && u.password === pass)) return next();
+  const identity = getRequestRole(req);
+  if (!identity) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Bot Dashboard"');
+    return res.status(401).send('Authentication required');
   }
-  res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Bot Dashboard"');
-  res.status(401).send('Authentication required');
+  const perms = ROLE_PERMISSIONS[identity.role] || ROLE_PERMISSIONS.viewer;
+  if (perms.allowAll) { req.userRole = identity.role; return next(); }
+  // Viewer: GET requests only (static files + read APIs)
+  if (perms.allowGet && req.method === 'GET') { req.userRole = identity.role; return next(); }
+  // Operator: also allow mutating calls/contacts/IVR paths
+  if (perms.allowPaths && perms.allowPaths.some(p => req.path.startsWith(p))) { req.userRole = identity.role; return next(); }
+  return res.status(403).json({ error: 'Forbidden — insufficient permissions for your role (' + identity.role + ')' });
 }
 app.use(requireAuth);
 

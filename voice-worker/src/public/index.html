@@ -627,10 +627,18 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
     <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:8px">משתמשים נוספים</div>
     <div id="users-list" style="font-size:13px;margin-bottom:10px"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <input id="new-user-name" placeholder="שם משתמש" style="flex:1">
-      <input id="new-user-pass" type="password" placeholder="סיסמה" style="flex:1">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <input id="new-user-name" placeholder="שם משתמש" style="flex:1;min-width:120px">
+      <input id="new-user-pass" type="password" placeholder="סיסמה" style="flex:1;min-width:120px">
+      <select id="new-user-role" style="flex:0 0 auto;background:#0f1629;color:#e2e8f0;border:1px solid #1e2545;border-radius:8px;padding:0 8px;font-size:13px">
+        <option value="viewer">👁 צופה</option>
+        <option value="operator">📞 מפעיל</option>
+        <option value="admin">⚙️ מנהל</option>
+      </select>
       <button class="btn btn-g btn-sm" onclick="addUser()">הוסף</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">
+      👁 <b>צופה</b> — קריאה בלבד &nbsp;|&nbsp; 📞 <b>מפעיל</b> — שיחות + אנשי קשר &nbsp;|&nbsp; ⚙️ <b>מנהל</b> — גישה מלאה
     </div>
     <div class="status-line" id="users-status"></div>
     <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
@@ -1860,10 +1868,12 @@ async function loadUsers() {
     const d = await (await fetch(API + '/api/users')).json();
     const el = document.getElementById('users-list');
     if (!el) return;
+    const roleLabel = { admin: '⚙️ מנהל', operator: '📞 מפעיל', viewer: '👁 צופה' };
+    const roleColor = { admin: '#818cf8', operator: '#22c55e', viewer: '#64748b' };
     el.innerHTML = (d.users || []).map(u =>
       `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #1e2545">
         <span style="flex:1">${u.username}</span>
-        <span style="font-size:11px;color:#64748b;background:#1e2545;padding:2px 6px;border-radius:10px">${u.role}</span>
+        <span style="font-size:11px;color:${roleColor[u.role]||'#64748b'};background:#1e2545;padding:2px 8px;border-radius:10px">${roleLabel[u.role]||u.role}</span>
         ${u.role !== 'admin' ? `<button class="btn btn-sm" style="background:#2d1f1f;color:#ef4444;padding:2px 8px" onclick="deleteUser('${u.username}')">✕</button>` : ''}
       </div>`
     ).join('');
@@ -1876,7 +1886,8 @@ async function addUser() {
   const st = document.getElementById('users-status');
   if (!username || !password) { st.textContent = 'נדרשים שם משתמש וסיסמה'; st.style.color = '#ef4444'; return; }
   try {
-    const r = await fetch(API + '/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, role: 'viewer' }) });
+    const role = document.getElementById('new-user-role').value || 'viewer';
+    const r = await fetch(API + '/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, role }) });
     const d = await r.json();
     if (!r.ok) { st.textContent = d.error; st.style.color = '#ef4444'; return; }
     st.textContent = `משתמש ${username} נוסף ✓`; st.style.color = '#22c55e';
