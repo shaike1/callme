@@ -389,6 +389,36 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
   <div class="drawer-body">
     <div class="fr"><label>שם הבוט</label><input id="s-name" placeholder="CallMe Bot"></div>
     <div class="fr"><label>ברכה</label><input id="s-greeting" placeholder="שלום!"></div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">⚙️ מנוע AI</div>
+    <div class="fr"><label>Engine</label>
+      <select id="s-aiEngine" onchange="onEngineChange()">
+        <option value="gemini-live">Gemini Live (Google)</option>
+        <option value="openai-realtime">OpenAI Realtime (GPT-4o) 🔜</option>
+      </select>
+    </div>
+    <div id="gemini-keys-section">
+      <div class="fr"><label>Gemini API Key</label><input id="s-geminiApiKey" type="password" placeholder="(ריק = מ-env)" style="direction:ltr" onblur="saveSettings()"></div>
+      <div class="fr"><label>Gemini Model</label>
+        <select id="s-geminiModel">
+          <option value="gemini-2.0-flash-live-001">gemini-2.0-flash (מהיר, חינמי)</option>
+          <option value="gemini-2.5-pro-preview-native-audio-dialog">gemini-2.5-pro (איכותי יותר)</option>
+        </select>
+      </div>
+    </div>
+    <div id="openai-keys-section" style="display:none">
+      <div class="fr"><label>OpenAI API Key</label><input id="s-openaiApiKey" type="password" placeholder="sk-..." style="direction:ltr" onblur="saveSettings()"></div>
+      <div class="fr"><label>Model</label>
+        <select id="s-openaiModel">
+          <option value="gpt-4o-realtime-preview">gpt-4o-realtime-preview</option>
+          <option value="gpt-4o-mini-realtime-preview">gpt-4o-mini-realtime-preview</option>
+        </select>
+      </div>
+      <div class="section-hint" style="color:#f59e0b">⚠️ תמיכה ב-OpenAI Realtime — בקרוב</div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
     <div class="fr"><label>קול</label>
       <select id="s-voice">
         <option value="Kore">Kore (נקבה)</option>
@@ -884,6 +914,14 @@ const SIP_HINTS = {
   'custom': 'Enter your SIP provider details manually.',
 };
 
+function onEngineChange() {
+  const engine = document.getElementById('s-aiEngine')?.value;
+  const gemini = document.getElementById('gemini-keys-section');
+  const openai = document.getElementById('openai-keys-section');
+  if (gemini) gemini.style.display = engine === 'openai-realtime' ? 'none' : '';
+  if (openai) openai.style.display = engine === 'openai-realtime' ? '' : 'none';
+}
+
 function onProviderChange() {
   const v = document.getElementById('s-sipProvider').value;
   const h = document.getElementById('sip-help');
@@ -898,6 +936,12 @@ async function loadSettings() {
     const s = await r.json();
     document.getElementById('s-name').value = s.name || '';
     document.getElementById('s-greeting').value = s.greeting || '';
+    document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
+    document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
+    if (s.geminiApiKey) document.getElementById('s-geminiApiKey').placeholder = '✓ set';
+    document.getElementById('s-openaiModel').value = s.openaiModel || 'gpt-4o-realtime-preview';
+    if (s.openaiApiKey) document.getElementById('s-openaiApiKey').placeholder = '✓ set';
+    onEngineChange();
     document.getElementById('s-persona').value = s.persona || '';
     document.getElementById('s-rules').value = s.rules || '';
     document.getElementById('s-knowledge').value = s.knowledge || '';
@@ -940,6 +984,11 @@ async function saveSettings() {
   const body = {
     name: document.getElementById('s-name').value,
     greeting: document.getElementById('s-greeting').value,
+    aiEngine: document.getElementById('s-aiEngine').value,
+    geminiModel: document.getElementById('s-geminiModel').value,
+    geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,
+    openaiModel: document.getElementById('s-openaiModel').value,
+    openaiApiKey: document.getElementById('s-openaiApiKey').value || undefined,
     persona: document.getElementById('s-persona').value,
     rules: document.getElementById('s-rules').value,
     knowledge: document.getElementById('s-knowledge').value,

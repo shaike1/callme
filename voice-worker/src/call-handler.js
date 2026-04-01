@@ -288,7 +288,9 @@ class CallHandler {
     try {
       session = await geminiManager.getOrCreate(callId, {
         systemPrompt,
-        language: process.env.CALL_LANGUAGE || 'he',
+        language: settings.language || process.env.CALL_LANGUAGE || 'he',
+        model: settings.geminiModel || undefined,
+        apiKey: settings.geminiApiKey || undefined,
         voiceConfig: {
           voice_config: {
             prebuilt_voice_config: { voice_name: voiceName }
