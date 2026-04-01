@@ -1552,7 +1552,30 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
   const { Server: WsServer } = require('ws');
   const GeminiLiveSession = require('./gemini-live/session');
 
-  const browserWss = new WsServer({ server: httpServer, path: '/api/browser-call' });
+  // noServer: true + manual upgrade handling avoids ws v8 perMessageDeflate conflict.
+  // ALL WS servers must use noServer:true so their internal handlers never call
+  // abortHandshake() on sockets belonging to other paths (which injects raw HTTP
+  // bytes into an already-upgraded WS stream, setting RSV1=1 and killing the conn).
+  const browserWss = new WsServer({ noServer: true, perMessageDeflate: false });
+
+  // Shared WS route registry — other blocks register here before server.listen()
+  if (!global._wsRoutes) global._wsRoutes = {};
+
+  global._wsRoutes['/api/browser-call'] = (req, socket, head) => {
+    browserWss.handleUpgrade(req, socket, head, (ws) => {
+      browserWss.emit('connection', ws, req);
+    });
+  };
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    const pathname = req.url.split('?')[0];
+    const handler = global._wsRoutes[pathname];
+    if (handler) {
+      handler(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+  });
 
   browserWss.on('connection', (ws, req) => {
     const url = new URL(req.url, 'http://localhost');
@@ -1812,7 +1835,12 @@ app.post('/api/vonage/buy', async (req, res) => {
   const { Server: WsServer } = require('ws');
   const GeminiLiveSession = require('./gemini-live/session');
 
-  const twilioWss = new WsServer({ server: httpServer, path: '/api/twilio/stream' });
+  const twilioWss = new WsServer({ noServer: true, perMessageDeflate: false });
+
+  if (!global._wsRoutes) global._wsRoutes = {};
+  global._wsRoutes['/api/twilio/stream'] = (req, socket, head) => {
+    twilioWss.handleUpgrade(req, socket, head, (ws) => twilioWss.emit('connection', ws, req));
+  };
 
   twilioWss.on('connection', (ws) => {
     const callId = `twilio-${Date.now()}`;
@@ -1925,7 +1953,12 @@ app.post('/api/vonage/buy', async (req, res) => {
   const { Server: WsServer } = require('ws');
   const GeminiLiveSession = require('./gemini-live/session');
 
-  const vonageWss = new WsServer({ server: httpServer, path: '/api/vonage/stream' });
+  const vonageWss = new WsServer({ noServer: true, perMessageDeflate: false });
+
+  if (!global._wsRoutes) global._wsRoutes = {};
+  global._wsRoutes['/api/vonage/stream'] = (req, socket, head) => {
+    vonageWss.handleUpgrade(req, socket, head, (ws) => vonageWss.emit('connection', ws, req));
+  };
 
   vonageWss.on('connection', (ws) => {
     const callId = `vonage-${Date.now()}`;
