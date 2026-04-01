@@ -195,7 +195,7 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
-  geminiApiKey: '',             // set via dashboard; blank = fall back to GEMINI_API_KEY env
+  geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
   openaiApiKey: '',             // set via dashboard; blank = fall back to OPENAI_API_KEY env
   elevenlabsApiKey: '',         // set via dashboard; blank = fall back to ELEVENLABS_API_KEY env
@@ -545,7 +545,7 @@ app.post('/api/tts', async (req, res) => {
   const { text, voice, language } = req.body || {};
   if (!text) return res.status(400).json({ error: 'missing "text"' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = botSettings.geminiApiKey;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
 
   const GeminiLiveSession = require('./gemini-live/session');
@@ -595,7 +595,7 @@ app.post('/api/chat', async (req, res) => {
   const { message, sessionId } = req.body || {};
   if (!message) return res.status(400).json({ error: 'missing "message" field' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = botSettings.geminiApiKey;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
 
   let systemPrompt = botSettings.persona;
@@ -1653,7 +1653,7 @@ app.get('/api/status', async (req, res) => {
       ws.close(4503, 'Daily cost limit reached'); return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = botSettings.geminiApiKey;
     if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
 
     let session = null;
@@ -1874,7 +1874,7 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
       ws.close(4503, 'Daily cost limit reached'); return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = botSettings.geminiApiKey;
     if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
 
     let session = null;
@@ -2144,7 +2144,7 @@ app.post('/api/vonage/buy', async (req, res) => {
     const callId = `twilio-${Date.now()}`;
     logger.info('Twilio Media Stream connected', { callId });
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = botSettings.geminiApiKey;
     if (!apiKey) { ws.close(1011, 'GEMINI_API_KEY not configured'); return; }
 
     let streamSid = null;
@@ -2262,7 +2262,7 @@ app.post('/api/vonage/buy', async (req, res) => {
     const callId = `vonage-${Date.now()}`;
     logger.info('Vonage WS stream connected', { callId });
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = botSettings.geminiApiKey;
     if (!apiKey) { ws.close(1011, 'GEMINI_API_KEY not configured'); return; }
 
     let session = null;

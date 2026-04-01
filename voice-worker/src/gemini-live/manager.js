@@ -26,8 +26,8 @@ class GeminiLiveManager {
       return this.sessions.get(callId);
     }
 
-    const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+    const apiKey = options.apiKey;
+    if (!apiKey) throw new Error('Gemini API key not set — configure it in the dashboard settings');
 
     const session = new GeminiLiveSession({ callId, ...options, apiKey });
 
