@@ -501,7 +501,7 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
     <div class="fr"><label>Registrar</label><input id="s-sipRegistrar" placeholder="sip.zadarma.com" style="direction:ltr"></div>
     <div class="fr"><label>Extension</label><input id="s-sipExtension" placeholder="12345" style="direction:ltr"></div>
     <div class="fr"><label>Auth ID</label><input id="s-sipAuthId" placeholder="12345" style="direction:ltr"></div>
-    <div class="fr"><label>סיסמה</label><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="fr"><label>סיסמה</label><div style="display:flex;gap:6px"><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)" style="flex:1"><button class="btn btn-sm" style="padding:0 8px;font-size:16px" title="צור סיסמה" onclick="genPass('s-sipPassword')">🔑</button></div></div>
     <div class="fr"><label>DID</label><input id="s-sipDid" placeholder="+972501234567" style="direction:ltr"></div>
     <div style="font-size:11px;color:#64748b">שינויים ייכנסו לתוקף בהפעלה הבאה.</div>
   </div>
@@ -621,7 +621,7 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
   </div>
   <div class="drawer-body">
     <div class="fr"><label>שם משתמש</label><input id="s-adminUser" placeholder="admin"></div>
-    <div class="fr"><label>סיסמה חדשה</label><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="fr"><label>סיסמה חדשה</label><div style="display:flex;gap:6px"><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)" style="flex:1"><button class="btn btn-sm" style="padding:0 8px;font-size:16px" title="צור סיסמה" onclick="genPass('s-adminPass','s-adminPassConfirm')">🔑</button></div></div>
     <div class="fr"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה"></div>
     <div class="status-line" id="admin-pass-status"></div>
     <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
@@ -630,6 +630,7 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
       <input id="new-user-name" placeholder="שם משתמש" style="flex:1;min-width:120px">
       <input id="new-user-pass" type="password" placeholder="סיסמה" style="flex:1;min-width:120px">
+      <button class="btn btn-sm" style="padding:0 8px;font-size:16px;flex-shrink:0" title="צור סיסמה" onclick="genPass('new-user-pass')">🔑</button>
       <select id="new-user-role" style="flex:0 0 auto;background:#0f1629;color:#e2e8f0;border:1px solid #1e2545;border-radius:8px;padding:0 8px;font-size:13px">
         <option value="viewer">👁 צופה</option>
         <option value="operator">📞 מפעיל</option>
@@ -1910,6 +1911,23 @@ async function deleteUser(username) {
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────
+function genPass(inputId, confirmId) {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*';
+  const len = 16;
+  let pass = '';
+  const arr = new Uint32Array(len);
+  crypto.getRandomValues(arr);
+  arr.forEach(v => { pass += chars[v % chars.length]; });
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = pass;
+  el.type = 'text';
+  setTimeout(() => { el.type = 'password'; }, 3000);
+  if (confirmId) { const c = document.getElementById(confirmId); if (c) c.value = pass; }
+  navigator.clipboard?.writeText(pass).catch(() => {});
+  toast('סיסמה נוצרה ✓ (הועתקה ללוח)');
+}
+
 function doLogout() {
   // Force browser to forget Basic-Auth credentials by sending a bad request
   fetch('/api/settings', { headers: { Authorization: 'Basic ' + btoa('logout:logout') } })
