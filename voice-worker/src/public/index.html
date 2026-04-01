@@ -932,8 +932,12 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
 
 <script>
 // ── Auth: redirect to /login if no stored credentials ──────────────────────
-const _storedAuth = sessionStorage.getItem('callme_auth');
+const _storedAuth = sessionStorage.getItem('callme_auth') || localStorage.getItem('callme_auth');
 if (!_storedAuth) { window.location.replace('/login'); }
+// Sync to sessionStorage so the rest of the code works uniformly
+if (!sessionStorage.getItem('callme_auth') && localStorage.getItem('callme_auth')) {
+  sessionStorage.setItem('callme_auth', localStorage.getItem('callme_auth'));
+}
 
 // Override fetch to inject Authorization header + handle 401
 const _origFetch = window.fetch.bind(window);
@@ -945,6 +949,7 @@ window.fetch = async (url, opts = {}) => {
   const resp = await _origFetch(url, opts);
   if (resp.status === 401) {
     sessionStorage.removeItem('callme_auth');
+    localStorage.removeItem('callme_auth');
     window.location.replace('/login');
   }
   return resp;
@@ -1998,6 +2003,7 @@ function genPass(inputId, confirmId) {
 
 function doLogout() {
   sessionStorage.removeItem('callme_auth');
+  localStorage.removeItem('callme_auth');
   window.location.replace('/login');
 }
 

@@ -87,6 +87,20 @@
   }
   .error.show { display: block; }
   .error::before { content: '✗ '; }
+  .remember-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #4b5563;
+  }
+  .remember-row input[type=checkbox] {
+    width: 14px; height: 14px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+  .remember-row label { cursor: pointer; }
 </style>
 </head>
 <body>
@@ -106,6 +120,10 @@
       <div class="lbl"><span class="lbl-he">סיסמה</span><span class="lbl-en">password</span></div>
       <input id="password" type="password" autocomplete="current-password" required>
     </div>
+    <div class="remember-row">
+      <input type="checkbox" id="remember" name="remember">
+      <label for="remember">זכור אותי / Remember me</label>
+    </div>
     <div class="btn-row">
       <button class="btn" id="btn-dashboard" onclick="doLogin('dashboard')">
         <span class="he">[ דשבורד ]</span>
@@ -120,8 +138,9 @@
   </form>
 </div>
 <script>
-if (sessionStorage.getItem('callme_auth')) { window.location.replace('/'); }
-if (sessionStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
+// Check both sessionStorage and localStorage
+if (sessionStorage.getItem('callme_auth') || localStorage.getItem('callme_auth')) { window.location.replace('/'); }
+if (sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
 
 async function doLogin(target) {
   const username = document.getElementById('username').value.trim();
@@ -146,7 +165,12 @@ async function doLogin(target) {
     });
     const data = await resp.json();
     if (resp.ok && data.token) {
-      sessionStorage.setItem(storageKey, data.token);
+      const remember = document.getElementById('remember').checked;
+      if (remember) {
+        localStorage.setItem(storageKey, data.token);
+      } else {
+        sessionStorage.setItem(storageKey, data.token);
+      }
       window.location.replace(redirect);
     } else {
       err.textContent = data.error || 'שגיאת כניסה / Login failed';
