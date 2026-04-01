@@ -273,6 +273,7 @@ app.post('/api/users', (req, res) => {
   if (!botSettings.users) botSettings.users = [];
   if (botSettings.users.find(u => u.username === username)) return res.status(409).json({ error: 'user already exists' });
   botSettings.users.push({ username, password, role: role || 'viewer' });
+  saveSettings();
   res.json({ success: true });
 });
 
@@ -282,12 +283,14 @@ app.put('/api/users/:username', (req, res) => {
   const u = botSettings.users.find(u => u.username === req.params.username);
   if (!u) return res.status(404).json({ error: 'user not found' });
   if (password) u.password = password;
+  saveSettings();
   res.json({ success: true });
 });
 
 app.delete('/api/users/:username', (req, res) => {
   if (!botSettings.users) return res.json({ success: true });
   botSettings.users = botSettings.users.filter(u => u.username !== req.params.username);
+  saveSettings();
   res.json({ success: true });
 });
 
