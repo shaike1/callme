@@ -1578,10 +1578,12 @@ app.get('/api/status', async (req, res) => {
             sendStatus('listening');
           });
 
-          session.on('input_transcript', (text) => sendTranscript('user', text));
+          // Buffer partial transcripts — only send complete turns to avoid char-by-char display
+          let _inputBuf = '', _outputBuf = '';
+          session.on('input_transcript', (text) => { _inputBuf += text; });
           session.on('output_transcript', (text) => {
-            sendTranscript('bot', text);
-            // Execute HA actions if present
+            _outputBuf += text;
+            // Execute HA actions if present in streaming text
             const haMatch = text.match(/<ha_action>([\s\S]*?)<\/ha_action>/);
             if (haMatch && global.callHaService) {
               try {
@@ -1590,6 +1592,11 @@ app.get('/api/status', async (req, res) => {
               } catch(_) {}
             }
           });
+          const _flushTranscripts = () => {
+            if (_inputBuf.trim()) { sendTranscript('user', _inputBuf.trim()); _inputBuf = ''; }
+            if (_outputBuf.trim()) { sendTranscript('bot', _outputBuf.trim()); _outputBuf = ''; }
+          };
+          session.on('turn_complete', _flushTranscripts);
           session.on('error', (err) => logger.error('Live session error', { sessionId, error: err.message }));
 
           await session.connect();
@@ -1771,8 +1778,14 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
             sendStatus('listening');
           });
           session.on('interrupted', () => { audioChunks = []; waitingForGemini = false; sendStatus('listening'); });
-          session.on('input_transcript', (text) => sendTranscript('user', text));
-          session.on('output_transcript', (text) => sendTranscript('bot', text));
+          // Buffer partial transcripts — send complete turns only
+          let _inBuf2 = '', _outBuf2 = '';
+          session.on('input_transcript', (text) => { _inBuf2 += text; });
+          session.on('output_transcript', (text) => { _outBuf2 += text; });
+          session.on('turn_complete', () => {
+            if (_inBuf2.trim()) { sendTranscript('user', _inBuf2.trim()); _inBuf2 = ''; }
+            if (_outBuf2.trim()) { sendTranscript('bot', _outBuf2.trim()); _outBuf2 = ''; }
+          });
           session.on('error', (err) => logger.error('BrowserCall session error', { sessionId, error: err.message }));
 
           await session.connect();
