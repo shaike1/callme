@@ -1177,14 +1177,14 @@ async function toggleWebCall() {
 }
 
 async function startWebCall() {
-  const tr = await fetch('/api/live-token');
-  const { token } = await tr.json();
+  const tokenData = await (await fetch('/api/live-token')).json();
+  const { token, wsBase: serverWsBase } = tokenData;
   wcStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
   wcCtx = new AudioContext();
   wcScheduled = 0;
   document.getElementById('webcall-transcript').innerHTML = '';
   // Use wsBase from server if provided (bypasses Cloudflare HTTP/2 which breaks WS upgrade)
-  const wsBase = tr.wsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+  const wsBase = serverWsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
   wcWs = new WebSocket(`${wsBase}/api/browser-call?token=${token}`);
   wcWs.binaryType = 'arraybuffer';
   wcWs.onopen = () => {

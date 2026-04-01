@@ -1614,8 +1614,15 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
 
     ws.on('message', async (data, isBinary) => {
       if (!configured) {
+        // If binary arrives before JSON config (race on reconnect), auto-configure with defaults
+        let cfg = {};
+        if (!isBinary) {
+          try { cfg = JSON.parse(data.toString()); }
+          catch (err) {
+            logger.warn('BrowserCall: invalid JSON config, using defaults', { sessionId });
+          }
+        }
         try {
-          const cfg = JSON.parse(data.toString());
           const settings = global.botSettings || {};
           session = new GeminiLiveSession({
             callId: sessionId, apiKey,
@@ -1623,6 +1630,7 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
             language: cfg.language || settings.language || 'he',
             voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: cfg.voice || settings.voice || 'Kore' } } },
           });
+          // If this was a binary message, process it as audio after configuration
 
           session.on('audio', (chunk) => {
             audioChunks.push(chunk);
