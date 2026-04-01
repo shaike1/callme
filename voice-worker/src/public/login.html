@@ -23,7 +23,10 @@
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 8px;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+    max-width: 280px;
+    margin-left: auto;
+    margin-right: auto;
   }
   .ic {
     aspect-ratio: 1;
@@ -123,18 +126,13 @@
 </head>
 <body>
 <div class="wrap">
-  <!-- Mini icon preview -->
+  <!-- Mini icon preview — 5 key tiles -->
   <div class="icon-grid">
-    <div class="ic"><div class="ic-inner ic-blue">📊</div></div>
     <div class="ic"><div class="ic-inner ic-green">📞</div></div>
     <div class="ic"><div class="ic-inner ic-purple">🤖</div></div>
-    <div class="ic"><div class="ic-inner ic-sky">🔢</div></div>
-    <div class="ic"><div class="ic-inner ic-amber">⏰</div></div>
-    <div class="ic"><div class="ic-inner ic-rose">🎙️</div></div>
-    <div class="ic"><div class="ic-inner ic-gray">📹</div></div>
-    <div class="ic"><div class="ic-inner ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div></div>
     <div class="ic"><div class="ic-inner ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div></div>
     <div class="ic"><div class="ic-inner ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div></div>
+    <div class="ic"><div class="ic-inner ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div></div>
   </div>
 
   <!-- Brand -->
@@ -157,6 +155,9 @@
       <button class="btn-login" type="submit" id="login-btn">כניסה</button>
       <div class="error" id="error-msg"></div>
     </form>
+  </div>
+  <div style="text-align:center;margin-top:16px;font-size:12px;color:#475569">
+    <a href="/admin/login" style="color:#64748b;text-decoration:none">👑 ניהול טננטים (Super Admin)</a>
   </div>
 </div>
 <script>
