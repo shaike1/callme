@@ -192,6 +192,14 @@ class CallHandler {
       systemPrompt += `\n\nIf the caller needs to speak with a human or you cannot help after ${settings.escalationTurns} exchanges, say you are transferring them and end the call.`;
     }
 
+    // Hard language lock — always appended regardless of persona
+    const lang = settings.language || 'he';
+    if (lang === 'he') {
+      systemPrompt += '\n\n## שפת תגובה\nחובה לענות תמיד בעברית בלבד — גם אם המתקשר דיבר בשפה אחרת. אל תענה בערבית, אנגלית, או כל שפה אחרת. תמיד עברית.';
+    } else if (lang === 'en') {
+      systemPrompt += '\n\n## Response language\nAlways respond in English only, regardless of what language the caller used.';
+    }
+
     const integrations = global.integrations || {};
     // Tool toggles — default true unless explicitly disabled
     const toolToggles = {
