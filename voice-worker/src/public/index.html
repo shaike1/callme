@@ -1183,8 +1183,9 @@ async function startWebCall() {
   wcCtx = new AudioContext();
   wcScheduled = 0;
   document.getElementById('webcall-transcript').innerHTML = '';
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  wcWs = new WebSocket(`${proto}://${location.host}/api/browser-call?token=${token}`);
+  // Use wsBase from server if provided (bypasses Cloudflare HTTP/2 which breaks WS upgrade)
+  const wsBase = tr.wsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+  wcWs = new WebSocket(`${wsBase}/api/browser-call?token=${token}`);
   wcWs.binaryType = 'arraybuffer';
   wcWs.onopen = () => {
     wcWs.send(JSON.stringify({ voice: 'Kore', language: 'he' }));

@@ -1535,7 +1535,11 @@ app.get('/api/status', async (req, res) => {
 // Live token endpoint — browser fetches this to auth the WS browser-call
 app.get('/api/live-token', (req, res) => {
   const { user, pass } = getAdminCreds();
-  res.json({ token: Buffer.from(`${user}:${pass}`).toString('base64') });
+  const token = Buffer.from(`${user}:${pass}`).toString('base64');
+  // WS_PUBLIC_URL allows overriding the WS host when behind Cloudflare (no HTTP/2 WS support)
+  // e.g. WS_PUBLIC_URL=ws://10.0.0.4:3101 or wss://callme.right-api.com
+  const wsBase = process.env.WS_PUBLIC_URL || null;
+  res.json({ token, wsBase });
 });
 
 // Start health server — keep reference so we can attach WS
@@ -1555,13 +1559,16 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
     const token = url.searchParams.get('token');
     const { user, pass } = getAdminCreds();
     const expectedToken = Buffer.from(`${user}:${pass}`).toString('base64');
-    if (token !== expectedToken) { ws.close(4401, 'Unauthorized'); return; }
+    if (token !== expectedToken) {
+      logger.warn('BrowserCall auth failed', { receivedToken: token && token.slice(0,8), expectedToken: expectedToken.slice(0,8) });
+      ws.close(4401, 'Unauthorized'); return;
+    }
 
     const sessionId = `browser-${Date.now()}`;
     logger.info('Browser WebCall connected', { sessionId });
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+    if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
 
     let session = null;
     let configured = false;
@@ -1644,8 +1651,8 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
       } else { speechCount = 0; }
     });
 
-    ws.on('close', () => {
-      logger.info('BrowserCall disconnected', { sessionId });
+    ws.on('close', (code, reason) => {
+      logger.info('BrowserCall disconnected', { sessionId, code, reason: reason && reason.toString() });
       if (waitingTimer) clearTimeout(waitingTimer);
       if (session) { try { if (speaking) session.sendActivityEnd(); session.close(); } catch(_) {} }
     });
