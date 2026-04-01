@@ -1358,10 +1358,11 @@ app.get('/api/recordings', (req, res) => {
     const recordings = files.map(f => {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(RECORDINGS_DIR, f), 'utf8'));
-        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0 };
+        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine, estimatedCostUsd: data.estimatedCostUsd };
       } catch (_) { return null; }
     }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
-    res.json({ recordings });
+    const totalCostUsd = recordings.reduce((s, r) => s + (r.estimatedCostUsd || 0), 0);
+    res.json({ recordings, totalCostUsd: Math.round(totalCostUsd * 10000) / 10000 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

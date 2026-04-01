@@ -1732,10 +1732,14 @@ async function loadRecordings() {
     const d = await r.json();
     const recs = d.recordings || [];
     if (!recs.length) { el.innerHTML = '<em style="color:#64748b">אין תמלולים עדיין</em>'; return; }
-    el.innerHTML = recs.map(rec => {
+    const totalCost = d.totalCostUsd || 0;
+    const totalCostStr = totalCost > 0 ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:8px;text-align:left">סה"כ עלות מוערכת: <b style="color:#f59e0b">$${totalCost.toFixed(4)}</b></div>` : '';
+    el.innerHTML = totalCostStr + recs.map(rec => {
       const dt = new Date(rec.savedAt).toLocaleString('he-IL');
       const caller = rec.callerName || rec.callId?.slice(0,12) || '—';
-      return `<div class="list-row"><div style="flex:1"><b>${caller}</b><br><span style="font-size:11px;color:#64748b">${dt} · ${rec.durationS}ש</span></div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
+      const dur = rec.durationS ? `${Math.floor(rec.durationS/60)}:${String(rec.durationS%60).padStart(2,'0')}` : '0:00';
+      const costStr = rec.estimatedCostUsd ? `<span style="color:#f59e0b;font-size:11px">$${rec.estimatedCostUsd.toFixed(4)}</span>` : '';
+      return `<div class="list-row"><div style="flex:1"><b>${caller}</b><br><span style="font-size:11px;color:#64748b">${dt} · ⏱${dur} ${costStr}</span></div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
     }).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }

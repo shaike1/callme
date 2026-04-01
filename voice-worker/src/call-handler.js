@@ -640,15 +640,25 @@ class CallHandler {
     }
   }
 
+  _estimateCostUsd(durationS, engine) {
+    // Gemini 2.5 Flash Native Audio: $0.70/hr input + $5.00/hr output = $5.70/hr combined
+    // OpenAI Realtime (GPT-4o):       $6.00/hr input + $12.00/hr output = $18.00/hr combined
+    const rates = { 'gemini-live': 5.70, 'openai-realtime': 18.00 };
+    const hourlyRate = rates[engine] || rates['gemini-live'];
+    return Math.round((durationS / 3600) * hourlyRate * 10000) / 10000; // 4 decimal places
+  }
+
   _saveRecording(callId, callerName, durationS, transcript) {
     const recDir = path.join(this.audioDir, 'recordings');
     try {
       if (!fs.existsSync(recDir)) fs.mkdirSync(recDir, { recursive: true });
       const safeName = callId.replace(/[^a-z0-9-]/gi, '_');
       const filename = `${safeName}-${Date.now()}.json`;
-      const data = { callId, callerName, durationS, savedAt: new Date().toISOString(), transcript };
+      const engine = (global.botSettings || {}).aiEngine || 'gemini-live';
+      const estimatedCostUsd = this._estimateCostUsd(durationS, engine);
+      const data = { callId, callerName, durationS, savedAt: new Date().toISOString(), transcript, engine, estimatedCostUsd };
       fs.writeFileSync(path.join(recDir, filename), JSON.stringify(data, null, 2));
-      logger.info('Transcript saved', { callId, filename, lines: transcript.length });
+      logger.info('Transcript saved', { callId, filename, lines: transcript.length, estimatedCostUsd });
     } catch (err) {
       logger.error('Failed to save transcript', { callId, error: err.message });
     }
