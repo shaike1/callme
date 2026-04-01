@@ -331,9 +331,11 @@ app.post('/api/settings', (req, res) => {
           rules, knowledge, escalationTurns, escalationNumber,
           toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
   if (aiEngine !== undefined) botSettings.aiEngine = aiEngine;
-  if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
+  if (geminiApiKey === '__CLEAR__') botSettings.geminiApiKey = '';
+  else if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
   if (geminiModel !== undefined) botSettings.geminiModel = geminiModel;
-  if (openaiApiKey !== undefined && openaiApiKey !== '' && openaiApiKey !== '✓ set') botSettings.openaiApiKey = openaiApiKey;
+  if (openaiApiKey === '__CLEAR__') botSettings.openaiApiKey = '';
+  else if (openaiApiKey !== undefined && openaiApiKey !== '' && openaiApiKey !== '✓ set') botSettings.openaiApiKey = openaiApiKey;
   if (elevenlabsApiKey !== undefined && elevenlabsApiKey !== '' && elevenlabsApiKey !== '✓ set') botSettings.elevenlabsApiKey = elevenlabsApiKey;
   if (rules !== undefined) botSettings.rules = rules;
   if (knowledge !== undefined) botSettings.knowledge = knowledge;
@@ -1401,13 +1403,27 @@ app.get('/t/:tenantId/api/live-token', requireTenantAuth, (req, res) => {
 const RECORDINGS_DIR = path.join(AUDIO_DIR, 'recordings');
 if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
+// Estimate cost from duration (used for backfill of old recordings)
+function estimateRecordingCost(durationS, engine) {
+  const rates = { 'gemini-live': 5.70, 'openai-realtime': 18.00 };
+  const rate = rates[engine] || rates['gemini-live'];
+  return Math.round((durationS / 3600) * rate * 10000) / 10000;
+}
+
 app.get('/api/recordings', (req, res) => {
   try {
     const files = fs.readdirSync(RECORDINGS_DIR).filter(f => f.endsWith('.json'));
     const recordings = files.map(f => {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(RECORDINGS_DIR, f), 'utf8'));
-        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine, estimatedCostUsd: data.estimatedCostUsd };
+        // Backfill cost for old recordings that don't have it
+        let cost = data.estimatedCostUsd;
+        if (cost == null && data.durationS) {
+          cost = estimateRecordingCost(data.durationS, data.engine);
+          data.estimatedCostUsd = cost;
+          fs.writeFileSync(path.join(RECORDINGS_DIR, f), JSON.stringify(data, null, 2));
+        }
+        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine || 'gemini-live', estimatedCostUsd: cost };
       } catch (_) { return null; }
     }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
     const totalCostUsd = recordings.reduce((s, r) => s + (r.estimatedCostUsd || 0), 0);
