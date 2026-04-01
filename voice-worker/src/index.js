@@ -85,8 +85,17 @@ function requireAuth(req, res, next) {
       req.path === '/admin/login' || req.path === '/api/admin/login') {
     return next();
   }
+  // Static HTML pages are served without auth — client-side JS redirects to /login if no session
+  if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html' ||
+      req.path === '/setup' || req.path === '/setup.html')) {
+    return next();
+  }
   const identity = getRequestRole(req);
   if (!identity) {
+    // For non-API GET requests (static assets), redirect to login instead of returning JSON 401
+    if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+      return res.redirect('/login');
+    }
     // Return JSON 401 without WWW-Authenticate to avoid browser dialog
     return res.status(401).json({ error: 'Unauthorized' });
   }
