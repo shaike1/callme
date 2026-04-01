@@ -1601,6 +1601,11 @@ app.get('/api/status', async (req, res) => {
     const sessionId = `live-${Date.now()}`;
     logger.info('Teamy Live connection', { sessionId });
 
+    if (botSettings.aiEnabled === false) { ws.close(4503, 'AI engine disabled'); return; }
+    if (botSettings.aiDailyCostLimitUsd > 0 && global.getTodayCostUsd && global.getTodayCostUsd() >= botSettings.aiDailyCostLimitUsd) {
+      ws.close(4503, 'Daily cost limit reached'); return;
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
 
@@ -1815,6 +1820,12 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
 
     const sessionId = `browser-${Date.now()}`;
     logger.info('Browser WebCall connected', { sessionId });
+
+    // Enforce AI enabled/daily cost limit
+    if (botSettings.aiEnabled === false) { ws.close(4503, 'AI engine disabled'); return; }
+    if (botSettings.aiDailyCostLimitUsd > 0 && global.getTodayCostUsd && global.getTodayCostUsd() >= botSettings.aiDailyCostLimitUsd) {
+      ws.close(4503, 'Daily cost limit reached'); return;
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
