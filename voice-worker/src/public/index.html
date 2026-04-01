@@ -406,7 +406,41 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
         <option value="ar">ערבית</option>
       </select>
     </div>
-    <div class="fr"><label>Persona</label><textarea id="s-persona" rows="4"></textarea></div>
+    <div class="fr"><label>Persona — Soul</label><textarea id="s-persona" rows="3" placeholder="אני בוט קולי AI בשם כלב. אני עוזר ידידותי, מדבר עברית, ותמיד מסיים משפט בעידוד."></textarea></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">מי הבוט, מה תפקידו, איך הוא מדבר, מה הטון שלו.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 כללים (Rules)</div>
+    <textarea id="s-rules" rows="3" placeholder="- אל תדון בנושאים פוליטיים&#10;- אם לא יודע — אמור שתבדוק ותחזור&#10;- תמיד היה קצר ולעניין" style="width:100%;box-sizing:border-box"></textarea>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">רשימת כללים ברורים — מה מותר, מה אסור, איך לנהוג.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">📚 ידע (Knowledge Base)</div>
+    <textarea id="s-knowledge" rows="4" placeholder="שעות פעילות: א׳-ה׳ 9:00-18:00&#10;כתובת: רחוב הרצל 1, תל אביב&#10;שאלות נפוצות: ..." style="width:100%;box-sizing:border-box"></textarea>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">מידע עסקי שהבוט יכיר — שעות, FAQ, פרטי קשר.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">🔀 הסלמה (Escalation)</div>
+    <div class="fr"><label>העברה אחרי</label>
+      <select id="s-escalationTurns">
+        <option value="">— אין —</option>
+        <option value="3">3 פניות</option>
+        <option value="5">5 פניות</option>
+        <option value="10">10 פניות</option>
+      </select>
+    </div>
+    <div class="fr"><label>העבר למספר</label><input id="s-escalationNumber" placeholder="+972501234567" style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">כשהבוט לא מצליח לעזור — מעביר לאדם.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">🛠️ כלים מורשים</div>
+    <div class="toggle-row"><label>Home Assistant</label><label class="switch"><input type="checkbox" id="s-toolHa"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>OpenClaw</label><label class="switch"><input type="checkbox" id="s-toolOpenclaw"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>Google Calendar</label><label class="switch"><input type="checkbox" id="s-toolCalendar"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>אנשי קשר</label><label class="switch"><input type="checkbox" id="s-toolContacts"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>מתזמן שיחות</label><label class="switch"><input type="checkbox" id="s-toolScheduler"><span class="slider"></span></label></div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
     <div class="fr"><label>Webhook URL</label><input id="s-callWebhookUrl" placeholder="https://..." style="direction:ltr"></div>
     <div style="font-size:11px;color:#64748b;margin-bottom:8px">POST JSON: call.started / call.ended / call.failed</div>
   </div>
@@ -859,6 +893,15 @@ async function loadSettings() {
     document.getElementById('s-name').value = s.name || '';
     document.getElementById('s-greeting').value = s.greeting || '';
     document.getElementById('s-persona').value = s.persona || '';
+    document.getElementById('s-rules').value = s.rules || '';
+    document.getElementById('s-knowledge').value = s.knowledge || '';
+    document.getElementById('s-escalationTurns').value = s.escalationTurns || '';
+    document.getElementById('s-escalationNumber').value = s.escalationNumber || '';
+    document.getElementById('s-toolHa').checked = !!s.toolHa;
+    document.getElementById('s-toolOpenclaw').checked = !!s.toolOpenclaw;
+    document.getElementById('s-toolCalendar').checked = !!s.toolCalendar;
+    document.getElementById('s-toolContacts').checked = !!s.toolContacts;
+    document.getElementById('s-toolScheduler').checked = !!s.toolScheduler;
     document.getElementById('s-voice').value = s.voice || 'Kore';
     document.getElementById('s-language').value = s.language || 'he';
     document.getElementById('s-sipProvider').value = s.sipProvider || '';
@@ -892,6 +935,15 @@ async function saveSettings() {
     name: document.getElementById('s-name').value,
     greeting: document.getElementById('s-greeting').value,
     persona: document.getElementById('s-persona').value,
+    rules: document.getElementById('s-rules').value,
+    knowledge: document.getElementById('s-knowledge').value,
+    escalationTurns: document.getElementById('s-escalationTurns').value,
+    escalationNumber: document.getElementById('s-escalationNumber').value,
+    toolHa: document.getElementById('s-toolHa').checked,
+    toolOpenclaw: document.getElementById('s-toolOpenclaw').checked,
+    toolCalendar: document.getElementById('s-toolCalendar').checked,
+    toolContacts: document.getElementById('s-toolContacts').checked,
+    toolScheduler: document.getElementById('s-toolScheduler').checked,
     voice: document.getElementById('s-voice').value,
     language: document.getElementById('s-language').value,
     sipProvider: document.getElementById('s-sipProvider').value,

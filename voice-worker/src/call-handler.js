@@ -182,6 +182,15 @@ class CallHandler {
     if (callerName) {
       systemPrompt += `\n\nThe caller's name is ${callerName}. Address them by name naturally.`;
     }
+    if (settings.rules) {
+      systemPrompt += `\n\n## Rules\n${settings.rules}`;
+    }
+    if (settings.knowledge) {
+      systemPrompt += `\n\n## Knowledge Base\n${settings.knowledge}`;
+    }
+    if (settings.escalationTurns && settings.escalationNumber) {
+      systemPrompt += `\n\nIf the caller needs to speak with a human or you cannot help after ${settings.escalationTurns} exchanges, say you are transferring them and end the call.`;
+    }
 
     const integrations = global.integrations || {};
 
