@@ -18,33 +18,41 @@
   }
   .wrap { width: 100%; max-width: 400px; }
 
-  /* Icon grid preview */
+  /* Icon grid preview — matches dashboard app-tile style */
   .icon-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 10px;
-    margin-bottom: 28px;
-    opacity: 0.85;
+    gap: 8px;
+    margin-bottom: 24px;
   }
   .ic {
     aspect-ratio: 1;
+    background: #12152a;
+    border: 1px solid #1e2545;
     border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 24px;
+  }
+  .ic img { width: 26px; height: 26px; }
+  .ic-inner {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
     font-size: 22px;
   }
-  .ic img { width: 22px; height: 22px; }
-  .ic-blue  { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
-  .ic-green { background: linear-gradient(135deg,#15803d,#22c55e); }
-  .ic-purple{ background: linear-gradient(135deg,#7e22ce,#a855f7); }
-  .ic-sky   { background: linear-gradient(135deg,#0369a1,#38bdf8); }
-  .ic-amber { background: linear-gradient(135deg,#b45309,#f59e0b); }
-  .ic-rose  { background: linear-gradient(135deg,#9f1239,#fb7185); }
-  .ic-gray  { background: linear-gradient(135deg,#374151,#6b7280); }
-  .ic-ha    { background: linear-gradient(135deg,#1565c0,#41bdf5); }
-  .ic-teal  { background: linear-gradient(135deg,#0f766e,#2dd4bf); }
-  .ic-dark  { background: linear-gradient(135deg,#1e1b4b,#4338ca); }
+  .ic-inner img { width: 24px; height: 24px; }
+  .ic-blue   { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
+  .ic-green  { background: linear-gradient(135deg,#15803d,#22c55e); }
+  .ic-purple { background: linear-gradient(135deg,#7e22ce,#a855f7); }
+  .ic-sky    { background: linear-gradient(135deg,#0369a1,#38bdf8); }
+  .ic-amber  { background: linear-gradient(135deg,#b45309,#f59e0b); }
+  .ic-rose   { background: linear-gradient(135deg,#9f1239,#fb7185); }
+  .ic-gray   { background: linear-gradient(135deg,#374151,#6b7280); }
+  .ic-haBlue { background: linear-gradient(135deg,#1565c0,#41bdf5); }
+  .ic-indigo { background: linear-gradient(135deg,#3730a3,#6366f1); }
+  .ic-pink   { background: linear-gradient(135deg,#be185d,#ec4899); }
 
   /* Branding */
   .brand {
@@ -117,16 +125,16 @@
 <div class="wrap">
   <!-- Mini icon preview -->
   <div class="icon-grid">
-    <div class="ic ic-green">📞</div>
-    <div class="ic ic-purple">🤖</div>
-    <div class="ic ic-sky">🔢</div>
-    <div class="ic ic-amber">⏰</div>
-    <div class="ic ic-rose">🎙️</div>
-    <div class="ic ic-gray">📹</div>
-    <div class="ic ic-ha"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div>
-    <div class="ic ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div>
-    <div class="ic ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div>
-    <div class="ic ic-sky">🔴</div>
+    <div class="ic"><div class="ic-inner ic-blue">📊</div></div>
+    <div class="ic"><div class="ic-inner ic-green">📞</div></div>
+    <div class="ic"><div class="ic-inner ic-purple">🤖</div></div>
+    <div class="ic"><div class="ic-inner ic-sky">🔢</div></div>
+    <div class="ic"><div class="ic-inner ic-amber">⏰</div></div>
+    <div class="ic"><div class="ic-inner ic-rose">🎙️</div></div>
+    <div class="ic"><div class="ic-inner ic-gray">📹</div></div>
+    <div class="ic"><div class="ic-inner ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div></div>
+    <div class="ic"><div class="ic-inner ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div></div>
+    <div class="ic"><div class="ic-inner ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div></div>
   </div>
 
   <!-- Brand -->
