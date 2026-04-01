@@ -260,6 +260,20 @@ app.post('/api/settings', (req, res) => {
   }});
 });
 
+// ── Teamy proxy ──────────────────────────────────────────────────────────────
+app.get('/api/teamy/status', async (req, res) => {
+  const cfg = integrations.teamy;
+  if (!cfg?.enabled || !cfg.url) return res.status(503).json({ error: 'Teamy not configured' });
+  try {
+    const headers = cfg.token && cfg.token !== '✓ set' ? { Authorization: `Bearer ${cfg.token}` } : {};
+    const [statusRes, botsRes] = await Promise.all([
+      fetch(cfg.url + '/status', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(cfg.url + '/bots', { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
+    res.json({ ...(statusRes || {}), bots: botsRes });
+  } catch(e) { res.status(502).json({ error: e.message }); }
+});
+
 // ── Users management ────────────────────────────────────────────────────────
 app.get('/api/users', (req, res) => {
   const users = (botSettings.users || []).map(({ username, role }) => ({ username, role: role || 'viewer' }));

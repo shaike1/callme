@@ -673,9 +673,15 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
     <div class="fr" style="margin-top:10px"><label>Teamy Server URL</label><input id="int-teamy-url" placeholder="http://100.64.0.12:3069" style="direction:ltr" onblur="saveIntegrations()"></div>
     <div class="fr"><label>API Token</label><input id="int-teamy-token" type="password" placeholder="(ריק = ללא auth)" onblur="saveIntegrations()"></div>
     <div class="status-line" id="int-teamy-status"></div>
+    <div id="teamy-live-status" style="margin-top:10px;font-size:13px;display:none">
+      <hr style="border:none;border-top:1px solid #1e2545;margin:10px 0">
+      <div style="font-weight:600;margin-bottom:6px">📊 סטטוס Teamy</div>
+      <div id="teamy-status-content"></div>
+    </div>
   </div>
   <div class="drawer-footer">
-    <button class="btn btn-g" onclick="testIntegration('teamy')">בדוק חיבור</button>
+    <button class="btn btn-g" onclick="testIntegration('teamy');loadTeamyStatus()">בדוק חיבור</button>
+    <button class="btn btn-g" onclick="loadTeamyStatus()">רענן סטטוס</button>
   </div>
 </div>
 
@@ -1773,6 +1779,31 @@ refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);
 setInterval(loadScheduler, 30000);
+
+// ── Teamy status ─────────────────────────────────────────────────────────
+async function loadTeamyStatus() {
+  const panel = document.getElementById('teamy-live-status');
+  const content = document.getElementById('teamy-status-content');
+  if (!panel || !content) return;
+  try {
+    const r = await fetch(API + '/api/teamy/status');
+    if (!r.ok) { panel.style.display = 'none'; return; }
+    const d = await r.json();
+    panel.style.display = '';
+    const state = d.state || 'unknown';
+    const stateColor = state === 'active' ? '#22c55e' : state === 'idle' ? '#64748b' : '#f59e0b';
+    const bots = d.bots || [];
+    content.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${stateColor};display:inline-block"></span>
+        <span>${state}</span>
+        ${d.transcriptLines ? `<span style="font-size:11px;color:#64748b">📝 ${d.transcriptLines} שורות</span>` : ''}
+        ${d.recordingBytes ? `<span style="font-size:11px;color:#64748b">🎙️ ${(d.recordingBytes/1024/1024).toFixed(1)}MB</span>` : ''}
+      </div>
+      ${bots.length ? `<div style="font-size:12px;color:#94a3b8">${bots.length} bot(s) active</div>` : ''}
+    `;
+  } catch { panel.style.display = 'none'; }
+}
 
 // ── Users management ─────────────────────────────────────────────────────
 async function loadUsers() {
