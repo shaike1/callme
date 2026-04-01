@@ -181,7 +181,7 @@ app.get('/api/logs', (req, res) => {
 app.use(express.json());
 
 // ── Bot Settings (persisted to settings.json) ────────────────────────────
-const SETTINGS_FILE = path.join(AUDIO_DIR, '..', 'bot-settings.json');
+const SETTINGS_FILE = path.join(AUDIO_DIR, 'bot-settings.json');
 
 const defaultSettings = {
   name: 'CallMe Bot',
