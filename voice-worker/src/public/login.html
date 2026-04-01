@@ -16,69 +16,35 @@
     color: #e2e8f0;
     padding: 20px;
   }
-  .wrap { width: 100%; max-width: 400px; }
+  .wrap { width: 100%; max-width: 360px; }
 
-  /* Icon grid preview — matches dashboard app-tile style */
-  .icon-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    margin-bottom: 20px;
-    max-width: 280px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .ic {
-    aspect-ratio: 1;
-    background: #12152a;
-    border: 1px solid #1e2545;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-  }
-  .ic img { width: 26px; height: 26px; }
-  .ic-inner {
-    width: 44px; height: 44px;
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-  }
-  .ic-inner img { width: 24px; height: 24px; }
-  .ic-blue   { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
-  .ic-green  { background: linear-gradient(135deg,#15803d,#22c55e); }
-  .ic-purple { background: linear-gradient(135deg,#7e22ce,#a855f7); }
-  .ic-sky    { background: linear-gradient(135deg,#0369a1,#38bdf8); }
-  .ic-amber  { background: linear-gradient(135deg,#b45309,#f59e0b); }
-  .ic-rose   { background: linear-gradient(135deg,#9f1239,#fb7185); }
-  .ic-gray   { background: linear-gradient(135deg,#374151,#6b7280); }
-  .ic-haBlue { background: linear-gradient(135deg,#1565c0,#41bdf5); }
-  .ic-indigo { background: linear-gradient(135deg,#3730a3,#6366f1); }
-  .ic-pink   { background: linear-gradient(135deg,#be185d,#ec4899); }
-
-  /* Branding */
   .brand {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+  }
+  .brand .logo {
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg,#6366f1,#8b5cf6);
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+    margin: 0 auto 14px;
   }
   .brand h1 {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 800;
     background: linear-gradient(135deg,#818cf8,#a78bfa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    letter-spacing: -0.5px;
   }
-  .brand p { font-size: 13px; color: #64748b; margin-top: 4px; }
+  .brand p { font-size: 13px; color: #475569; margin-top: 4px; }
 
-  /* Card */
   .card {
     background: #0f1629;
     border: 1px solid #1e2545;
     border-radius: 20px;
-    padding: 32px 28px;
+    padding: 28px 24px;
     box-shadow: 0 24px 80px rgba(0,0,0,0.5);
   }
   .field { margin-bottom: 14px; }
@@ -122,26 +88,23 @@
     display: none;
   }
   .error.show { display: block; }
+  .footer {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+  }
+  .footer a { color: #475569; text-decoration: none; }
+  .footer a:hover { color: #64748b; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <!-- Mini icon preview — 5 key tiles -->
-  <div class="icon-grid">
-    <div class="ic"><div class="ic-inner ic-green">📞</div></div>
-    <div class="ic"><div class="ic-inner ic-purple">🤖</div></div>
-    <div class="ic"><div class="ic-inner ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div></div>
-    <div class="ic"><div class="ic-inner ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div></div>
-    <div class="ic"><div class="ic-inner ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div></div>
-  </div>
-
-  <!-- Brand -->
   <div class="brand">
+    <div class="logo">📞</div>
     <h1>CallMe Bot</h1>
-    <p>AI Voice Assistant Dashboard</p>
+    <p>AI Voice Assistant</p>
   </div>
 
-  <!-- Login card -->
   <div class="card">
     <form id="login-form" onsubmit="doLogin(event)">
       <div class="field">
@@ -156,8 +119,9 @@
       <div class="error" id="error-msg"></div>
     </form>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:12px;color:#475569">
-    <a href="/admin/login" style="color:#64748b;text-decoration:none">👑 ניהול טננטים (Super Admin)</a>
+
+  <div class="footer">
+    <a href="/admin/login">👑 ניהול טננטים</a>
   </div>
 </div>
 <script>
