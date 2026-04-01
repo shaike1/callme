@@ -64,6 +64,9 @@ function requireAuth(req, res, next) {
     const user = decoded.slice(0, colonIdx);
     const pass = decoded.slice(colonIdx + 1);
     if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
+    // Check additional users list
+    const users = botSettings.users || [];
+    if (users.find(u => u.username === user && u.password === pass)) return next();
   }
   res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Bot Dashboard"');
   res.status(401).send('Authentication required');
@@ -255,6 +258,37 @@ app.post('/api/settings', (req, res) => {
     sipPassword: botSettings.sipPassword ? '✓ set' : '',
     adminPass: botSettings.adminPass ? '✓ set' : '',
   }});
+});
+
+// ── Users management ────────────────────────────────────────────────────────
+app.get('/api/users', (req, res) => {
+  const users = (botSettings.users || []).map(({ username, role }) => ({ username, role: role || 'viewer' }));
+  const { user: adminUser } = getAdminCreds();
+  res.json({ users: [{ username: adminUser, role: 'admin' }, ...users] });
+});
+
+app.post('/api/users', (req, res) => {
+  const { username, password, role } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+  if (!botSettings.users) botSettings.users = [];
+  if (botSettings.users.find(u => u.username === username)) return res.status(409).json({ error: 'user already exists' });
+  botSettings.users.push({ username, password, role: role || 'viewer' });
+  res.json({ success: true });
+});
+
+app.put('/api/users/:username', (req, res) => {
+  const { password } = req.body || {};
+  if (!botSettings.users) botSettings.users = [];
+  const u = botSettings.users.find(u => u.username === req.params.username);
+  if (!u) return res.status(404).json({ error: 'user not found' });
+  if (password) u.password = password;
+  res.json({ success: true });
+});
+
+app.delete('/api/users/:username', (req, res) => {
+  if (!botSettings.users) return res.json({ success: true });
+  botSettings.users = botSettings.users.filter(u => u.username !== req.params.username);
+  res.json({ success: true });
 });
 
 // ── Integrations (teamy, openclaw, home assistant) ───────────────────────

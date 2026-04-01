@@ -560,6 +560,15 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
     <div class="fr"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה"></div>
     <div class="status-line" id="admin-pass-status"></div>
     <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">משתמשים נוספים</div>
+    <div id="users-list" style="font-size:13px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input id="new-user-name" placeholder="שם משתמש" style="flex:1">
+      <input id="new-user-pass" type="password" placeholder="סיסמה" style="flex:1">
+      <button class="btn btn-g btn-sm" onclick="addUser()">הוסף</button>
+    </div>
+    <div class="status-line" id="users-status"></div>
+    <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
     <div style="font-size:13px;color:#94a3b8;margin-bottom:10px">ניתוק מהדאשבורד</div>
     <button class="btn" style="background:#1e2545;color:#ef4444;border:1px solid #ef4444" onclick="doLogout()">🚪 התנתק</button>
   </div>
@@ -805,6 +814,7 @@ function openPanel(id) {
   currentPanel = id;
   document.getElementById('overlay').classList.add('open');
   document.getElementById(id).classList.add('open');
+  if (id === 'panel-security') loadUsers();
 }
 
 function closePanel() {
@@ -1710,6 +1720,46 @@ refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);
 setInterval(loadScheduler, 30000);
+
+// ── Users management ─────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const d = await (await fetch(API + '/api/users')).json();
+    const el = document.getElementById('users-list');
+    if (!el) return;
+    el.innerHTML = (d.users || []).map(u =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #1e2545">
+        <span style="flex:1">${u.username}</span>
+        <span style="font-size:11px;color:#64748b;background:#1e2545;padding:2px 6px;border-radius:10px">${u.role}</span>
+        ${u.role !== 'admin' ? `<button class="btn btn-sm" style="background:#2d1f1f;color:#ef4444;padding:2px 8px" onclick="deleteUser('${u.username}')">✕</button>` : ''}
+      </div>`
+    ).join('');
+  } catch {}
+}
+
+async function addUser() {
+  const username = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  const st = document.getElementById('users-status');
+  if (!username || !password) { st.textContent = 'נדרשים שם משתמש וסיסמה'; st.style.color = '#ef4444'; return; }
+  try {
+    const r = await fetch(API + '/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, role: 'viewer' }) });
+    const d = await r.json();
+    if (!r.ok) { st.textContent = d.error; st.style.color = '#ef4444'; return; }
+    st.textContent = `משתמש ${username} נוסף ✓`; st.style.color = '#22c55e';
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-pass').value = '';
+    loadUsers();
+  } catch(e) { st.textContent = e.message; st.style.color = '#ef4444'; }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`למחוק את המשתמש ${username}?`)) return;
+  try {
+    await fetch(API + '/api/users/' + encodeURIComponent(username), { method: 'DELETE' });
+    loadUsers();
+  } catch {}
+}
 
 // ── Logout ────────────────────────────────────────────────────────────────
 function doLogout() {
