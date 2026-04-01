@@ -1317,6 +1317,42 @@ app.post('/admin/tenants', requireSuperAdmin, (req, res) => {
   res.json({ success: true, tenant, dashboardUrl: `/t/${id}/` });
 });
 
+app.get('/admin/billing', requireSuperAdmin, (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const result = tenants.map(t => {
+    const dir = path.join(AUDIO_DIR, 'tenants', t.id, 'recordings');
+    let totalCostUsd = 0, todayCostUsd = 0, callCount = 0;
+    try {
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+      callCount = files.length;
+      for (const f of files) {
+        try {
+          const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
+          totalCostUsd += cost;
+          if (d.savedAt && d.savedAt.startsWith(today)) todayCostUsd += cost;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return { id: t.id, name: t.name, callCount, totalCostUsd: Math.round(totalCostUsd * 10000) / 10000, todayCostUsd: Math.round(todayCostUsd * 10000) / 10000 };
+  });
+  const globalDir = RECORDINGS_DIR;
+  let globalTotal = 0, globalToday = 0, globalCalls = 0;
+  try {
+    const files = fs.readdirSync(globalDir).filter(f => f.endsWith('.json'));
+    globalCalls = files.length;
+    for (const f of files) {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(globalDir, f), 'utf8'));
+        const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
+        globalTotal += cost;
+        if (d.savedAt && d.savedAt.startsWith(today)) globalToday += cost;
+      } catch (_) {}
+    }
+  } catch (_) {}
+  res.json({ tenants: result, global: { callCount: globalCalls, totalCostUsd: Math.round(globalTotal * 10000) / 10000, todayCostUsd: Math.round(globalToday * 10000) / 10000 } });
+});
+
 app.delete('/admin/tenants/:tenantId', requireSuperAdmin, (req, res) => {
   const { tenantId } = req.params;
   tenants = tenants.filter(t => t.id !== tenantId);
@@ -1384,8 +1420,19 @@ app.get('/t/:tenantId/api/recordings', requireTenantAuth, (req, res) => {
   try {
     const dir = path.join(req.tenantDir, 'recordings');
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
-    res.json(files.map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (_) { return null; } }).filter(Boolean));
-  } catch (_) { res.json([]); }
+    const recordings = files.map(f => {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+        if (data.estimatedCostUsd == null && data.durationS) {
+          data.estimatedCostUsd = estimateRecordingCost(data.durationS, data.engine);
+          fs.writeFileSync(path.join(dir, f), JSON.stringify(data, null, 2));
+        }
+        return { file: f, callId: data.callId, callerName: data.callerName, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine || 'gemini-live', estimatedCostUsd: data.estimatedCostUsd };
+      } catch (_) { return null; }
+    }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    const totalCostUsd = recordings.reduce((s, r) => s + (r.estimatedCostUsd || 0), 0);
+    res.json({ recordings, totalCostUsd: Math.round(totalCostUsd * 10000) / 10000 });
+  } catch (_) { res.json({ recordings: [], totalCostUsd: 0 }); }
 });
 
 // Tenant API — voicemails

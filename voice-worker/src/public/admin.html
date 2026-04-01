@@ -149,6 +149,14 @@
     </div>
   </div>
 
+  <!-- Billing summary -->
+  <div class="section" id="billing-section" style="display:none">
+    <div class="section-header">
+      <h2>💰 Billing — סיכום עלויות</h2>
+    </div>
+    <div id="billing-list"><div class="empty">טוען...</div></div>
+  </div>
+
   <!-- Tenant list -->
   <div class="section">
     <div class="section-header">
@@ -275,8 +283,40 @@ function showStatus(msg, isErr = false) {
 // Check for stat-version via package info (best effort)
 document.getElementById('stat-version').textContent = 'v1.x';
 
+async function loadBilling() {
+  try {
+    const r = await fetch('/admin/billing');
+    if (!r.ok) return;
+    const d = await r.json();
+    const all = [...d.tenants, { id: '__global__', name: 'Global (ללא טננט)', ...d.global }];
+    const hasCost = all.some(t => t.totalCostUsd > 0);
+    if (!hasCost) return;
+    document.getElementById('billing-section').style.display = '';
+    const el = document.getElementById('billing-list');
+    el.innerHTML = `<div style="font-family:'SF Mono','Fira Code',monospace;font-size:12px">
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px 16px;padding:6px 0;border-bottom:1px solid #2d2d30;color:#64748b;font-size:11px">
+        <span>טננט</span><span>שיחות</span><span>היום</span><span>סה"כ</span>
+      </div>
+      ${all.map(t => t.callCount === 0 ? '' : `
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px 16px;padding:6px 0;border-bottom:1px solid #1e2533;align-items:center">
+        <span style="color:#e2e8f0">${t.name}</span>
+        <span style="color:#64748b">${t.callCount}</span>
+        <span style="color:${t.todayCostUsd > 0 ? '#fbbf24' : '#64748b'}">$${t.todayCostUsd.toFixed(4)}</span>
+        <span style="color:#a78bfa;font-weight:600">$${t.totalCostUsd.toFixed(4)}</span>
+      </div>`).join('')}
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px 16px;padding:8px 0;color:#4ade80;font-weight:600;font-size:12px">
+        <span>סה"כ כולל</span>
+        <span>${all.reduce((s,t)=>s+t.callCount,0)}</span>
+        <span>$${all.reduce((s,t)=>s+t.todayCostUsd,0).toFixed(4)}</span>
+        <span>$${all.reduce((s,t)=>s+t.totalCostUsd,0).toFixed(4)}</span>
+      </div>
+    </div>`;
+  } catch(_) {}
+}
+
 loadTenants();
 loadStats();
+loadBilling();
 </script>
 </body>
 </html>
