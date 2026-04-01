@@ -8,76 +8,72 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
-    background: #0a0a0a;
+    background: #070d1f;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    color: #ededed;
+    color: #e2e8f0;
     padding: 20px;
   }
   .wrap { width: 100%; max-width: 340px; }
 
   .brand {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: 28px;
   }
   .brand h1 {
-    font-size: 20px;
-    font-weight: 600;
-    color: #ededed;
+    font-size: 22px;
+    font-weight: 700;
+    color: #e2e8f0;
     letter-spacing: -0.3px;
   }
-  .brand p {
-    font-size: 13px;
-    color: #666;
-    margin-top: 3px;
-  }
+  .brand p { font-size: 13px; color: #475569; margin-top: 4px; }
 
   .card {
-    background: #111;
-    border: 1px solid #222;
-    border-radius: 12px;
-    padding: 24px;
+    background: #0f1629;
+    border: 1px solid #1e2545;
+    border-radius: 16px;
+    padding: 28px 24px;
   }
-  .field { margin-bottom: 12px; }
+  .field { margin-bottom: 14px; }
   .field label {
     display: block;
     font-size: 12px;
-    color: #888;
+    color: #64748b;
     margin-bottom: 5px;
     font-weight: 500;
   }
   .field input {
     width: 100%;
-    background: #0a0a0a;
-    border: 1px solid #2a2a2a;
+    background: #070d1f;
+    border: 1px solid #1e2545;
     border-radius: 8px;
     padding: 10px 12px;
-    color: #ededed;
+    color: #e2e8f0;
     font-size: 14px;
     outline: none;
     transition: border-color 0.15s;
   }
-  .field input:focus { border-color: #555; }
+  .field input:focus { border-color: #4f46e5; }
   .btn-login {
     width: 100%;
-    background: #ededed;
-    color: #0a0a0a;
+    background: #4f46e5;
+    color: #fff;
     border: none;
     border-radius: 8px;
-    padding: 10px;
+    padding: 11px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    margin-top: 8px;
+    margin-top: 6px;
     transition: background 0.15s;
   }
-  .btn-login:hover { background: #d4d4d4; }
-  .btn-login:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-login:hover { background: #4338ca; }
+  .btn-login:disabled { background: #1e2545; color: #475569; cursor: not-allowed; }
   .error {
-    background: #1a0a0a;
-    border: 1px solid #3a1a1a;
+    background: #1e1010;
+    border: 1px solid #3b1a1a;
     border-radius: 8px;
     color: #f87171;
     font-size: 12px;
@@ -89,15 +85,11 @@
   .error.show { display: block; }
   .footer {
     text-align: center;
-    margin-top: 20px;
+    margin-top: 18px;
     font-size: 12px;
   }
-  .footer a {
-    color: #444;
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .footer a:hover { color: #888; }
+  .footer a { color: #334155; text-decoration: none; }
+  .footer a:hover { color: #64748b; }
 </style>
 </head>
 <body>
