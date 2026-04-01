@@ -351,7 +351,7 @@ app.post('/api/integrations/test/:name', async (req, res) => {
   const cfg = integrations[name === 'ha' ? 'ha' : name];
   if (!cfg?.url) return res.json({ ok: false, error: 'URL לא מוגדר' });
   try {
-    const testUrl = name === 'teamy' ? cfg.url + '/api/bots' :
+    const testUrl = name === 'teamy' ? cfg.url + '/bots' :
                     name === 'openclaw' ? cfg.url + '/health' :
                     cfg.url + '/api/config'; // HA
     const resp = await new Promise((resolve, reject) => {
@@ -1353,7 +1353,7 @@ app.get('/api/status', async (req, res) => {
       if (!cfg?.url || !cfg?.enabled) {
         intResults[name] = integrationStatus[name] = { ok: null, ts: now, error: 'not configured' };
       } else {
-        const testUrl = name === 'teamy' ? cfg.url + '/api/bots' :
+        const testUrl = name === 'teamy' ? cfg.url + '/bots' :
                         name === 'openclaw' ? cfg.url + '/health' :
                         cfg.url + '/api/config';
         const result = await new Promise((resolve) => {
