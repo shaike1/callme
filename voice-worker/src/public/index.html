@@ -469,6 +469,8 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
       <div class="section-hint" style="color:#f59e0b">⚠️ תמיכה ב-OpenAI Realtime — בקרוב</div>
     </div>
     </div><!-- /ai-engine-section -->
+    <div class="fr" id="ai-cost-limit-row"><label>מגבלת עלות יומית ($)</label><input id="s-aiDailyCostLimitUsd" type="number" min="0" step="0.1" placeholder="0 = ללא מגבלה" style="direction:ltr;width:140px" onblur="saveSettings()"></div>
+    <div id="ai-daily-cost-display" style="font-size:12px;color:#64748b;padding:2px 0"></div>
     <div id="ai-disabled-notice" style="display:none;font-size:12px;color:#f87171;padding:6px 0">מנוע AI כבוי — שיחות נכנסות יעברו ישירות לתא קולי.</div>
 
     <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
@@ -1030,7 +1032,9 @@ async function loadSettings() {
     document.getElementById('s-name').value = s.name || '';
     document.getElementById('s-greeting').value = s.greeting || '';
     document.getElementById('s-aiEnabled').checked = s.aiEnabled !== false;
+    document.getElementById('s-aiDailyCostLimitUsd').value = s.aiDailyCostLimitUsd || '';
     onAiEnabledChange();
+    loadDailyCost();
     document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
     document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
     if (s.geminiApiKey) { document.getElementById('s-geminiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-gemini').style.display = ''; }
@@ -1075,6 +1079,18 @@ async function loadSettings() {
   } catch(e) { console.error(e); }
 }
 
+async function loadDailyCost() {
+  try {
+    const d = await (await fetch(`${API}/api/daily-cost`)).json();
+    const el = document.getElementById('ai-daily-cost-display');
+    if (!el) return;
+    const costStr = `$${d.todayCostUsd.toFixed(4)}`;
+    const limitStr = d.limitActive ? ` / $${d.limitUsd.toFixed(2)}` : '';
+    const color = d.limitReached ? '#f87171' : d.limitActive && d.todayCostUsd > d.limitUsd * 0.8 ? '#fbbf24' : '#64748b';
+    el.innerHTML = `עלות היום: <span style="color:${color};font-family:'SF Mono','Fira Code',monospace">${costStr}${limitStr}</span>${d.limitReached ? ' <span style="color:#f87171">⚠ מגבלה הושגה</span>' : ''}`;
+  } catch(_) {}
+}
+
 async function clearApiKey(provider) {
   if (!confirm('למחוק את ה-API key? הבוט ישתמש ב-key מ-environment variables.')) return;
   const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey' };
@@ -1092,6 +1108,7 @@ async function saveSettings() {
     name: document.getElementById('s-name').value,
     greeting: document.getElementById('s-greeting').value,
     aiEnabled: document.getElementById('s-aiEnabled').checked,
+    aiDailyCostLimitUsd: parseFloat(document.getElementById('s-aiDailyCostLimitUsd').value) || 0,
     aiEngine: document.getElementById('s-aiEngine').value,
     geminiModel: document.getElementById('s-geminiModel').value,
     geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,

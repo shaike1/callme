@@ -192,6 +192,8 @@ const defaultSettings = {
   greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
   voice: process.env.GEMINI_VOICE || 'Kore',
   // AI engine & API keys
+  aiEnabled: true,
+  aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: '',             // blank = use server default
@@ -267,6 +269,7 @@ if (!_settingsFileExisted) {
 
 // Export settings so call-handler can read them
 global.botSettings = botSettings;
+global.getTodayCostUsd = () => getTodayCostUsd(path.join(AUDIO_DIR, 'recordings'));
 
 app.get('/api/settings', (req, res) => {
   const { user: adminUser } = getAdminCreds();
@@ -331,6 +334,8 @@ app.post('/api/settings', (req, res) => {
           rules, knowledge, escalationTurns, escalationNumber,
           toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
   if (aiEnabled !== undefined) botSettings.aiEnabled = aiEnabled;
+  const { aiDailyCostLimitUsd } = req.body || {};
+  if (aiDailyCostLimitUsd !== undefined) botSettings.aiDailyCostLimitUsd = parseFloat(aiDailyCostLimitUsd) || 0;
   if (aiEngine !== undefined) botSettings.aiEngine = aiEngine;
   if (geminiApiKey === '__CLEAR__') botSettings.geminiApiKey = '';
   else if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
@@ -1398,6 +1403,28 @@ app.get('/t/:tenantId/api/live-token', requireTenantAuth, (req, res) => {
   const user = s.adminUser || 'admin';
   const pass = s.adminPass || 'callme2024';
   res.json({ token: Buffer.from(`${user}:${pass}`).toString('base64') });
+});
+
+// ── Cost helpers ─────────────────────────────────────────────────────────
+function getTodayCostUsd(recDir) {
+  try {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const files = fs.readdirSync(recDir).filter(f => f.endsWith('.json'));
+    return files.reduce((sum, f) => {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(recDir, f), 'utf8'));
+        if (!d.savedAt || !d.savedAt.startsWith(today)) return sum;
+        const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
+        return sum + cost;
+      } catch (_) { return sum; }
+    }, 0);
+  } catch (_) { return 0; }
+}
+
+app.get('/api/daily-cost', (req, res) => {
+  const todayCost = getTodayCostUsd(RECORDINGS_DIR);
+  const limitUsd = botSettings.aiDailyCostLimitUsd || 0;
+  res.json({ todayCostUsd: Math.round(todayCost * 10000) / 10000, limitUsd, limitActive: limitUsd > 0, limitReached: limitUsd > 0 && todayCost >= limitUsd });
 });
 
 // ── Recordings (call transcripts) ────────────────────────────────────────
