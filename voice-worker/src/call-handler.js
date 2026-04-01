@@ -193,20 +193,49 @@ class CallHandler {
     }
 
     const integrations = global.integrations || {};
+    // Tool toggles — default true unless explicitly disabled
+    const toolToggles = {
+      findContact:    settings.toolFindContact    !== false,
+      addContact:     settings.toolAddContact     !== false,
+      scheduleCall:   settings.toolScheduleCall   !== false,
+      calendar:       settings.toolCalendar       !== false,
+      homeAssistant:  settings.toolHomeAssistant  !== false,
+    };
 
-    const toolDeclarations = [
-      {
+    const toolDeclarations = [];
+    const activeToolNames = [];
+
+    if (toolToggles.findContact) {
+      toolDeclarations.push({
         name: 'find_contact',
         description: 'Search the contacts book by name. Returns phone number and contact info.',
         parameters: {
           type: 'object',
-          properties: {
-            name: { type: 'string', description: 'Contact name to search for' }
-          },
+          properties: { name: { type: 'string', description: 'Contact name to search for' } },
           required: ['name']
         }
-      },
-      {
+      });
+      activeToolNames.push('find_contact — חיפוש איש קשר לפי שם');
+    }
+
+    if (toolToggles.addContact) {
+      toolDeclarations.push({
+        name: 'add_contact',
+        description: 'Save a new contact to the address book.',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Contact name' },
+            phone: { type: 'string', description: 'Phone number or SIP URI' }
+          },
+          required: ['name', 'phone']
+        }
+      });
+      activeToolNames.push('add_contact — שמירת איש קשר חדש');
+    }
+
+    if (toolToggles.scheduleCall) {
+      toolDeclarations.push({
         name: 'add_scheduled_call',
         description: 'Schedule a future outbound call. Use when user says "remind me", "call me at", "call X tomorrow", etc.',
         parameters: {
@@ -219,35 +248,23 @@ class CallHandler {
           },
           required: ['target', 'time']
         }
-      },
-      {
-        name: 'get_bot_status',
-        description: 'Get current bot statistics: active calls, total calls today, SIP registration status.',
-        parameters: { type: 'object', properties: {} }
-      },
-      {
-        name: 'add_contact',
-        description: 'Save a new contact to the address book.',
-        parameters: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'Contact name' },
-            phone: { type: 'string', description: 'Phone number or SIP URI' }
-          },
-          required: ['name', 'phone']
-        }
-      }
-    ];
+      });
+      activeToolNames.push('add_scheduled_call — תזמון שיחה עתידית');
+    }
 
-    if ((global.botSettings || {}).calendarUrl) {
+    toolDeclarations.push({
+      name: 'get_bot_status',
+      description: 'Get current bot statistics: active calls, total calls today, SIP registration status.',
+      parameters: { type: 'object', properties: {} }
+    });
+
+    if (toolToggles.calendar && (global.botSettings || {}).calendarUrl) {
       toolDeclarations.push({
         name: 'check_calendar',
         description: 'Check the user calendar for upcoming events. Use when asked about schedule, appointments, "what do I have today/tomorrow", etc.',
         parameters: {
           type: 'object',
-          properties: {
-            days: { type: 'number', description: 'How many days ahead to look (default 1 = today, 7 = this week)' }
-          }
+          properties: { days: { type: 'number', description: 'How many days ahead to look (default 1 = today, 7 = this week)' } }
         }
       });
       toolDeclarations.push({
@@ -265,9 +282,10 @@ class CallHandler {
           required: ['title', 'date', 'time']
         }
       });
+      activeToolNames.push('check_calendar — בדיקת יומן', 'add_calendar_event — הוספת אירוע ליומן');
     }
 
-    if (integrations.ha?.enabled && integrations.ha?.url) {
+    if (toolToggles.homeAssistant && integrations.ha?.enabled && integrations.ha?.url) {
       toolDeclarations.push({
         name: 'control_home_assistant',
         description: 'Control smart home devices via Home Assistant. Turn lights on/off, adjust temperature, lock doors, etc.',
@@ -281,6 +299,12 @@ class CallHandler {
           required: ['domain', 'service']
         }
       });
+      activeToolNames.push('control_home_assistant — שליטה בבית חכם (Home Assistant)');
+    }
+
+    // Inject active tools list into system prompt so the bot knows its capabilities
+    if (activeToolNames.length > 0) {
+      systemPrompt += `\n\n## כלים זמינים\nיש לך גישה לכלים הבאים — השתמש בהם באופן יזום כשרלוונטי:\n${activeToolNames.map(t => `- ${t}`).join('\n')}`;
     }
 
     const voiceName = settings.voice || 'Kore';
