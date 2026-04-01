@@ -3,89 +3,231 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CallMe — Super Admin</title>
+<title>CallMe Bot — Super Admin</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0f1623;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:24px}
-h1{font-size:22px;font-weight:700;margin-bottom:4px}
-.subtitle{color:#8892a4;font-size:13px;margin-bottom:28px}
-.card{background:#141b2d;border:1px solid #1e2d47;border-radius:12px;padding:20px;margin-bottom:20px}
-h2{font-size:15px;font-weight:600;color:#94a3b8;margin-bottom:14px}
-.form-row{display:flex;gap:10px;align-items:center;margin-bottom:10px}
-input{background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:14px;flex:1}
-input:focus{outline:none;border-color:#3b82f6}
-.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
-.btn-primary{background:#3b82f6;color:#fff}
-.btn-primary:hover{background:#2563eb}
-.btn-danger{background:#ef4444;color:#fff}
-.btn-danger:hover{background:#dc2626}
-.btn-ghost{background:#2d3148;color:#e2e8f0}
-.btn-ghost:hover{background:#3d4168}
-.tenant-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e2d47}
-.tenant-row:last-child{border-bottom:none}
-.tenant-name{font-weight:600;font-size:15px}
-.tenant-meta{font-size:12px;color:#8892a4;margin-top:2px}
-.tenant-actions{display:flex;gap:8px}
-.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
-.badge-green{background:#14532d;color:#86efac}
-.badge-gray{background:#1e293b;color:#64748b}
-#status{margin-top:10px;font-size:13px;color:#22c55e;min-height:18px}
-.empty{color:#8892a4;font-size:13px;padding:16px 0;text-align:center}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
-.logo{display:flex;align-items:center;gap:10px}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #070d1f;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Top bar */
+  .topbar {
+    background: #0f1629;
+    border-bottom: 1px solid #1e2545;
+    padding: 0 28px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-left .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg,#b45309,#f59e0b);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .topbar-left h1 {
+    font-size: 17px; font-weight: 700;
+    background: linear-gradient(135deg,#f59e0b,#fb7185);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .topbar-left .badge {
+    background: linear-gradient(135deg,#b45309,#f59e0b);
+    color: #fff; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px; letter-spacing: 0.5px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .btn-sm {
+    padding: 7px 14px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-sm:hover { opacity: 0.85; }
+  .btn-primary { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; }
+  .btn-danger  { background: #1e2545; color: #ef4444; border: 1px solid #2d1f1f; }
+  .btn-ghost   { background: #1e2545; color: #94a3b8; }
+  .btn-amber   { background: linear-gradient(135deg,#b45309,#f59e0b); color: #fff; }
+
+  /* Main */
+  .main { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+  .stat-card {
+    background: #0f1629; border: 1px solid #1e2545; border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .stat-card .label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: #e2e8f0; }
+  .stat-card .sub { font-size: 12px; color: #475569; margin-top: 4px; }
+
+  /* Section */
+  .section {
+    background: #0f1629; border: 1px solid #1e2545; border-radius: 16px;
+    padding: 22px 24px; margin-bottom: 20px;
+  }
+  .section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 18px;
+  }
+  .section-header h2 { font-size: 15px; font-weight: 600; color: #94a3b8; }
+
+  /* Tenant rows */
+  .tenant-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 0; border-bottom: 1px solid #1e2545;
+  }
+  .tenant-row:last-child { border-bottom: none; }
+  .tenant-info .name { font-size: 15px; font-weight: 600; color: #e2e8f0; }
+  .tenant-info .meta { font-size: 12px; color: #64748b; margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .tenant-info .meta code {
+    background: #1e2545; padding: 1px 6px; border-radius: 4px;
+    font-family: monospace; font-size: 11px; color: #94a3b8;
+  }
+  .tenant-actions { display: flex; gap: 8px; }
+  .badge-status {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  }
+  .badge-active { background: #14532d; color: #86efac; }
+  .badge-inactive { background: #1e293b; color: #64748b; }
+
+  /* Create form */
+  .create-form { display: flex; gap: 10px; flex-wrap: wrap; }
+  .create-form input {
+    flex: 1; min-width: 160px;
+    background: #070d1f; border: 1px solid #1e2545; border-radius: 10px;
+    padding: 10px 13px; color: #e2e8f0; font-size: 14px; outline: none;
+    transition: border-color 0.15s;
+  }
+  .create-form input:focus { border-color: #f59e0b; }
+
+  .empty { color: #475569; font-size: 13px; text-align: center; padding: 20px 0; }
+  #status { font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .status-ok  { color: #22c55e; }
+  .status-err { color: #ef4444; }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">
-    <span style="font-size:28px">📞</span>
-    <div>
-      <h1>CallMe Super Admin</h1>
-      <div class="subtitle">ניהול Tenants — Multi-tenant SaaS</div>
-    </div>
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo-icon">👑</div>
+    <h1>CallMe Bot</h1>
+    <div class="badge">SUPER ADMIN</div>
   </div>
-  <a href="/" class="btn btn-ghost" style="text-decoration:none">← לוח ראשי</a>
-</header>
-
-<div class="card">
-  <h2>➕ צור Tenant חדש</h2>
-  <div class="form-row">
-    <input id="t-name" placeholder="שם הלקוח (למשל: Acme Corp)" style="direction:rtl">
-    <input id="t-id" placeholder="מזהה (acme-corp) — אופציונלי" style="direction:ltr;max-width:200px">
-    <button class="btn btn-primary" onclick="createTenant()">צור</button>
+  <div class="topbar-right">
+    <a href="/" class="btn-sm btn-ghost" style="text-decoration:none">← לוח הבוט</a>
+    <button class="btn-sm btn-danger" onclick="doLogout()">יציאה</button>
   </div>
-  <div id="status"></div>
 </div>
 
-<div class="card">
-  <h2>🏢 Tenants פעילים</h2>
-  <div id="tenants-list"><div class="empty">טוען...</div></div>
+<div class="main">
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">טננטים פעילים</div>
+      <div class="value" id="stat-count">—</div>
+      <div class="sub">סה"כ במערכת</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">גרסת מערכת</div>
+      <div class="value" style="font-size:18px;padding-top:4px" id="stat-version">—</div>
+      <div class="sub">CallMe Bot</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">שרת</div>
+      <div class="value" style="font-size:16px;padding-top:4px">🟢 פעיל</div>
+      <div class="sub" id="stat-uptime">—</div>
+    </div>
+  </div>
+
+  <!-- Tenant list -->
+  <div class="section">
+    <div class="section-header">
+      <h2>🏢 ניהול Tenants</h2>
+    </div>
+    <div id="tenants-list"><div class="empty">טוען...</div></div>
+  </div>
+
+  <!-- Create tenant -->
+  <div class="section">
+    <div class="section-header">
+      <h2>➕ צור Tenant חדש</h2>
+    </div>
+    <div class="create-form">
+      <input id="t-name" placeholder="שם הלקוח (Acme Corp)" style="direction:rtl">
+      <input id="t-id" placeholder="מזהה (acme-corp) — אופציונלי" style="direction:ltr;max-width:200px">
+      <button class="btn-sm btn-amber" onclick="createTenant()">צור Tenant</button>
+    </div>
+    <div id="status"></div>
+  </div>
 </div>
 
 <script>
-const API = '';
+// Auth guard
+const _superAuth = sessionStorage.getItem('callme_super_auth');
+if (!_superAuth) { window.location.replace('/admin/login'); }
+
+// Fetch with auth
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (url, opts = {}) => {
+  const auth = sessionStorage.getItem('callme_super_auth');
+  if (auth) { opts = { ...opts, headers: { 'Authorization': 'Basic ' + auth, ...(opts.headers||{}) } }; }
+  const resp = await _origFetch(url, opts);
+  if (resp.status === 401) { sessionStorage.removeItem('callme_super_auth'); window.location.replace('/admin/login'); }
+  return resp;
+};
+
+function doLogout() {
+  sessionStorage.removeItem('callme_super_auth');
+  window.location.replace('/admin/login');
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch('/health');
+    if (r.ok) {
+      const d = await r.json();
+      const up = Math.floor(d.uptime);
+      const h = Math.floor(up/3600), m = Math.floor((up%3600)/60), s = up%60;
+      document.getElementById('stat-uptime').textContent = `פעיל ${h}ש׳ ${m}ד׳ ${s}ש"ד`;
+    }
+  } catch(_){}
+}
 
 async function loadTenants() {
   try {
-    const r = await fetch(API + '/admin/tenants');
-    if (!r.ok) { document.getElementById('tenants-list').innerHTML = '<div class="empty">שגיאת אימות</div>'; return; }
+    const r = await fetch('/admin/tenants');
+    if (!r.ok) { document.getElementById('tenants-list').innerHTML = '<div class="empty">שגיאת גישה</div>'; return; }
     const tenants = await r.json();
+    document.getElementById('stat-count').textContent = tenants.length;
     const el = document.getElementById('tenants-list');
-    if (!tenants.length) { el.innerHTML = '<div class="empty">אין tenants עדיין. צור את הראשון.</div>'; return; }
+    if (!tenants.length) {
+      el.innerHTML = '<div class="empty">אין tenants עדיין — צור את הראשון למטה.</div>';
+      return;
+    }
     el.innerHTML = tenants.map(t => `
       <div class="tenant-row">
-        <div>
-          <div class="tenant-name">${t.name} <span class="badge badge-green">פעיל</span></div>
-          <div class="tenant-meta">
-            ID: <code style="background:#1e2535;padding:1px 5px;border-radius:3px">${t.id}</code>
-            ${t.extension ? ` | שלוחה: ${t.extension}` : ''}
-            ${t.botName ? ` | בוט: ${t.botName}` : ''}
-            | נוצר: ${new Date(t.createdAt).toLocaleDateString('he-IL')}
+        <div class="tenant-info">
+          <div class="name">${t.name} <span class="badge-status badge-active">● פעיל</span></div>
+          <div class="meta">
+            <span>מזהה: <code>${t.id}</code></span>
+            ${t.extension ? `<span>שלוחה: ${t.extension}</span>` : ''}
+            ${t.botName ? `<span>בוט: ${t.botName}</span>` : ''}
+            <span>נוצר: ${new Date(t.createdAt).toLocaleDateString('he-IL')}</span>
           </div>
         </div>
         <div class="tenant-actions">
-          <a href="${t.dashboardUrl}" target="_blank" class="btn btn-ghost" style="text-decoration:none;font-size:13px">פתח דשבורד ↗</a>
-          <button class="btn btn-danger" style="font-size:13px" onclick="deleteTenant('${t.id}','${t.name}')">מחק</button>
+          <a href="/t/${t.id}/" target="_blank" class="btn-sm btn-primary" style="text-decoration:none">פתח דשבורד ↗</a>
+          <button class="btn-sm btn-danger" onclick="deleteTenant('${t.id}','${t.name}')">מחק</button>
         </div>
       </div>`).join('');
   } catch(e) {
@@ -98,14 +240,14 @@ async function createTenant() {
   const id = document.getElementById('t-id').value.trim();
   if (!name) { showStatus('נדרש שם', true); return; }
   try {
-    const r = await fetch(API + '/admin/tenants', {
+    const r = await fetch('/admin/tenants', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ name, id: id || undefined })
     });
     const d = await r.json();
     if (d.success) {
-      showStatus(`✓ Tenant "${d.tenant.name}" נוצר — ${d.dashboardUrl}`);
+      showStatus(`✓ Tenant "${d.tenant.name}" נוצר`);
       document.getElementById('t-name').value = '';
       document.getElementById('t-id').value = '';
       loadTenants();
@@ -116,8 +258,8 @@ async function createTenant() {
 }
 
 async function deleteTenant(id, name) {
-  if (!confirm(`למחוק את tenant "${name}" (${id})?\nהנתונים בדיסק לא יימחקו.`)) return;
-  const r = await fetch(`${API}/admin/tenants/${id}`, { method: 'DELETE' });
+  if (!confirm(`למחוק את "${name}" (${id})?\nהנתונים בדיסק לא יימחקו.`)) return;
+  const r = await fetch(`/admin/tenants/${id}`, { method: 'DELETE' });
   const d = await r.json();
   if (d.success) { showStatus(`"${name}" הוסר.`); loadTenants(); }
   else showStatus('שגיאה', true);
@@ -125,12 +267,16 @@ async function deleteTenant(id, name) {
 
 function showStatus(msg, isErr = false) {
   const el = document.getElementById('status');
-  el.style.color = isErr ? '#ef4444' : '#22c55e';
+  el.className = isErr ? 'status-err' : 'status-ok';
   el.textContent = msg;
   setTimeout(() => el.textContent = '', 5000);
 }
 
+// Check for stat-version via package info (best effort)
+document.getElementById('stat-version').textContent = 'v1.x';
+
 loadTenants();
+loadStats();
 </script>
 </body>
 </html>

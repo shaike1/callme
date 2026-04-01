@@ -80,8 +80,9 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/admin') || req.path.startsWith('/t/')) {
     return next();
   }
-  // Login page and login API are public
-  if (req.path === '/login' || req.path === '/login.html' || req.path === '/api/login') {
+  // Login pages and login APIs are public
+  if (req.path === '/login' || req.path === '/login.html' || req.path === '/api/login' ||
+      req.path === '/admin/login' || req.path === '/api/admin/login') {
     return next();
   }
   const identity = getRequestRole(req);
@@ -1212,17 +1213,23 @@ global.resolveTenantForCall = function(calledNumber, calledExtension) {
 };
 
 // Super-admin auth
+function getSuperAdminCreds() {
+  return {
+    user: process.env.SUPER_ADMIN_USER || 'superadmin',
+    pass: process.env.SUPER_ADMIN_PASS || 'superadmin2024',
+  };
+}
+
 function requireSuperAdmin(req, res, next) {
-  const user = process.env.SUPER_ADMIN_USER || 'superadmin';
-  const pass = process.env.SUPER_ADMIN_PASS || 'superadmin2024';
+  const { user, pass } = getSuperAdminCreds();
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Basic ')) {
     const decoded = Buffer.from(auth.slice(6), 'base64').toString();
     const idx = decoded.indexOf(':');
     if (decoded.slice(0, idx) === user && decoded.slice(idx + 1) === pass) return next();
   }
-  res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Super Admin"');
-  res.status(401).send('Super Admin authentication required');
+  // Return JSON 401 — no WWW-Authenticate to avoid browser dialog
+  res.status(401).json({ error: 'Super Admin authentication required' });
 }
 
 // Tenant-level auth
@@ -1249,6 +1256,22 @@ app.param('tenantId', (req, res, next, tenantId) => {
   req.tenantDir = getTenantDir(tenantId);
   req.tenantSettings = loadTenantData(tenantId, 'settings.json', {});
   next();
+});
+
+// Super-admin login page (public)
+app.get('/admin/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-login.html'));
+});
+
+// Super-admin login API
+app.post('/api/admin/login', express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'missing credentials' });
+  const { user, pass } = getSuperAdminCreds();
+  if (username === user && password === pass) {
+    return res.json({ success: true, token: Buffer.from(`${username}:${password}`).toString('base64') });
+  }
+  res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
 });
 
 // Super-admin panel
