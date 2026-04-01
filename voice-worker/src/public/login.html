@@ -14,84 +14,99 @@
     justify-content: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: #e2e8f0;
+    padding: 20px;
   }
+  .wrap { width: 100%; max-width: 400px; }
+
+  /* Icon grid preview */
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+    opacity: 0.85;
+  }
+  .ic {
+    aspect-ratio: 1;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+  .ic img { width: 22px; height: 22px; }
+  .ic-blue  { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
+  .ic-green { background: linear-gradient(135deg,#15803d,#22c55e); }
+  .ic-purple{ background: linear-gradient(135deg,#7e22ce,#a855f7); }
+  .ic-sky   { background: linear-gradient(135deg,#0369a1,#38bdf8); }
+  .ic-amber { background: linear-gradient(135deg,#b45309,#f59e0b); }
+  .ic-rose  { background: linear-gradient(135deg,#9f1239,#fb7185); }
+  .ic-gray  { background: linear-gradient(135deg,#374151,#6b7280); }
+  .ic-ha    { background: linear-gradient(135deg,#1565c0,#41bdf5); }
+  .ic-teal  { background: linear-gradient(135deg,#0f766e,#2dd4bf); }
+  .ic-dark  { background: linear-gradient(135deg,#1e1b4b,#4338ca); }
+
+  /* Branding */
+  .brand {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .brand h1 {
+    font-size: 26px;
+    font-weight: 800;
+    background: linear-gradient(135deg,#818cf8,#a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  .brand p { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+  /* Card */
   .card {
     background: #0f1629;
     border: 1px solid #1e2545;
     border-radius: 20px;
-    padding: 40px 36px;
-    width: 100%;
-    max-width: 380px;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    padding: 32px 28px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
   }
-  .logo {
-    text-align: center;
-    margin-bottom: 28px;
-  }
-  .logo-icon {
-    font-size: 52px;
-    display: block;
-    margin-bottom: 8px;
-  }
-  .logo h1 {
-    font-size: 22px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #818cf8, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .logo p {
-    font-size: 13px;
-    color: #64748b;
-    margin-top: 4px;
-  }
-  .field {
-    margin-bottom: 16px;
-  }
-  .field label {
-    display: block;
-    font-size: 13px;
-    color: #94a3b8;
-    margin-bottom: 6px;
-  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 5px; }
   .field input {
     width: 100%;
     background: #070d1f;
     border: 1px solid #1e2545;
     border-radius: 10px;
-    padding: 12px 14px;
+    padding: 11px 13px;
     color: #e2e8f0;
     font-size: 15px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s;
   }
-  .field input:focus {
-    border-color: #818cf8;
-  }
+  .field input:focus { border-color: #818cf8; }
   .btn-login {
     width: 100%;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg,#6366f1,#8b5cf6);
     color: #fff;
     border: none;
     border-radius: 12px;
-    padding: 14px;
-    font-size: 16px;
+    padding: 13px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    margin-top: 8px;
-    transition: opacity 0.2s;
+    margin-top: 6px;
+    transition: opacity 0.15s;
   }
   .btn-login:hover { opacity: 0.9; }
-  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-login:disabled { opacity: 0.45; cursor: not-allowed; }
   .error {
     background: #2d1f1f;
     border: 1px solid #ef4444;
     border-radius: 10px;
     color: #ef4444;
     font-size: 13px;
-    padding: 10px 14px;
-    margin-top: 14px;
+    padding: 9px 13px;
+    margin-top: 12px;
     text-align: center;
     display: none;
   }
@@ -99,30 +114,45 @@
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="logo">
-    <span class="logo-icon">📞</span>
+<div class="wrap">
+  <!-- Mini icon preview -->
+  <div class="icon-grid">
+    <div class="ic ic-green">📞</div>
+    <div class="ic ic-purple">🤖</div>
+    <div class="ic ic-sky">🔢</div>
+    <div class="ic ic-amber">⏰</div>
+    <div class="ic ic-rose">🎙️</div>
+    <div class="ic ic-gray">📹</div>
+    <div class="ic ic-ha"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div>
+    <div class="ic ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div>
+    <div class="ic ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div>
+    <div class="ic ic-sky">🔴</div>
+  </div>
+
+  <!-- Brand -->
+  <div class="brand">
     <h1>CallMe Bot</h1>
     <p>AI Voice Assistant Dashboard</p>
   </div>
-  <form id="login-form" onsubmit="doLogin(event)">
-    <div class="field">
-      <label>שם משתמש</label>
-      <input id="username" type="text" placeholder="admin" autocomplete="username" autofocus required>
-    </div>
-    <div class="field">
-      <label>סיסמה</label>
-      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
-    </div>
-    <button class="btn-login" type="submit" id="login-btn">כניסה</button>
-    <div class="error" id="error-msg"></div>
-  </form>
+
+  <!-- Login card -->
+  <div class="card">
+    <form id="login-form" onsubmit="doLogin(event)">
+      <div class="field">
+        <label>שם משתמש</label>
+        <input id="username" type="text" placeholder="admin" autocomplete="username" autofocus required>
+      </div>
+      <div class="field">
+        <label>סיסמה</label>
+        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button class="btn-login" type="submit" id="login-btn">כניסה</button>
+      <div class="error" id="error-msg"></div>
+    </form>
+  </div>
 </div>
 <script>
-// If already logged in, go to dashboard
-if (sessionStorage.getItem('callme_auth')) {
-  window.location.replace('/');
-}
+if (sessionStorage.getItem('callme_auth')) { window.location.replace('/'); }
 
 async function doLogin(e) {
   e.preventDefault();
@@ -131,8 +161,7 @@ async function doLogin(e) {
   const btn = document.getElementById('login-btn');
   const err = document.getElementById('error-msg');
   err.classList.remove('show');
-  btn.disabled = true;
-  btn.textContent = 'מתחבר...';
+  btn.disabled = true; btn.textContent = 'מתחבר...';
   try {
     const resp = await fetch('/api/login', {
       method: 'POST',
@@ -146,14 +175,12 @@ async function doLogin(e) {
     } else {
       err.textContent = data.error || 'שגיאת כניסה';
       err.classList.add('show');
-      btn.disabled = false;
-      btn.textContent = 'כניסה';
+      btn.disabled = false; btn.textContent = 'כניסה';
     }
   } catch (ex) {
     err.textContent = 'שגיאת רשת';
     err.classList.add('show');
-    btn.disabled = false;
-    btn.textContent = 'כניסה';
+    btn.disabled = false; btn.textContent = 'כניסה';
   }
 }
 </script>
