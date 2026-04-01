@@ -8,175 +8,136 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
-    background: #070d1f;
+    background: #0a0a0a;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #ededed;
     padding: 20px;
   }
-  .wrap { width: 100%; max-width: 400px; }
+  .wrap { width: 100%; max-width: 340px; }
 
-  /* Icon grid preview — matches dashboard app-tile style */
-  .icon-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    margin-bottom: 24px;
-  }
-  .ic {
-    aspect-ratio: 1;
-    background: #12152a;
-    border: 1px solid #1e2545;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ic-inner {
-    width: 44px; height: 44px;
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-  }
-  .ic-inner img { width: 24px; height: 24px; }
-  .ic-blue   { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
-  .ic-green  { background: linear-gradient(135deg,#15803d,#22c55e); }
-  .ic-purple { background: linear-gradient(135deg,#7e22ce,#a855f7); }
-  .ic-sky    { background: linear-gradient(135deg,#0369a1,#38bdf8); }
-  .ic-amber  { background: linear-gradient(135deg,#b45309,#f59e0b); }
-  .ic-rose   { background: linear-gradient(135deg,#9f1239,#fb7185); }
-  .ic-gray   { background: linear-gradient(135deg,#374151,#6b7280); }
-  .ic-haBlue { background: linear-gradient(135deg,#1565c0,#41bdf5); }
-  .ic-teal   { background: linear-gradient(135deg,#0f766e,#2dd4bf); }
-  .ic-indigo { background: linear-gradient(135deg,#3730a3,#6366f1); }
-
-  /* Branding */
   .brand {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
   }
   .brand h1 {
-    font-size: 26px;
-    font-weight: 800;
-    background: linear-gradient(135deg,#f59e0b,#fb7185);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: -0.5px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #ededed;
+    letter-spacing: -0.3px;
   }
-  .brand p { font-size: 13px; color: #64748b; margin-top: 4px; }
-  .brand .badge {
+  .brand p {
+    font-size: 13px;
+    color: #666;
+    margin-top: 3px;
+  }
+  .brand .tag {
     display: inline-block;
-    background: linear-gradient(135deg,#b45309,#f59e0b);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 12px;
-    letter-spacing: 0.5px;
-    margin-top: 6px;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #666;
+    padding: 2px 7px;
+    letter-spacing: 0.8px;
+    margin-top: 8px;
+    text-transform: uppercase;
   }
 
-  /* Card */
   .card {
-    background: #0f1629;
-    border: 1px solid #1e2545;
-    border-radius: 20px;
-    padding: 32px 28px;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 24px;
   }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 5px; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 5px;
+    font-weight: 500;
+  }
   .field input {
     width: 100%;
-    background: #070d1f;
-    border: 1px solid #1e2545;
-    border-radius: 10px;
-    padding: 11px 13px;
-    color: #e2e8f0;
-    font-size: 15px;
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #ededed;
+    font-size: 14px;
     outline: none;
     transition: border-color 0.15s;
   }
-  .field input:focus { border-color: #f59e0b; }
+  .field input:focus { border-color: #555; }
   .btn-login {
     width: 100%;
-    background: linear-gradient(135deg,#b45309,#f59e0b);
-    color: #fff;
+    background: #ededed;
+    color: #0a0a0a;
     border: none;
-    border-radius: 12px;
-    padding: 13px;
-    font-size: 15px;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    margin-top: 6px;
-    transition: opacity 0.15s;
+    margin-top: 8px;
+    transition: background 0.15s;
   }
-  .btn-login:hover { opacity: 0.9; }
-  .btn-login:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-login:hover { background: #d4d4d4; }
+  .btn-login:disabled { background: #333; color: #666; cursor: not-allowed; }
   .error {
-    background: #2d1f1f;
-    border: 1px solid #ef4444;
-    border-radius: 10px;
-    color: #ef4444;
-    font-size: 13px;
-    padding: 9px 13px;
-    margin-top: 12px;
+    background: #1a0a0a;
+    border: 1px solid #3a1a1a;
+    border-radius: 8px;
+    color: #f87171;
+    font-size: 12px;
+    padding: 8px 12px;
+    margin-top: 10px;
     text-align: center;
     display: none;
   }
   .error.show { display: block; }
-  .back-link {
+  .footer {
     text-align: center;
-    margin-top: 16px;
+    margin-top: 20px;
     font-size: 12px;
-    color: #475569;
   }
-  .back-link a { color: #64748b; text-decoration: none; }
-  .back-link a:hover { color: #94a3b8; }
+  .footer a {
+    color: #444;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .footer a:hover { color: #888; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <!-- Mini icon preview -->
-  <div class="icon-grid">
-    <div class="ic"><div class="ic-inner ic-amber">👑</div></div>
-    <div class="ic"><div class="ic-inner ic-blue">🏢</div></div>
-    <div class="ic"><div class="ic-inner ic-green">📞</div></div>
-    <div class="ic"><div class="ic-inner ic-purple">🤖</div></div>
-    <div class="ic"><div class="ic-inner ic-indigo">⚙️</div></div>
-    <div class="ic"><div class="ic-inner ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" onerror="this.parentNode.textContent='✈️'"></div></div>
-    <div class="ic"><div class="ic-inner ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" onerror="this.parentNode.textContent='💬'"></div></div>
-    <div class="ic"><div class="ic-inner ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" onerror="this.parentNode.textContent='🏠'"></div></div>
-    <div class="ic"><div class="ic-inner ic-gray">🔒</div></div>
-    <div class="ic"><div class="ic-inner ic-rose">📊</div></div>
-  </div>
-
-  <!-- Brand -->
   <div class="brand">
     <h1>CallMe Bot</h1>
     <p>Platform Administration</p>
-    <div class="badge">SUPER ADMIN</div>
+    <div class="tag">Super Admin</div>
   </div>
 
-  <!-- Login card -->
   <div class="card">
     <form id="login-form" onsubmit="doLogin(event)">
       <div class="field">
         <label>שם משתמש</label>
-        <input id="username" type="text" placeholder="superadmin" autocomplete="username" autofocus required>
+        <input id="username" type="text" autocomplete="username" autofocus required>
       </div>
       <div class="field">
         <label>סיסמה</label>
-        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+        <input id="password" type="password" autocomplete="current-password" required>
       </div>
-      <button class="btn-login" type="submit" id="login-btn">כניסה לניהול</button>
+      <button class="btn-login" type="submit" id="login-btn">כניסה</button>
       <div class="error" id="error-msg"></div>
     </form>
   </div>
-  <div class="back-link"><a href="/login">← חזרה לממשק הבוט</a></div>
+
+  <div class="footer">
+    <a href="/login">← חזרה לממשק הבוט</a>
+  </div>
 </div>
 <script>
 if (sessionStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
@@ -188,7 +149,7 @@ async function doLogin(e) {
   const btn = document.getElementById('login-btn');
   const err = document.getElementById('error-msg');
   err.classList.remove('show');
-  btn.disabled = true; btn.textContent = 'מתחבר...';
+  btn.disabled = true; btn.textContent = '...';
   try {
     const resp = await fetch('/api/admin/login', {
       method: 'POST',
@@ -202,12 +163,12 @@ async function doLogin(e) {
     } else {
       err.textContent = data.error || 'שגיאת כניסה';
       err.classList.add('show');
-      btn.disabled = false; btn.textContent = 'כניסה לניהול';
+      btn.disabled = false; btn.textContent = 'כניסה';
     }
   } catch (ex) {
     err.textContent = 'שגיאת רשת';
     err.classList.add('show');
-    btn.disabled = false; btn.textContent = 'כניסה לניהול';
+    btn.disabled = false; btn.textContent = 'כניסה';
   }
 }
 </script>
