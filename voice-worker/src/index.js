@@ -80,10 +80,14 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/admin') || req.path.startsWith('/t/')) {
     return next();
   }
+  // Login page and login API are public
+  if (req.path === '/login' || req.path === '/login.html' || req.path === '/api/login') {
+    return next();
+  }
   const identity = getRequestRole(req);
   if (!identity) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="CallMe Bot Dashboard"');
-    return res.status(401).send('Authentication required');
+    // Return JSON 401 without WWW-Authenticate to avoid browser dialog
+    return res.status(401).json({ error: 'Unauthorized' });
   }
   const perms = ROLE_PERMISSIONS[identity.role] || ROLE_PERMISSIONS.viewer;
   if (perms.allowAll) { req.userRole = identity.role; return next(); }
@@ -98,6 +102,19 @@ app.use(requireAuth);
 // Serve dashboard
 app.use('/', express.static(path.join(__dirname, 'public')));
 app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+
+// Login API — validates credentials, returns success (no session; client stores Basic-Auth token)
+app.post('/api/login', express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'missing credentials' });
+  const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
+  if ((username === ADMIN_USER && password === ADMIN_PASS) ||
+      (botSettings.users || []).find(u => u.username === username && u.password === password)) {
+    return res.json({ success: true, token: Buffer.from(`${username}:${password}`).toString('base64') });
+  }
+  res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
+});
 
 // In-memory log ring buffer for dashboard /api/logs
 const LOG_RING = [];
