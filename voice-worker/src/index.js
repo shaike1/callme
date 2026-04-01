@@ -195,10 +195,10 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
-  geminiApiKey: '',             // never persisted — always falls back to GEMINI_API_KEY env
+  geminiApiKey: '',             // set via dashboard; blank = fall back to GEMINI_API_KEY env
   geminiModel: '',             // blank = use server default
-  openaiApiKey: '',             // never persisted — always falls back to OPENAI_API_KEY env
-  elevenlabsApiKey: '',         // never persisted — always falls back to ELEVENLABS_API_KEY env
+  openaiApiKey: '',             // set via dashboard; blank = fall back to OPENAI_API_KEY env
+  elevenlabsApiKey: '',         // set via dashboard; blank = fall back to ELEVENLABS_API_KEY env
   // Bot "soul" — rules, knowledge, escalation
   rules: '',
   knowledge: '',
@@ -253,20 +253,12 @@ const _settingsFileExisted = fs.existsSync(SETTINGS_FILE);
 try {
   if (_settingsFileExisted) {
     botSettings = { ...defaultSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
-    // Always restore API keys from env (never from disk)
-    botSettings.geminiApiKey = '';
-    botSettings.openaiApiKey = '';
-    botSettings.elevenlabsApiKey = '';
     logger.info('Loaded bot settings from file');
   }
 } catch (_) {}
 
 const saveSettings = () => {
-  try {
-    // Never persist API keys to disk — they live in env vars only
-    const { geminiApiKey, openaiApiKey, elevenlabsApiKey, ...toSave } = botSettings;
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(toSave, null, 2));
-  } catch (_) {}
+  try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(botSettings, null, 2)); } catch (_) {}
 };
 
 // On first run: seed settings file from environment so dashboard manages everything
@@ -288,9 +280,9 @@ app.get('/api/settings', (req, res) => {
     adminUser: botSettings.adminUser || adminUser,
     telegramBotToken: botSettings.telegramBotToken ? '✓ set' : '',
     whatsappApiKey: botSettings.whatsappApiKey ? '✓ set' : '',
-    geminiApiKey: process.env.GEMINI_API_KEY ? '✓ set' : '',
-    openaiApiKey: process.env.OPENAI_API_KEY ? '✓ set' : '',
-    elevenlabsApiKey: process.env.ELEVENLABS_API_KEY ? '✓ set' : '',
+    geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
+    elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   });
 });
 
@@ -361,15 +353,15 @@ app.post('/api/settings', (req, res) => {
   if (toolCalendar !== undefined) botSettings.toolCalendar = toolCalendar;
   if (toolHomeAssistant !== undefined) botSettings.toolHomeAssistant = toolHomeAssistant;
   saveSettings();
-  logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
+  logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***', geminiApiKey: botSettings.geminiApiKey ? '***' : '', openaiApiKey: botSettings.openaiApiKey ? '***' : '', elevenlabsApiKey: botSettings.elevenlabsApiKey ? '***' : '' });
   // Return settings without exposing passwords
   res.json({ success: true, settings: {
     ...botSettings,
     sipPassword: botSettings.sipPassword ? '✓ set' : '',
     adminPass: botSettings.adminPass ? '✓ set' : '',
-    geminiApiKey: process.env.GEMINI_API_KEY ? '✓ set' : '',
-    openaiApiKey: process.env.OPENAI_API_KEY ? '✓ set' : '',
-    elevenlabsApiKey: process.env.ELEVENLABS_API_KEY ? '✓ set' : '',
+    geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
+    elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   }});
 });
 

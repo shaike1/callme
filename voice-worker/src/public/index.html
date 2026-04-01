@@ -450,7 +450,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
       </select>
     </div>
     <div id="gemini-keys-section">
-      <div class="fr"><label>Gemini API Key</label><span id="gemini-key-status" style="font-size:12px;color:#64748b;font-family:'SF Mono','Fira Code',monospace">בודק...</span></div>
+      <div class="fr"><label>Gemini API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-geminiApiKey" type="password" placeholder="(ריק = מ-env)" style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-gemini" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('gemini')" title="מחק מפתח">✕</button></div></div>
       <div class="fr"><label>Gemini Model</label>
         <select id="s-geminiModel">
           <option value="gemini-2.0-flash-live-001">gemini-2.0-flash (מהיר, חינמי)</option>
@@ -459,7 +459,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
       </div>
     </div>
     <div id="openai-keys-section" style="display:none">
-      <div class="fr"><label>OpenAI API Key</label><span id="openai-key-status" style="font-size:12px;color:#64748b;font-family:'SF Mono','Fira Code',monospace">בודק...</span></div>
+      <div class="fr"><label>OpenAI API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-openaiApiKey" type="password" placeholder="sk-..." style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-openai" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('openai')" title="מחק מפתח">✕</button></div></div>
       <div class="fr"><label>Model</label>
         <select id="s-openaiModel">
           <option value="gpt-4o-realtime-preview">gpt-4o-realtime-preview</option>
@@ -1037,9 +1037,9 @@ async function loadSettings() {
     loadDailyCost();
     document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
     document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
-    document.getElementById('gemini-key-status').innerHTML = s.geminiApiKey ? '<span style="color:#4ade80">✓ מוגדר ב-env</span>' : '<span style="color:#f87171">✗ חסר — הגדר GEMINI_API_KEY ב-.env</span>';
+    if (s.geminiApiKey) { document.getElementById('s-geminiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-gemini').style.display = ''; }
     document.getElementById('s-openaiModel').value = s.openaiModel || 'gpt-4o-realtime-preview';
-    if (document.getElementById('openai-key-status')) document.getElementById('openai-key-status').innerHTML = s.openaiApiKey ? '<span style="color:#4ade80">✓ מוגדר ב-env</span>' : '<span style="color:#64748b">לא מוגדר</span>';
+    if (s.openaiApiKey) { document.getElementById('s-openaiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-openai').style.display = ''; }
     onEngineChange();
     document.getElementById('s-persona').value = s.persona || '';
     document.getElementById('s-rules').value = s.rules || '';
@@ -1079,6 +1079,18 @@ async function loadSettings() {
   } catch(e) { console.error(e); }
 }
 
+async function clearApiKey(provider) {
+  if (!confirm('למחוק את ה-API key?')) return;
+  const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey' };
+  const inputMap = { gemini: 's-geminiApiKey', openai: 's-openaiApiKey' };
+  const btnMap = { gemini: 'btn-clear-gemini', openai: 'btn-clear-openai' };
+  await fetch(`${API}/api/settings`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [keyMap[provider]]: '__CLEAR__' }) });
+  document.getElementById(inputMap[provider]).placeholder = '(ריק = ללא)';
+  document.getElementById(inputMap[provider]).value = '';
+  document.getElementById(btnMap[provider]).style.display = 'none';
+  showToast('API key נמחק');
+}
+
 async function loadDailyCost() {
   try {
     const d = await (await fetch(`${API}/api/daily-cost`)).json();
@@ -1100,7 +1112,9 @@ async function saveSettings() {
     aiDailyCostLimitUsd: parseFloat(document.getElementById('s-aiDailyCostLimitUsd').value) || 0,
     aiEngine: document.getElementById('s-aiEngine').value,
     geminiModel: document.getElementById('s-geminiModel').value,
+    geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,
     openaiModel: document.getElementById('s-openaiModel').value,
+    openaiApiKey: document.getElementById('s-openaiApiKey').value || undefined,
     persona: document.getElementById('s-persona').value,
     rules: document.getElementById('s-rules').value,
     knowledge: document.getElementById('s-knowledge').value,
