@@ -7,28 +7,29 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow-x:hidden}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d14;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#1a1a1c;color:#abb2bf;min-height:100vh;display:flex;flex-direction:column}
 
 /* ── Header ── */
-.hdr{background:#12152a;border-bottom:1px solid #1e2545;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
-.hdr h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
-.hdr .sub{font-size:12px;color:#64748b;margin-right:auto}
+.hdr{background:#111;border-bottom:1px solid #2d2d30;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.hdr h1{font-size:18px;font-weight:600;letter-spacing:-.3px;color:#e2e8f0}
+.hdr .sub{font-size:12px;color:#4b5563;margin-right:auto}
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .dot.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
 .dot.off{background:#ef4444;box-shadow:0 0 6px #ef4444}
-.dot.na{background:#64748b}
-.hdr-stat{font-size:12px;color:#94a3b8;padding:4px 10px;background:#1e2545;border-radius:20px;white-space:nowrap}
+.dot.na{background:#374151}
+.hdr-stat{font-size:12px;color:#6b7280;padding:4px 10px;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap}
 
 /* ── Phone Bar ── */
-.phone-bar{background:#12152a;border-bottom:1px solid #1e2545;padding:12px 18px}
+.phone-bar{background:#111;border-bottom:1px solid #2d2d30;padding:12px 18px}
 .phone-inner{max-width:680px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.phone-input{flex:1;min-width:150px;background:#0b0d14;border:1px solid #2d3a52;border-radius:24px;padding:9px 16px;color:#e2e8f0;font-size:14px;outline:none;direction:ltr}
-.phone-input:focus{border-color:#3b82f6}
-.phone-input::placeholder{color:#4a5568;direction:rtl}
-.call-btn{padding:9px 20px;border-radius:24px;border:none;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;transition:all .15s}
-.call-btn.start{background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff}
-.call-btn.start:hover{filter:brightness(1.1)}
-.call-btn.end{background:#dc2626;color:#fff}
+.phone-input{flex:1;min-width:150px;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:8px 14px;color:#e2e8f0;font-size:14px;outline:none;direction:ltr;transition:border-color .15s}
+.phone-input:focus{border-color:#6366f1}
+.phone-input::placeholder{color:#4b5563;direction:rtl}
+.call-btn{padding:8px 18px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;transition:all .15s;background:transparent}
+.call-btn.start{color:#4ade80;border-color:#14532d}
+.call-btn.start:hover{border-color:#4ade80;background:#0a1a0a}
+.call-btn.end{color:#f87171;border-color:#3b1a1a}
+.call-btn.end:hover{border-color:#f87171;background:#1a0a0a}
 .wc-status{font-size:13px;color:#64748b}
 .wc-rms{font-size:11px;color:#22c55e;direction:ltr;min-width:50px}
 .wc-transcript-bar{max-width:680px;margin:8px auto 0;max-height:120px;overflow-y:auto;font-size:12px;line-height:1.6;color:#94a3b8}
@@ -37,16 +38,16 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d14;color:#e2e8f
 /* ── App Grid ── */
 .grid-wrap{flex:1;padding:20px 16px;max-width:780px;margin:0 auto;width:100%}
 .grid-section{margin-bottom:24px}
-.grid-section-title{font-size:11px;font-weight:600;color:#4a5568;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;padding-right:4px}
+.grid-section-title{font-size:11px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;padding-right:4px;font-family:'SF Mono','Fira Code',monospace}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 @media(max-width:500px){.grid{grid-template-columns:repeat(3,1fr);gap:10px}}
 
-.app-tile{background:#12152a;border:1px solid #1e2545;border-radius:16px;padding:16px 10px 12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;user-select:none}
-.app-tile:hover{background:#181d35;border-color:#2d3a5a;transform:translateY(-1px)}
+.app-tile{background:#111;border:1px solid #2d2d30;border-radius:12px;padding:16px 10px 12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;user-select:none}
+.app-tile:hover{background:#161618;border-color:#6366f1;transform:translateY(-1px)}
 .app-tile:active{transform:scale(.96)}
 .app-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
-.app-name{font-size:11px;font-weight:600;color:#94a3b8;text-align:center;line-height:1.3}
-.app-badge{position:absolute;top:8px;left:8px;width:9px;height:9px;border-radius:50%;border:2px solid #12152a}
+.app-name{font-size:11px;font-weight:500;color:#6b7280;text-align:center;line-height:1.3;font-family:'SF Mono','Fira Code',monospace}
+.app-badge{position:absolute;top:8px;left:8px;width:9px;height:9px;border-radius:50%;border:2px solid #111}
 .app-badge.on{background:#22c55e}
 .app-badge.off{background:#ef4444}
 .app-badge.na{background:#374151}
@@ -69,60 +70,63 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d14;color:#e2e8f
 .ic-cyan{background:linear-gradient(135deg,#164e63,#22d3ee)}
 
 /* ── Drawer ── */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
 .overlay.open{opacity:1;pointer-events:all}
-.drawer{position:fixed;bottom:0;left:0;right:0;background:#12152a;border-radius:20px 20px 0 0;z-index:101;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);max-height:88vh;display:flex;flex-direction:column}
+.drawer{position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #2d2d30;border-radius:12px 12px 0 0;z-index:101;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);max-height:88vh;display:flex;flex-direction:column}
 .drawer.open{transform:translateY(0)}
-.drawer-handle{width:36px;height:4px;background:#2d3a52;border-radius:2px;margin:10px auto 0}
-.drawer-header{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2545;flex-shrink:0}
-.drawer-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px}
-.drawer-close{width:30px;height:30px;background:#1e2545;border:none;color:#94a3b8;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.drawer-handle{width:36px;height:3px;background:#2d2d30;border-radius:2px;margin:10px auto 0}
+.drawer-header{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2d2d30;flex-shrink:0}
+.drawer-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px;color:#e2e8f0}
+.drawer-close{width:28px;height:28px;background:transparent;border:1px solid #2d2d30;color:#6b7280;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+.drawer-close:hover{border-color:#6366f1;color:#e2e8f0}
 .drawer-body{padding:16px 20px;overflow-y:auto;flex:1}
-.drawer-footer{padding:12px 20px;border-top:1px solid #1e2545;flex-shrink:0;display:flex;gap:8px;justify-content:flex-end}
+.drawer-footer{padding:12px 20px;border-top:1px solid #2d2d30;flex-shrink:0;display:flex;gap:8px;justify-content:flex-end}
 
 /* ── Forms ── */
 .fr{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;align-items:center;margin-bottom:10px}
-.fr label{font-size:12px;color:#64748b}
-input,select,textarea{width:100%;background:#0b0d14;border:1px solid #2d3a52;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;outline:none}
-input:focus,select:focus,textarea:focus{border-color:#3b82f6}
+.fr label{font-size:12px;color:#4b5563;font-family:'SF Mono','Fira Code',monospace}
+input,select,textarea{width:100%;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:8px 12px;color:#e2e8f0;font-size:13px;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:#6366f1}
 textarea{resize:vertical;min-height:72px;font-family:inherit}
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e2545}
-.toggle-row label{font-size:13px;color:#94a3b8}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2d2d30}
+.toggle-row label{font-size:13px;color:#6b7280}
 .switch{position:relative;display:inline-block;width:42px;height:24px}
 .switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;inset:0;background:#2d3a52;border-radius:24px;transition:.3s;cursor:pointer}
-.slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.slider{position:absolute;inset:0;background:#2d2d30;border-radius:24px;transition:.3s;cursor:pointer}
+.slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#888;border-radius:50%;transition:.3s}
 .switch input:checked + .slider{background:#22c55e}
-.switch input:checked + .slider:before{transform:translateX(18px)}
-.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
-.btn:hover{opacity:.85}
-.btn-p{background:#3b82f6;color:#fff}
-.btn-d{background:#ef4444;color:#fff}
-.btn-g{background:#1e2545;color:#e2e8f0}
-.btn-sm{padding:5px 12px;font-size:12px}
-.section-hint{background:#0b1629;border-radius:8px;padding:10px 12px;font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6}
+.switch input:checked + .slider:before{transform:translateX(18px);background:#fff}
+.btn{padding:7px 16px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:transparent;color:#abb2bf}
+.btn:hover{border-color:#6366f1;color:#e2e8f0}
+.btn-p{background:transparent;color:#818cf8;border-color:#3730a3}
+.btn-p:hover{background:#1a1a2e;border-color:#6366f1;color:#e2e8f0}
+.btn-d{background:transparent;color:#f87171;border-color:#3b1a1a}
+.btn-d:hover{background:#1a0a0a;border-color:#f87171}
+.btn-g{background:transparent;color:#6b7280;border-color:#2d2d30}
+.btn-sm{padding:4px 10px;font-size:12px}
+.section-hint{background:#111;border:1px solid #2d2d30;border-radius:4px;padding:10px 12px;font-size:12px;color:#4b5563;margin-bottom:12px;line-height:1.6}
 .status-line{font-size:12px;min-height:16px;margin-top:8px}
 .ok{color:#22c55e} .err{color:#ef4444} .warn{color:#f59e0b}
 
 /* ── Active Calls ── */
-.call-item{background:#0b0d14;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px}
+.call-item{background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px}
 .call-dur{color:#3b82f6;font-weight:600;white-space:nowrap}
 
 /* ── Contacts / Scheduler rows ── */
-.list-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1e2545}
+.list-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #2d2d30}
 .list-row:last-child{border-bottom:none}
 
 /* ── Logs ── */
-#logs{background:#070910;border-radius:8px;padding:10px 12px;height:220px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;line-height:1.6;word-break:break-all}
+#logs{background:#0a0a0a;border:1px solid #2d2d30;border-radius:4px;padding:10px 12px;height:220px;overflow-y:auto;font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:11px;line-height:1.6;word-break:break-all}
 .log-info{color:#3b82f6}.log-warn{color:#f59e0b}.log-error{color:#ef4444}.log-debug{color:#374151}
 
 /* ── IVR ── */
-.ivr-node{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#0b1629;border-radius:8px}
+.ivr-node{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#111;border:1px solid #2d2d30;border-radius:4px}
 
 /* ── Toast ── */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #4ade80;color:#4ade80;padding:8px 20px;border-radius:4px;font-size:13px;font-family:'SF Mono','Fira Code',monospace;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
 .toast.show{opacity:1}
-.toast.error{background:#ef4444}
+.toast.error{border-color:#f87171;color:#f87171;background:#111}
 
 @media(max-width:480px){
   .fr{grid-template-columns:1fr}
@@ -142,9 +146,9 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
   <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
   <span class="hdr-stat" id="uptime"></span>
   <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
-  <button onclick="toggleLang()" style="font-size:12px;color:#60a5fa;background:none;border:1px solid #1e2545;border-radius:20px;padding:5px 12px;cursor:pointer;white-space:nowrap" id="lang-btn">EN</button>
-  <a href="/setup" style="font-size:12px;color:#60a5fa;text-decoration:none;padding:5px 12px;border:1px solid #1e2545;border-radius:20px;white-space:nowrap">⚙️ Setup</a>
-  <button onclick="doLogout()" title="התנתק" style="font-size:13px;color:#ef4444;background:none;border:1px solid #3a1f1f;border-radius:20px;padding:5px 10px;cursor:pointer">🚪</button>
+  <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
+  <a href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
+  <button onclick="doLogout()" title="התנתק" style="font-size:12px;color:#f87171;background:transparent;border:1px solid #3b1a1a;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace">exit</button>
 </div>
 
 <!-- Phone Bar -->
