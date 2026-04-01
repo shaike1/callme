@@ -3,113 +3,392 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CallMe Bot — Dashboard</title>
+<title>CallMe Bot</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { overflow-x: hidden; max-width: 100vw; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
-  header { background: #1a1d2e; border-bottom: 1px solid #2d3148; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 20px; font-weight: 600; }
-  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; flex-shrink: 0; }
-  .status-dot.offline { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
-  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; width: 100%; }
-  .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 12px; padding: 20px; }
-  .card h2 { font-size: 14px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
-  .stat { background: #0f1117; border-radius: 8px; padding: 12px; text-align: center; }
-  .stat .val { font-size: 28px; font-weight: 700; color: #60a5fa; }
-  .stat .lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
-  .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; align-items: start; margin-bottom: 12px; }
-  .form-row label { font-size: 13px; color: #94a3b8; padding-top: 8px; }
-  input, select, textarea { width: 100%; max-width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
-  input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
-  textarea { resize: vertical; min-height: 80px; font-family: inherit; }
-  .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: #3b82f6; color: #fff; }
-  .btn-danger { background: #ef4444; color: #fff; }
-  .btn-sm { padding: 5px 12px; font-size: 12px; }
-  .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
-  .toast.show { opacity: 1; }
-  .toast.error { background: #ef4444; }
-  #logs { background: #0a0c14; border-radius: 8px; padding: 12px; height: 280px; overflow-y: auto; overflow-x: hidden; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; word-break: break-all; }
-  .card { overflow: hidden; }
-  .log-info { color: #60a5fa; }
-  .log-warn { color: #f59e0b; }
-  .log-error { color: #ef4444; }
-  .log-debug { color: #64748b; }
-  .active-calls { display: flex; flex-direction: column; gap: 8px; }
-  .call-item { background: #0f1117; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
-  .call-item .call-id { font-family: monospace; color: #94a3b8; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
-  .call-item .call-dur { color: #60a5fa; font-weight: 600; white-space: nowrap; }
-  #no-calls { color: #64748b; font-size: 13px; text-align: center; padding: 20px; }
-  .chat-box { display: flex; gap: 8px; margin-top: 12px; }
-  .chat-box input { flex: 1; }
-  #chat-out { background: #0a0c14; border-radius: 8px; padding: 12px; min-height: 80px; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap; }
-  .conn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-  .conn-item { background: #0f1117; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 10px; }
-  .conn-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .conn-dot.ok { background: #22c55e; box-shadow: 0 0 5px #22c55e; }
-  .conn-dot.err { background: #ef4444; box-shadow: 0 0 5px #ef4444; }
-  .conn-dot.na { background: #64748b; }
-  .conn-item .conn-label { font-size: 13px; font-weight: 600; }
-  .conn-item .conn-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
-  @media (max-width: 600px) {
-    .container { padding: 12px 10px; gap: 14px; }
-    .card { padding: 14px 12px; }
-    .form-row { grid-template-columns: 1fr; gap: 4px; }
-    .form-row label { padding-top: 0; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .conn-grid { grid-template-columns: repeat(2, 1fr); }
-    .btn-row { justify-content: stretch; }
-    .btn-row .btn { flex: 1; }
-    header { padding: 12px 14px; }
-    header h1 { font-size: 17px; }
-    #uptime { display: none; }
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d14;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+.hdr{background:#12152a;border-bottom:1px solid #1e2545;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.hdr h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.hdr .sub{font-size:12px;color:#64748b;margin-right:auto}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.dot.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
+.dot.off{background:#ef4444;box-shadow:0 0 6px #ef4444}
+.dot.na{background:#64748b}
+.hdr-stat{font-size:12px;color:#94a3b8;padding:4px 10px;background:#1e2545;border-radius:20px;white-space:nowrap}
+
+/* ── Phone Bar ── */
+.phone-bar{background:#12152a;border-bottom:1px solid #1e2545;padding:12px 18px}
+.phone-inner{max-width:680px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phone-input{flex:1;min-width:150px;background:#0b0d14;border:1px solid #2d3a52;border-radius:24px;padding:9px 16px;color:#e2e8f0;font-size:14px;outline:none;direction:ltr}
+.phone-input:focus{border-color:#3b82f6}
+.phone-input::placeholder{color:#4a5568;direction:rtl}
+.call-btn{padding:9px 20px;border-radius:24px;border:none;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;transition:all .15s}
+.call-btn.start{background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff}
+.call-btn.start:hover{filter:brightness(1.1)}
+.call-btn.end{background:#dc2626;color:#fff}
+.wc-status{font-size:13px;color:#64748b}
+.wc-rms{font-size:11px;color:#22c55e;direction:ltr;min-width:50px}
+.wc-transcript-bar{max-width:680px;margin:8px auto 0;max-height:120px;overflow-y:auto;font-size:12px;line-height:1.6;color:#94a3b8}
+.wc-transcript-bar div{padding:2px 0}
+
+/* ── App Grid ── */
+.grid-wrap{flex:1;padding:20px 16px;max-width:780px;margin:0 auto;width:100%}
+.grid-section{margin-bottom:24px}
+.grid-section-title{font-size:11px;font-weight:600;color:#4a5568;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;padding-right:4px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:500px){.grid{grid-template-columns:repeat(3,1fr);gap:10px}}
+
+.app-tile{background:#12152a;border:1px solid #1e2545;border-radius:16px;padding:16px 10px 12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;user-select:none}
+.app-tile:hover{background:#181d35;border-color:#2d3a5a;transform:translateY(-1px)}
+.app-tile:active{transform:scale(.96)}
+.app-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+.app-name{font-size:11px;font-weight:600;color:#94a3b8;text-align:center;line-height:1.3}
+.app-badge{position:absolute;top:8px;left:8px;width:9px;height:9px;border-radius:50%;border:2px solid #12152a}
+.app-badge.on{background:#22c55e}
+.app-badge.off{background:#ef4444}
+.app-badge.na{background:#374151}
+
+/* Icon colors */
+.ic-blue{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.ic-green{background:linear-gradient(135deg,#15803d,#22c55e)}
+.ic-haBlue{background:linear-gradient(135deg,#c2410c,#f97316)}
+.ic-purple{background:linear-gradient(135deg,#7e22ce,#a855f7)}
+.ic-red{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+.ic-teal{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+.ic-sky{background:linear-gradient(135deg,#0369a1,#38bdf8)}
+.ic-haBlue{background:linear-gradient(135deg,#1565c0,#41bdf5)}
+.ic-lime{background:linear-gradient(135deg,#4d7c0f,#84cc16)}
+.ic-amber{background:linear-gradient(135deg,#b45309,#f59e0b)}
+.ic-pink{background:linear-gradient(135deg,#be185d,#ec4899)}
+.ic-indigo{background:linear-gradient(135deg,#3730a3,#6366f1)}
+.ic-gray{background:linear-gradient(135deg,#374151,#6b7280)}
+.ic-rose{background:linear-gradient(135deg,#9f1239,#fb7185)}
+.ic-cyan{background:linear-gradient(135deg,#164e63,#22d3ee)}
+
+/* ── Drawer ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;bottom:0;left:0;right:0;background:#12152a;border-radius:20px 20px 0 0;z-index:101;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);max-height:88vh;display:flex;flex-direction:column}
+.drawer.open{transform:translateY(0)}
+.drawer-handle{width:36px;height:4px;background:#2d3a52;border-radius:2px;margin:10px auto 0}
+.drawer-header{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2545;flex-shrink:0}
+.drawer-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px}
+.drawer-close{width:30px;height:30px;background:#1e2545;border:none;color:#94a3b8;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.drawer-body{padding:16px 20px;overflow-y:auto;flex:1}
+.drawer-footer{padding:12px 20px;border-top:1px solid #1e2545;flex-shrink:0;display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Forms ── */
+.fr{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;align-items:center;margin-bottom:10px}
+.fr label{font-size:12px;color:#64748b}
+input,select,textarea{width:100%;background:#0b0d14;border:1px solid #2d3a52;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#3b82f6}
+textarea{resize:vertical;min-height:72px;font-family:inherit}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e2545}
+.toggle-row label{font-size:13px;color:#94a3b8}
+.switch{position:relative;display:inline-block;width:42px;height:24px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#2d3a52;border-radius:24px;transition:.3s;cursor:pointer}
+.slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.switch input:checked + .slider{background:#22c55e}
+.switch input:checked + .slider:before{transform:translateX(18px)}
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-p{background:#3b82f6;color:#fff}
+.btn-d{background:#ef4444;color:#fff}
+.btn-g{background:#1e2545;color:#e2e8f0}
+.btn-sm{padding:5px 12px;font-size:12px}
+.section-hint{background:#0b1629;border-radius:8px;padding:10px 12px;font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6}
+.status-line{font-size:12px;min-height:16px;margin-top:8px}
+.ok{color:#22c55e} .err{color:#ef4444} .warn{color:#f59e0b}
+
+/* ── Active Calls ── */
+.call-item{background:#0b0d14;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px}
+.call-dur{color:#3b82f6;font-weight:600;white-space:nowrap}
+
+/* ── Contacts / Scheduler rows ── */
+.list-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1e2545}
+.list-row:last-child{border-bottom:none}
+
+/* ── Logs ── */
+#logs{background:#070910;border-radius:8px;padding:10px 12px;height:220px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;line-height:1.6;word-break:break-all}
+.log-info{color:#3b82f6}.log-warn{color:#f59e0b}.log-error{color:#ef4444}.log-debug{color:#374151}
+
+/* ── IVR ── */
+.ivr-node{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#0b1629;border-radius:8px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+.toast.error{background:#ef4444}
+
+@media(max-width:480px){
+  .fr{grid-template-columns:1fr}
+  .fr label{margin-bottom:0}
+  .hdr-stat{display:none}
+  .phone-inner{flex-direction:column;align-items:stretch}
+  .call-btn{justify-content:center}
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="status-dot" id="status-dot"></div>
-  <h1>CallMe Bot</h1>
-  <span id="status-text" style="font-size:13px;color:#64748b;margin-right:auto">בודק...</span>
-  <span id="uptime" style="font-size:12px;color:#64748b"></span>
-  <a href="/setup" style="font-size:12px;color:#60a5fa;text-decoration:none;padding:5px 12px;border:1px solid #2d3148;border-radius:6px">⚙️ Wizard</a>
-</header>
 
-<div class="container">
+<!-- Header -->
+<div class="hdr">
+  <div class="dot na" id="status-dot"></div>
+  <h1>📞 CallMe Bot</h1>
+  <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
+  <span class="hdr-stat" id="uptime"></span>
+  <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
+  <button onclick="toggleLang()" style="font-size:12px;color:#60a5fa;background:none;border:1px solid #1e2545;border-radius:20px;padding:5px 12px;cursor:pointer;white-space:nowrap" id="lang-btn">EN</button>
+  <a href="/setup" style="font-size:12px;color:#60a5fa;text-decoration:none;padding:5px 12px;border:1px solid #1e2545;border-radius:20px;white-space:nowrap">⚙️ Setup</a>
+</div>
 
-  <!-- Stats -->
-  <div class="card">
-    <h2>סטטיסטיקות</h2>
-    <div class="stats-grid">
-      <div class="stat"><div class="val" id="stat-total">—</div><div class="lbl">סה"כ שיחות</div></div>
-      <div class="stat"><div class="val" id="stat-active">—</div><div class="lbl">שיחות פעילות</div></div>
-      <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl">ממוצע (שניות)</div></div>
-      <div class="stat"><div class="val" id="stat-errors">—</div><div class="lbl">שגיאות</div></div>
+<!-- Phone Bar -->
+<div class="phone-bar">
+  <div class="phone-inner">
+    <input class="phone-input" id="phone-target" data-i18n-ph="phonePh" placeholder="מספר יעד (ריק = בוט AI)" maxlength="80">
+    <button class="call-btn start" id="webcall-btn" onclick="handleCallBtn()">
+      <span id="wcb-icon">📞</span>
+      <span id="wcb-label" data-i18n="startCall">התחל שיחה</span>
+    </button>
+    <button class="call-btn end" id="hangup-btn" onclick="hangupCall()" style="display:none">⏹ <span data-i18n="hangup">נתק</span></button>
+    <span class="wc-status" id="webcall-status" data-i18n="notConnected">לא מחובר</span>
+    <span class="wc-rms" id="webcall-rms"></span>
+  </div>
+  <div class="wc-transcript-bar" id="webcall-transcript"></div>
+</div>
+
+<!-- App Grid -->
+<div class="grid-wrap">
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secCalls">שיחות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-status')">
+        <div class="app-badge na" id="badge-status"></div>
+        <div class="app-icon ic-blue">📊</div>
+        <div class="app-name" data-i18n="appStatus">סטטוס</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-calls')">
+        <div class="app-badge na" id="badge-calls"></div>
+        <div class="app-icon ic-green">📞</div>
+        <div class="app-name" data-i18n="appActiveCalls">שיחות פעילות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-recordings')">
+        <div class="app-icon ic-gray">📝</div>
+        <div class="app-name" data-i18n="appTranscripts">תמלולים</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-voicemails')">
+        <div class="app-icon ic-rose">🎙️</div>
+        <div class="app-name" data-i18n="appVoicemail">הודעות קוליות</div>
+      </div>
     </div>
   </div>
 
-  <!-- Connection Status -->
-  <div class="card">
-    <h2>סטטוס חיבורים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadStatus()">רענן</button></h2>
-    <div class="conn-grid" id="conn-grid">
-      <div class="conn-item"><div class="conn-dot na" id="cs-dot-drachtio"></div><div><div class="conn-label">Drachtio SIP</div><div class="conn-sub" id="cs-sub-drachtio">בודק...</div></div></div>
-      <div class="conn-item"><div class="conn-dot na" id="cs-dot-sip"></div><div><div class="conn-label" id="cs-label-sip">SIP Trunk</div><div class="conn-sub" id="cs-sub-sip">בודק...</div></div></div>
-      <div class="conn-item"><div class="conn-dot na" id="cs-dot-teamy"></div><div><div class="conn-label">Teamy</div><div class="conn-sub" id="cs-sub-teamy">לא מוגדר</div></div></div>
-      <div class="conn-item"><div class="conn-dot na" id="cs-dot-openclaw"></div><div><div class="conn-label">OpenClaw</div><div class="conn-sub" id="cs-sub-openclaw">לא מוגדר</div></div></div>
-      <div class="conn-item"><div class="conn-dot na" id="cs-dot-ha"></div><div><div class="conn-label">Home Assistant</div><div class="conn-sub" id="cs-sub-ha">לא מוגדר</div></div></div>
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secSettings">הגדרות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-bot')">
+        <div class="app-icon ic-purple">🤖</div>
+        <div class="app-name">AI Bot</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-sip')">
+        <div class="app-badge na" id="badge-sip"></div>
+        <div class="app-icon ic-green">☎️</div>
+        <div class="app-name">SIP Trunk</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-ivr')">
+        <div class="app-icon ic-lime" style="font-size:28px">🔀</div>
+        <div class="app-name">IVR</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-dialer')">
+        <div class="app-icon ic-sky">🔢</div>
+        <div class="app-name" data-i18n="appDialer">חייגן</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-contacts')">
+        <div class="app-icon ic-pink">👥</div>
+        <div class="app-name" data-i18n="appContacts">אנשי קשר</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-scheduler')">
+        <div class="app-icon ic-amber">⏰</div>
+        <div class="app-name" data-i18n="appScheduler">מתזמן</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-security')">
+        <div class="app-icon ic-gray">🔒</div>
+        <div class="app-name" data-i18n="appSecurity">אבטחה</div>
+      </div>
     </div>
   </div>
 
-  <!-- Settings -->
-  <div class="card">
-    <h2>הגדרות בוט</h2>
-    <div class="form-row"><label>שם</label><input id="s-name" placeholder="CallMe Bot"></div>
-    <div class="form-row"><label>ברכה</label><input id="s-greeting" placeholder="שלום!"></div>
-    <div class="form-row"><label>קול</label>
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secIntegrations">אינטגרציות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-ha')">
+        <div class="app-badge na" id="badge-ha"></div>
+        <div class="app-icon ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Home Assistant</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-openclaw')">
+        <div class="app-badge na" id="badge-openclaw"></div>
+        <div class="app-icon ic-purple" style="font-size:28px">🦞</div>
+        <div class="app-name">OpenClaw</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-teamy')">
+        <div class="app-badge na" id="badge-teamy"></div>
+        <div class="app-icon ic-sky"><img src="https://cdn.simpleicons.org/microsoftteams/ffffff" style="width:30px;height:30px" onerror="this.replaceWith(document.createTextNode('🤝'))"></div>
+        <div class="app-name">Teamy</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-telegram')">
+        <div class="app-icon ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Telegram</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-whatsapp')">
+        <div class="app-icon ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">WhatsApp</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-calendar')">
+        <div class="app-icon ic-indigo"><img src="https://cdn.simpleicons.org/googlecalendar/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Google Calendar</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-twilio')">
+        <div class="app-icon ic-red"><img src="https://www.twilio.com/assets/icons/twilio-icon-red.svg" style="width:30px;height:30px" onerror="this.outerHTML='<span style=\'font-size:18px;font-weight:900;color:#fff;font-family:sans-serif\'>T</span>'"></div>
+        <div class="app-name">Twilio DID</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-vonage')">
+        <div class="app-icon ic-teal"><img src="https://cdn.simpleicons.org/vonage/ffffff" style="width:30px;height:30px" onerror="this.style.display='none';this.parentElement.insertAdjacentText('beforeend','📞')"></div>
+        <div class="app-name">Vonage DID</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secSystem">מערכת</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-logs')">
+        <div class="app-icon ic-gray">📋</div>
+        <div class="app-name" data-i18n="appLogs">לוגים</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-chat')">
+        <div class="app-icon ic-cyan">💭</div>
+        <div class="app-name" data-i18n="appChat">צ'אט בדיקה</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /grid-wrap -->
+
+<!-- Overlay -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+
+<!-- ─────────────── DRAWERS ─────────────── -->
+
+<!-- Status / Stats -->
+<div class="drawer" id="panel-status">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-blue" style="width:36px;height:36px;font-size:18px;border-radius:10px">📊</span> סטטוס מערכת</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#3b82f6" id="stat-total">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">סה"כ שיחות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#22c55e" id="stat-active">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">שיחות פעילות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#f59e0b" id="stat-avg">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">ממוצע שניות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#ef4444" id="stat-errors">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">שגיאות</div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:10px">חיבורים</div>
+    <div id="conn-grid" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-drachtio"></div>
+        <div><div style="font-size:13px;font-weight:600">Drachtio SIP</div><div style="font-size:11px;color:#64748b" id="cs-sub-drachtio">בודק...</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-sip"></div>
+        <div><div style="font-size:13px;font-weight:600" id="cs-label-sip">SIP Trunk</div><div style="font-size:11px;color:#64748b" id="cs-sub-sip">בודק...</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-teamy"></div>
+        <div><div style="font-size:13px;font-weight:600">Teamy</div><div style="font-size:11px;color:#64748b" id="cs-sub-teamy">לא מוגדר</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-openclaw"></div>
+        <div><div style="font-size:13px;font-weight:600">OpenClaw</div><div style="font-size:11px;color:#64748b" id="cs-sub-openclaw">לא מוגדר</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-ha"></div>
+        <div><div style="font-size:13px;font-weight:600">Home Assistant</div><div style="font-size:11px;color:#64748b" id="cs-sub-ha">לא מוגדר</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="refresh()">רענן</button>
+  </div>
+</div>
+
+<!-- Active Calls -->
+<div class="drawer" id="panel-calls">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">📞</span> שיחות פעילות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="active-calls-list"><em style="color:#64748b">אין שיחות פעילות כרגע</em></div>
+  </div>
+</div>
+
+<!-- Recordings -->
+<div class="drawer" id="panel-recordings">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">📝</span> תמלולים</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="recordings-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer"><button class="btn btn-g" onclick="loadRecordings()">רענן</button></div>
+</div>
+
+<!-- Voicemails -->
+<div class="drawer" id="panel-voicemails">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-rose" style="width:36px;height:36px;font-size:18px;border-radius:10px">🎙️</span> הודעות קוליות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="voicemails-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer"><button class="btn btn-g" onclick="loadVoicemails()">רענן</button></div>
+</div>
+
+<!-- Bot Settings -->
+<div class="drawer" id="panel-bot">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;font-size:18px;border-radius:10px">🤖</span> הגדרות AI Bot</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>שם הבוט</label><input id="s-name" placeholder="CallMe Bot"></div>
+    <div class="fr"><label>ברכה</label><input id="s-greeting" placeholder="שלום!"></div>
+    <div class="fr"><label>קול</label>
       <select id="s-voice">
         <option value="Kore">Kore (נקבה)</option>
         <option value="Aoede">Aoede (נקבה)</option>
@@ -119,26 +398,31 @@
         <option value="Fenrir">Fenrir (זכר)</option>
       </select>
     </div>
-    <div class="form-row"><label>שפה</label>
+    <div class="fr"><label>שפה</label>
       <select id="s-language">
         <option value="he">עברית</option>
         <option value="en">אנגלית</option>
         <option value="ar">ערבית</option>
       </select>
     </div>
-    <div class="form-row"><label>Persona</label><textarea id="s-persona" rows="4"></textarea></div>
-    <div class="form-row">
-      <label>Webhook URL <span style="color:#64748b;font-weight:normal">(call events)</span></label>
-      <input id="s-callWebhookUrl" placeholder="https://your-server/webhook" style="direction:ltr">
-    </div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:10px">POST JSON לכתובת זו בכל call.started / call.ended / call.failed</div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button></div>
+    <div class="fr"><label>Persona</label><textarea id="s-persona" rows="4"></textarea></div>
+    <div class="fr"><label>Webhook URL</label><input id="s-callWebhookUrl" placeholder="https://..." style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">POST JSON: call.started / call.ended / call.failed</div>
   </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveSettings()">שמור</button>
+  </div>
+</div>
 
-  <!-- SIP Trunk -->
-  <div class="card">
-    <h2>SIP Trunk — ספק טלפוני</h2>
-    <div class="form-row"><label>ספק</label>
+<!-- SIP Trunk -->
+<div class="drawer" id="panel-sip">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">☎️</span> SIP Trunk</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>ספק</label>
       <select id="s-sipProvider" onchange="onProviderChange()">
         <option value="">— בחר ספק —</option>
         <option value="3cx">3CX (נוכחי)</option>
@@ -147,317 +431,363 @@
         <option value="custom">Custom SIP</option>
       </select>
     </div>
-    <div id="sip-help" style="font-size:12px;color:#60a5fa;margin-bottom:12px;display:none"></div>
-    <div class="form-row"><label>SIP Server / Domain</label><input id="s-sipServer" placeholder="sip.zadarma.com"></div>
-    <div class="form-row"><label>SIP Registrar</label><input id="s-sipRegistrar" placeholder="sip.zadarma.com"></div>
-    <div class="form-row"><label>Extension / Username</label><input id="s-sipExtension" placeholder="12345"></div>
-    <div class="form-row"><label>Auth ID</label><input id="s-sipAuthId" placeholder="12345"></div>
-    <div class="form-row"><label>סיסמה</label><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)"></div>
-    <div class="form-row"><label>מספר DID</label><input id="s-sipDid" placeholder="+972501234567"></div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:12px">שינוי הגדרות SIP ייכנס לתוקף בהפעלה הבאה של הבוט.</div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות SIP</button></div>
+    <div id="sip-help" style="font-size:12px;color:#3b82f6;margin-bottom:10px;display:none"></div>
+    <div class="fr"><label>SIP Server</label><input id="s-sipServer" placeholder="sip.zadarma.com" style="direction:ltr"></div>
+    <div class="fr"><label>Registrar</label><input id="s-sipRegistrar" placeholder="sip.zadarma.com" style="direction:ltr"></div>
+    <div class="fr"><label>Extension</label><input id="s-sipExtension" placeholder="12345" style="direction:ltr"></div>
+    <div class="fr"><label>Auth ID</label><input id="s-sipAuthId" placeholder="12345" style="direction:ltr"></div>
+    <div class="fr"><label>סיסמה</label><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="fr"><label>DID</label><input id="s-sipDid" placeholder="+972501234567" style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b">שינויים ייכנסו לתוקף בהפעלה הבאה.</div>
   </div>
-
-  <!-- Admin credentials -->
-  <div class="card">
-    <h2>אבטחה — כניסה לדשבורד</h2>
-    <div class="form-row"><label>שם משתמש</label><input id="s-adminUser" placeholder="admin"></div>
-    <div class="form-row"><label>סיסמה חדשה</label><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)"></div>
-    <div class="form-row"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה החדשה"></div>
-    <div id="admin-pass-status" style="font-size:12px;min-height:16px;color:#94a3b8;margin-bottom:10px"></div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="saveAdminCreds()">שמור פרטי כניסה</button></div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveSettings()">שמור</button>
   </div>
+</div>
 
-  <!-- Integrations -->
-  <div class="card">
-    <h2>אינטגרציות</h2>
-
-    <!-- Teamy -->
-    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span style="font-size:16px">🤝</span>
-        <span style="font-weight:600;font-size:14px">Teamy — Teams Meeting Bot</span>
-        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="int-teamy-enabled" onchange="saveIntegrations()"> פעיל
-        </label>
-        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('teamy')">בדוק חיבור</button>
-      </div>
-      <div class="form-row"><label>Teamy Server URL</label><input id="int-teamy-url" placeholder="http://100.64.0.12:3069" onblur="saveIntegrations()"></div>
-      <div class="form-row"><label>API Token (אם נדרש)</label><input id="int-teamy-token" type="password" placeholder="(ריק = ללא auth)" onblur="saveIntegrations()"></div>
-      <div style="font-size:12px;color:#64748b">כאשר פעיל: CallMe Bot ישמש כ-voice engine של Teamy. Teamy ימשיך לנהל פגישות Teams, CallMe Bot יספק קול Gemini Live.</div>
-    </div>
-
-    <!-- OpenClaw -->
-    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span style="font-size:16px">🧠</span>
-        <span style="font-weight:600;font-size:14px">OpenClaw — AI Gateway</span>
-        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="int-openclaw-enabled" onchange="saveIntegrations()"> פעיל
-        </label>
-        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('openclaw')">בדוק חיבור</button>
-      </div>
-      <div class="form-row"><label>OpenClaw URL</label><input id="int-openclaw-url" placeholder="http://127.0.0.1:18790" onblur="saveIntegrations()"></div>
-      <div class="form-row"><label>API Token</label><input id="int-openclaw-token" type="password" placeholder="token" onblur="saveIntegrations()"></div>
-      <div style="font-size:12px;color:#64748b">כאשר פעיל: הבוט יוכל לקרוא לOpenClaw כ-tool בזמן שיחה (חיפוש מידע, ביצוע פעולות).</div>
-    </div>
-
-    <!-- Home Assistant -->
-    <div style="border:1px solid #2d3148;border-radius:8px;padding:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span style="font-size:16px">🏠</span>
-        <span style="font-weight:600;font-size:14px">Home Assistant</span>
-        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="int-ha-enabled" onchange="saveIntegrations()"> פעיל
-        </label>
-        <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testIntegration('ha')">בדוק חיבור</button>
-      </div>
-      <div class="form-row"><label>HA URL</label><input id="int-ha-url" placeholder="http://homeassistant.local:8123" onblur="saveIntegrations()"></div>
-      <div class="form-row"><label>Long-lived Token</label><input id="int-ha-token" type="password" placeholder="eyJ..." onblur="saveIntegrations()"></div>
-      <div class="form-row"><label>Webhook ID (נכנס)</label><input id="int-ha-webhook" placeholder="callme_webhook" onblur="saveIntegrations()"></div>
-      <div style="font-size:12px;color:#64748b">כאשר פעיל: HA יכול להפעיל שיחה יוצאת. הבוט יכול לשלוח אירועים ל-HA.</div>
-    </div>
-    <div id="int-status" style="font-size:12px;color:#22c55e;margin-top:10px;min-height:16px"></div>
+<!-- IVR -->
+<div class="drawer" id="panel-ivr">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-lime" style="width:36px;height:36px;font-size:20px;border-radius:10px">🔀</span> IVR Builder</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
   </div>
+  <div class="drawer-body">
+    <div class="section-hint">כשמתקבלת שיחה נכנסת, הבוט ינגן תפריט ויחכה ללחיצת מקש.</div>
+    <div class="toggle-row">
+      <label>הפעל IVR</label>
+      <label class="switch"><input type="checkbox" id="ivr-enabled"><span class="slider"></span></label>
+    </div>
+    <div class="fr" style="margin-top:10px"><label>הודעת פתיחה</label><textarea id="ivr-greeting" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="flex:1"><label style="font-size:12px;color:#64748b">Timeout (שניות)</label>
+        <input id="ivr-timeout" type="number" min="3" max="30" value="5">
+      </div>
+      <div style="flex:1"><label style="font-size:12px;color:#64748b">אם אין לחיצה</label>
+        <select id="ivr-timeout-action">
+          <option value="ai">שיחה עם הבוט</option>
+          <option value="voicemail">קח הודעה</option>
+          <option value="hangup">נתק</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px">מקשים:</div>
+    <div id="ivr-nodes-list"></div>
+    <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="addIvrNode()">+ הוסף מקש</button>
+    <div class="status-line ok" id="ivr-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveIvr()">שמור IVR</button>
+  </div>
+</div>
 
-  <!-- Contacts -->
-  <div class="card">
-    <h2>אנשי קשר</h2>
+<!-- Dialer -->
+<div class="drawer" id="panel-dialer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔢</span> חייגן SIP</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>מספר / SIP URI</label><input id="dial-target" placeholder="05XXXXXXXX או sip:ext@domain" style="direction:ltr"></div>
+    <div class="fr"><label>Caller ID</label><input id="dial-from" placeholder="ברירת מחדל: הגדרות SIP" style="direction:ltr"></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-p" id="dial-btn" onclick="dialOut()">📞 התקשר</button>
+      <button class="btn btn-d" id="hangup-btn2" onclick="hangupSipCall()" style="display:none">⏹ נתק</button>
+    </div>
+    <div class="status-line" id="dial-status"></div>
+  </div>
+</div>
+
+<!-- Contacts -->
+<div class="drawer" id="panel-contacts">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-pink" style="width:36px;height:36px;font-size:18px;border-radius:10px">👥</span> אנשי קשר</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <input id="c-name" placeholder="שם" style="flex:1;min-width:100px">
-      <input id="c-phone" placeholder="מספר / SIP URI" style="flex:2;min-width:140px;direction:ltr">
-      <button class="btn btn-primary btn-sm" onclick="addContact()">הוסף</button>
+      <input id="c-name" placeholder="שם" style="flex:1;min-width:90px">
+      <input id="c-phone" placeholder="מספר / SIP URI" style="flex:2;min-width:120px;direction:ltr">
+      <button class="btn btn-p btn-sm" onclick="addContact()">הוסף</button>
     </div>
-    <div id="contacts-list" style="font-size:13px;color:#94a3b8">טוען...</div>
+    <div id="contacts-list" style="font-size:13px;color:#64748b">טוען...</div>
   </div>
+</div>
 
-  <!-- Scheduler -->
-  <div class="card">
-    <h2>שיחות מתוזמנות</h2>
-    <div style="background:#0f1117;border-radius:8px;padding:12px;margin-bottom:12px">
-      <div class="form-row"><label>שם / תיאור</label><input id="sc-name" placeholder="תזכורת בוקר"></div>
-      <div class="form-row">
-        <label>יעד</label>
+<!-- Scheduler -->
+<div class="drawer" id="panel-scheduler">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-amber" style="width:36px;height:36px;font-size:18px;border-radius:10px">⏰</span> מתזמן שיחות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="background:#0b1629;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div class="fr"><label>שם / תיאור</label><input id="sc-name" placeholder="תזכורת בוקר"></div>
+      <div class="fr"><label>יעד</label>
         <div style="display:flex;gap:6px">
           <input id="sc-target" placeholder="מספר או SIP URI" style="flex:2;direction:ltr">
           <select id="sc-contact" style="flex:1" onchange="onScContact()"><option value="">— מאנשי קשר —</option></select>
         </div>
       </div>
-      <div class="form-row"><label>שעה (HH:MM)</label><input id="sc-time" type="time" style="direction:ltr"></div>
-      <div class="form-row">
-        <label>חזרה</label>
+      <div class="fr"><label>שעה</label><input id="sc-time" type="time" style="direction:ltr"></div>
+      <div class="fr"><label>חזרה</label>
         <select id="sc-repeat">
           <option value="once">פעם אחת</option>
           <option value="daily">כל יום</option>
           <option value="weekdays">ימי חול</option>
         </select>
       </div>
-      <div class="form-row"><label>הודעה קולית</label><textarea id="sc-message" placeholder="מה יגיד הבוט כשמרימים? (ריק = ברכת ברירת מחדל)" style="min-height:60px"></textarea></div>
-      <button class="btn btn-primary" onclick="addScheduledJob()">צור תזמון</button>
+      <div class="fr"><label>הודעה קולית</label><textarea id="sc-message" placeholder="מה יגיד הבוט? (ריק = ברירת מחדל)" style="min-height:56px"></textarea></div>
+      <button class="btn btn-p btn-sm" onclick="addScheduledJob()">צור תזמון</button>
     </div>
-    <div id="scheduler-list" style="font-size:13px;color:#94a3b8">טוען...</div>
+    <div id="scheduler-list" style="font-size:13px;color:#64748b">טוען...</div>
   </div>
+</div>
 
-  <!-- Dialer -->
-  <div class="card">
-    <h2>Dialer — שיחה יוצאת</h2>
-    <div class="form-row">
-      <label>מספר / SIP URI</label>
-      <input id="dial-target" placeholder="05XXXXXXXX או sip:ext@domain" style="direction:ltr">
-    </div>
-    <div class="form-row">
-      <label>Caller ID</label>
-      <input id="dial-from" placeholder="ברירת מחדל: הגדרות SIP" style="direction:ltr">
-    </div>
-    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="dial-btn" onclick="dialOut()">התקשר</button>
-      <button class="btn btn-danger" id="hangup-btn" onclick="hangupCall()" style="display:none">נתק</button>
-    </div>
-    <div id="dial-status" style="margin-top:10px;font-size:13px;color:#94a3b8;min-height:18px"></div>
+<!-- Security -->
+<div class="drawer" id="panel-security">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔒</span> אבטחה</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
   </div>
-
-  <!-- Chat test -->
-  <div class="card">
-    <h2>בדיקת צ'אט (ללא שיחה)</h2>
-    <div id="chat-out">תגובת הבוט תופיע כאן...</div>
-    <div class="chat-box">
-      <input id="chat-input" placeholder="שלח הודעה לבוט..." onkeydown="if(event.key==='Enter')sendChat()">
-      <button class="btn btn-primary btn-sm" onclick="sendChat()">שלח</button>
-    </div>
+  <div class="drawer-body">
+    <div class="fr"><label>שם משתמש</label><input id="s-adminUser" placeholder="admin"></div>
+    <div class="fr"><label>סיסמה חדשה</label><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)"></div>
+    <div class="fr"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה"></div>
+    <div class="status-line" id="admin-pass-status"></div>
+    <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:10px">ניתוק מהדאשבורד</div>
+    <button class="btn" style="background:#1e2545;color:#ef4444;border:1px solid #ef4444" onclick="doLogout()">🚪 התנתק</button>
   </div>
-
-  <!-- Telegram notifications -->
-  <div class="card">
-    <h2>Telegram — התראות</h2>
-    <div class="form-row"><label>Bot Token</label><input id="s-telegramBotToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
-    <div class="form-row"><label>Chat ID</label><input id="s-telegramChatId" placeholder="-100XXXXXXXXX" style="direction:ltr"></div>
-    <div class="form-row"><label>Thread ID</label><input id="s-telegramThreadId" placeholder="201 (אופציונלי)" style="direction:ltr"></div>
-    <div class="form-row">
-      <label>סיכום שיחה</label>
-      <label style="display:flex;align-items:center;gap:8px;padding-top:6px">
-        <input type="checkbox" id="s-telegramCallSummary"> שלח סיכום אחרי כל שיחה
-      </label>
-    </div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="saveTelegramSettings()">שמור הגדרות Telegram</button></div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveAdminCreds()">שמור</button>
   </div>
+</div>
 
-  <!-- Twilio DID -->
-  <div class="card">
-    <h2>📱 Twilio — מספר טלפון PSTN</h2>
-    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
-      חבר מספר טלפון אמיתי — שיחות PSTN מופנות ישירות לGemini Live דרך Twilio Media Streams.
-    </div>
-    <div class="form-row"><label>Account SID</label><input id="s-twilioSid" placeholder="ACxxxxxxxx" style="direction:ltr"></div>
-    <div class="form-row"><label>Auth Token</label><input id="s-twilioToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
-    <div class="form-row"><label>Public URL</label><input id="s-twilioUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
-    <div class="btn-row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="saveTwilioSettings()">שמור</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadTwilioNumbers()">טען מספרים</button>
-    </div>
-    <div id="twilio-numbers" style="margin-top:12px;font-size:13px"></div>
-    <div style="margin-top:14px;border-top:1px solid #2d3148;padding-top:14px">
-      <b style="font-size:13px">חפש מספר חדש</b>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <input id="twilio-country" placeholder="US" style="width:60px;direction:ltr">
-        <input id="twilio-area" placeholder="Area Code (אופציונלי)" style="flex:1;direction:ltr">
-        <button class="btn btn-sm btn-primary" onclick="searchTwilioNumbers()">חפש</button>
-      </div>
-      <div id="twilio-search-results" style="margin-top:10px;font-size:13px"></div>
-    </div>
+<!-- Home Assistant -->
+<div class="drawer" id="panel-ha">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-haBlue" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" style="width:22px;height:22px"></span> Home Assistant</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
   </div>
-
-  <!-- Vonage DID -->
-  <div class="card">
-    <h2>📞 Vonage — מספר טלפון PSTN</h2>
-    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
-      שיחות PSTN דרך Vonage → WebSocket 16kHz ישיר לGemini Live. פשוט יותר מTwilio — אין codec.
+  <div class="drawer-body">
+    <div class="section-hint">כאשר פעיל: HA יכול להפעיל שיחה יוצאת. הבוט יכול לשלוח אירועים ל-HA.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-ha-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
     </div>
-    <div class="form-row"><label>API Key</label><input id="s-vonageKey" placeholder="xxxxxxxx" style="direction:ltr"></div>
-    <div class="form-row"><label>API Secret</label><input id="s-vonageSecret" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
-    <div class="form-row"><label>Public URL</label><input id="s-vonageUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
-    <div class="btn-row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="saveVonageSettings()">שמור</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadVonageNumbers()">טען מספרים</button>
-    </div>
-    <div id="vonage-numbers" style="margin-top:12px;font-size:13px"></div>
-    <div style="margin-top:14px;border-top:1px solid #2d3148;padding-top:14px">
-      <b style="font-size:13px">חפש מספר חדש</b>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <input id="vonage-country" placeholder="IL" style="width:60px;direction:ltr">
-        <input id="vonage-pattern" placeholder="Pattern (אופציונלי)" style="flex:1;direction:ltr">
-        <button class="btn btn-sm btn-primary" onclick="searchVonageNumbers()">חפש</button>
-      </div>
-      <div id="vonage-search-results" style="margin-top:10px;font-size:13px"></div>
-    </div>
+    <div class="fr" style="margin-top:10px"><label>HA URL</label><input id="int-ha-url" placeholder="http://homeassistant.local:8123" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>Long-lived Token</label><input id="int-ha-token" type="password" placeholder="eyJ..." onblur="saveIntegrations()"></div>
+    <div class="fr"><label>Webhook ID</label><input id="int-ha-webhook" placeholder="callme_webhook" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-ha-status"></div>
   </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('ha')">בדוק חיבור</button>
+  </div>
+</div>
 
-  <!-- WhatsApp notifications -->
-  <div class="card">
-    <h2>💬 WhatsApp — התראות</h2>
-    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
-      הגדרה: שמור את המספר <b>+34 644 59 65 90</b> ושלח לו "I allow callmebot to send me messages" — תקבל apikey.
+<!-- OpenClaw -->
+<div class="drawer" id="panel-openclaw">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;border-radius:10px;font-size:20px">🦞</span> OpenClaw AI Gateway</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">כאשר פעיל: הבוט יוכל לקרוא ל-OpenClaw כ-tool בזמן שיחה.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-openclaw-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
     </div>
-    <div class="form-row"><label>מספר טלפון</label><input id="s-whatsappPhone" placeholder="+972501234567" style="direction:ltr"></div>
-    <div class="form-row"><label>API Key</label><input id="s-whatsappApiKey" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
-    <div class="form-row">
-      <label>התראות שיחה</label>
-      <label style="display:flex;align-items:center;gap:8px;padding-top:6px">
-        <input type="checkbox" id="s-whatsappCallSummary"> שלח סיכום אחרי כל שיחה / voicemail
-      </label>
+    <div class="fr" style="margin-top:10px"><label>OpenClaw URL</label><input id="int-openclaw-url" placeholder="http://127.0.0.1:18790" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>API Token</label><input id="int-openclaw-token" type="password" placeholder="token" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-openclaw-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('openclaw')">בדוק חיבור</button>
+  </div>
+</div>
+
+<!-- Teamy -->
+<div class="drawer" id="panel-teamy">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/microsoftteams/ffffff" style="width:22px;height:22px" onerror="this.replaceWith(document.createTextNode('🤝'))"></span> Teamy — Teams Bot</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">CallMe Bot ישמש כ-voice engine של Teamy. Teamy ינהל פגישות Teams.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-teamy-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
     </div>
-    <div class="btn-row" style="gap:8px">
-      <button class="btn btn-primary" onclick="saveWhatsappSettings()">שמור</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testWhatsapp()">שלח הודעת בדיקה</button>
+    <div class="fr" style="margin-top:10px"><label>Teamy Server URL</label><input id="int-teamy-url" placeholder="http://100.64.0.12:3069" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>API Token</label><input id="int-teamy-token" type="password" placeholder="(ריק = ללא auth)" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-teamy-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('teamy')">בדוק חיבור</button>
+  </div>
+</div>
+
+<!-- Telegram -->
+<div class="drawer" id="panel-telegram">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/telegram/ffffff" style="width:22px;height:22px"></span> Telegram</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>Bot Token</label><input id="s-telegramBotToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Chat ID</label><input id="s-telegramChatId" placeholder="-100XXXXXXXXX" style="direction:ltr"></div>
+    <div class="fr"><label>Thread ID</label><input id="s-telegramThreadId" placeholder="201 (אופציונלי)" style="direction:ltr"></div>
+    <div class="toggle-row">
+      <label>סיכום אחרי שיחה</label>
+      <label class="switch"><input type="checkbox" id="s-telegramCallSummary"><span class="slider"></span></label>
     </div>
   </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveTelegramSettings()">שמור</button>
+  </div>
+</div>
 
-  <!-- Calendar integration -->
-  <div class="card">
-    <h2>📅 Calendar — יומן</h2>
-    <div class="form-row">
-      <label>iCal URL</label>
-      <input id="s-calendarUrl" type="text" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" style="direction:ltr">
+<!-- WhatsApp -->
+<div class="drawer" id="panel-whatsapp">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" style="width:22px;height:22px"></span> WhatsApp</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">שמור את המספר <b>+34 644 59 65 90</b> ושלח "I allow callmebot to send me messages" → תקבל apikey.</div>
+    <div class="fr"><label>מספר טלפון</label><input id="s-whatsappPhone" placeholder="+972501234567" style="direction:ltr"></div>
+    <div class="fr"><label>API Key</label><input id="s-whatsappApiKey" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="toggle-row">
+      <label>סיכום אחרי שיחה / voicemail</label>
+      <label class="switch"><input type="checkbox" id="s-whatsappCallSummary"><span class="slider"></span></label>
     </div>
-    <div class="form-row">
-      <label>שם יומן</label>
-      <input id="s-calendarName" placeholder="My Calendar">
-    </div>
-    <div class="btn-row" style="gap:8px">
-      <button class="btn btn-primary" onclick="saveCalendarSettings()">שמור</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="testCalendar()">בדוק חיבור</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0" onclick="loadCalendarEvents()">טען אירועים</button>
-    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testWhatsapp()">בדיקה</button>
+    <button class="btn btn-p" onclick="saveWhatsappSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Calendar -->
+<div class="drawer" id="panel-calendar">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-indigo" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/googlecalendar/ffffff" style="width:22px;height:22px"></span> Google Calendar</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>iCal URL</label><input id="s-calendarUrl" placeholder="https://calendar.google.com/..." style="direction:ltr"></div>
+    <div class="fr"><label>שם יומן</label><input id="s-calendarName" placeholder="My Calendar"></div>
     <div id="calendar-events" style="margin-top:10px;font-size:13px"></div>
   </div>
-
-  <!-- Browser Web Call -->
-  <div class="card" id="webcall-card">
-    <h2>Web Call — שיחה מהדפדפן</h2>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <button id="webcall-btn" class="btn btn-primary" onclick="toggleWebCall()">📞 התחל שיחה</button>
-      <span id="webcall-status" style="color:#8892a4;font-size:14px">לא מחובר</span>
-      <span id="webcall-rms" style="color:#4caf50;font-size:12px;direction:ltr;min-width:60px"></span>
-    </div>
-    <div id="webcall-transcript" style="margin-top:12px;max-height:220px;overflow-y:auto;font-size:13px;line-height:1.7"></div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testCalendar()">בדוק</button>
+    <button class="btn btn-g" onclick="loadCalendarEvents()">טען אירועים</button>
+    <button class="btn btn-p" onclick="saveCalendarSettings()">שמור</button>
   </div>
+</div>
 
-  <!-- IVR Builder -->
-  <div class="card">
-    <h2>🌳 IVR Builder — תפריט אוטומטי</h2>
-    <div style="background:#1a2236;border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px;color:#8892a4">
-      כשמתקבלת שיחה נכנסת, הבוט ינגן תפריט ויחכה ללחיצת מקש. כל מקש מוביל לפעולה שונה.
+<!-- Twilio -->
+<div class="drawer" id="panel-twilio">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-red" style="width:36px;height:36px;border-radius:10px"><img src="https://www.twilio.com/assets/icons/twilio-icon-red.svg" style="width:22px;height:22px" onerror="this.outerHTML='<span style=\'font-size:16px;font-weight:900;color:#fff;font-family:sans-serif\'>T</span>'"></span> Twilio PSTN</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">שיחות PSTN דרך Twilio Media Streams → Gemini Live ישיר.</div>
+    <div class="fr"><label>Account SID</label><input id="s-twilioSid" placeholder="ACxxxxxxxx" style="direction:ltr"></div>
+    <div class="fr"><label>Auth Token</label><input id="s-twilioToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Public URL</label><input id="s-twilioUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-g btn-sm" onclick="loadTwilioNumbers()">טען מספרים</button>
     </div>
-    <div class="form-row" style="align-items:center">
-      <label>הפעל IVR</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="ivr-enabled" style="width:18px;height:18px">
-        <span style="font-size:13px;color:#8892a4">פעיל</span>
-      </label>
-    </div>
-    <div class="form-row"><label>הודעת פתיחה</label>
-      <textarea id="ivr-greeting" rows="2" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:8px;color:#e2e8f0;font-size:14px;resize:vertical">ברוכים הבאים. לחצו 1 לשיחה עם הבוט. לחצו 2 להשארת הודעה.</textarea>
-    </div>
-    <div style="display:flex;gap:12px;margin-bottom:12px">
-      <div style="flex:1"><label style="font-size:12px;color:#8892a4">Timeout (שניות)</label>
-        <input id="ivr-timeout" type="number" min="3" max="30" value="5" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:14px">
+    <div id="twilio-numbers" style="margin-top:10px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #1e2545;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">חפש מספר חדש</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="twilio-country" placeholder="US" style="width:56px;direction:ltr">
+        <input id="twilio-area" placeholder="Area Code" style="flex:1;direction:ltr">
+        <button class="btn btn-p btn-sm" onclick="searchTwilioNumbers()">חפש</button>
       </div>
-      <div style="flex:1"><label style="font-size:12px;color:#8892a4">פעולה אם אין לחיצה</label>
-        <select id="ivr-timeout-action" style="width:100%;background:#1e2535;border:1px solid #2d3a52;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:14px">
-          <option value="ai">עבור לשיחה עם הבוט</option>
-          <option value="voicemail">קח הודעה</option>
-          <option value="hangup">נתק</option>
-        </select>
+      <div id="twilio-search-results" style="margin-top:8px;font-size:13px"></div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveTwilioSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Vonage -->
+<div class="drawer" id="panel-vonage">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-teal" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/vonage/ffffff" style="width:22px;height:22px" onerror="this.style.display='none';this.parentElement.insertAdjacentText('beforeend','📞')"></span> Vonage PSTN</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">WebSocket 16kHz ישיר ל-Gemini Live. פשוט יותר מ-Twilio.</div>
+    <div class="fr"><label>API Key</label><input id="s-vonageKey" placeholder="xxxxxxxx" style="direction:ltr"></div>
+    <div class="fr"><label>API Secret</label><input id="s-vonageSecret" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Public URL</label><input id="s-vonageUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-g btn-sm" onclick="loadVonageNumbers()">טען מספרים</button>
+    </div>
+    <div id="vonage-numbers" style="margin-top:10px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #1e2545;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">חפש מספר חדש</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="vonage-country" placeholder="IL" style="width:56px;direction:ltr">
+        <input id="vonage-pattern" placeholder="Pattern" style="flex:1;direction:ltr">
+        <button class="btn btn-p btn-sm" onclick="searchVonageNumbers()">חפש</button>
       </div>
+      <div id="vonage-search-results" style="margin-top:8px;font-size:13px"></div>
     </div>
-
-    <div style="font-size:13px;font-weight:600;color:#94a3b8;margin-bottom:8px">צמתי תפריט:</div>
-    <div id="ivr-nodes-list"></div>
-    <button class="btn" style="background:#2d3148;color:#e2e8f0;margin-top:8px;font-size:13px" onclick="addIvrNode()">+ הוסף מקש</button>
-
-    <div class="btn-row" style="margin-top:12px">
-      <button class="btn btn-primary" onclick="saveIvr()">שמור IVR</button>
-    </div>
-    <div id="ivr-status" style="margin-top:8px;font-size:13px;color:#22c55e"></div>
   </div>
-
-  <!-- Recordings (transcripts) -->
-  <div class="card">
-    <h2>תמלולים — שיחות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadRecordings()">רענן</button></h2>
-    <div id="recordings-list"><em style="color:#8892a4">טוען...</em></div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveVonageSettings()">שמור</button>
   </div>
+</div>
 
-  <!-- Voicemails -->
-  <div class="card">
-    <h2>הודעות קוליות <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="loadVoicemails()">רענן</button></h2>
-    <div id="voicemails-list"><em style="color:#8892a4">טוען...</em></div>
+<!-- Logs -->
+<div class="drawer" id="panel-logs">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">📋</span> לוגים חיים</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
   </div>
-
-  <!-- Logs -->
-  <div class="card">
-    <h2>לוגים חיים <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;margin-right:8px" onclick="clearLogs()">נקה</button></h2>
+  <div class="drawer-body">
     <div id="logs"></div>
   </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="clearLogs()">נקה</button>
+  </div>
+</div>
 
+<!-- Chat test -->
+<div class="drawer" id="panel-chat">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-cyan" style="width:36px;height:36px;font-size:18px;border-radius:10px">💭</span> בדיקת צ'אט</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="chat-out" style="background:#0b0d14;border-radius:8px;padding:12px;min-height:80px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px">תגובת הבוט תופיע כאן...</div>
+    <div style="display:flex;gap:8px">
+      <input id="chat-input" placeholder="שלח הודעה לבוט..." onkeydown="if(event.key==='Enter')sendChat()" style="flex:1">
+      <button class="btn btn-p btn-sm" onclick="sendChat()">שלח</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -465,6 +795,29 @@
 <script>
 const API = '';
 
+// ── Panel / Drawer ────────────────────────────────────────────────────────
+let currentPanel = null;
+
+function openPanel(id) {
+  if (currentPanel) {
+    document.getElementById(currentPanel).classList.remove('open');
+  }
+  currentPanel = id;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById(id).classList.add('open');
+}
+
+function closePanel() {
+  if (currentPanel) {
+    document.getElementById(currentPanel).classList.remove('open');
+    currentPanel = null;
+  }
+  document.getElementById('overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });
+
+// ── Toast ─────────────────────────────────────────────────────────────────
 function toast(msg, err) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -472,10 +825,11 @@ function toast(msg, err) {
   setTimeout(() => t.className = 'toast', 2500);
 }
 
+// ── SIP hints ─────────────────────────────────────────────────────────────
 const SIP_HINTS = {
   '3cx': 'SIP Domain: 1664.3cx.cloud | Registrar: 127.0.0.1 (via SBC)',
-  'zadarma': 'SIP Server: sip.zadarma.com | Registrar: sip.zadarma.com | Extension: your Zadarma account number',
-  'twilio': 'SIP Server: your-domain.pstn.twilio.com | Auth: Twilio SIP credentials | DID: Twilio number',
+  'zadarma': 'SIP Server: sip.zadarma.com | Extension: account number',
+  'twilio': 'SIP Server: your-domain.pstn.twilio.com',
   'custom': 'Enter your SIP provider details manually.',
 };
 
@@ -486,6 +840,7 @@ function onProviderChange() {
   else h.style.display = 'none';
 }
 
+// ── Settings ──────────────────────────────────────────────────────────────
 async function loadSettings() {
   try {
     const r = await fetch(API + '/api/settings');
@@ -501,9 +856,8 @@ async function loadSettings() {
     document.getElementById('s-sipExtension').value = s.sipExtension || '';
     document.getElementById('s-sipAuthId').value = s.sipAuthId || '';
     document.getElementById('s-sipDid').value = s.sipDid || '';
-    if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = s.sipPassword; // shows '✓ set'
+    if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = '✓ set';
     if (s.adminUser) document.getElementById('s-adminUser').value = s.adminUser;
-    if (s.adminPass) document.getElementById('s-adminPass').placeholder = s.adminPass; // shows '✓ set'
     document.getElementById('s-callWebhookUrl').value = s.callWebhookUrl || '';
     document.getElementById('s-telegramChatId').value = s.telegramChatId || '';
     document.getElementById('s-telegramThreadId').value = s.telegramThreadId || '';
@@ -522,47 +876,6 @@ async function loadSettings() {
   } catch(e) { console.error(e); }
 }
 
-async function saveTelegramSettings() {
-  const body = {
-    telegramChatId: document.getElementById('s-telegramChatId').value,
-    telegramThreadId: document.getElementById('s-telegramThreadId').value,
-    telegramCallSummary: document.getElementById('s-telegramCallSummary').checked,
-  };
-  const token = document.getElementById('s-telegramBotToken').value;
-  if (token) body.telegramBotToken = token;
-  try {
-    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) { toast('הגדרות Telegram נשמרו ✓'); document.getElementById('s-telegramBotToken').value = ''; }
-    else toast('שגיאה', true);
-  } catch(e) { toast('שגיאה: ' + e.message, true); }
-}
-
-async function saveAdminCreds() {
-  const user = document.getElementById('s-adminUser').value.trim();
-  const pass = document.getElementById('s-adminPass').value;
-  const confirm = document.getElementById('s-adminPassConfirm').value;
-  const status = document.getElementById('admin-pass-status');
-
-  if (pass && pass !== confirm) {
-    status.textContent = 'הסיסמאות לא תואמות'; status.style.color = '#ef4444'; return;
-  }
-  if (!user) { status.textContent = 'שם משתמש לא יכול להיות ריק'; status.style.color = '#ef4444'; return; }
-
-  const body = { adminUser: user };
-  if (pass) body.adminPass = pass;
-
-  try {
-    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) {
-      toast('פרטי כניסה עודכנו ✓');
-      document.getElementById('s-adminPass').value = '';
-      document.getElementById('s-adminPassConfirm').value = '';
-      status.textContent = pass ? 'סיסמה שונתה — הכנס מחדש בריענון הבא' : 'שם משתמש עודכן';
-      status.style.color = '#22c55e';
-    } else { toast('שגיאה בשמירה', true); }
-  } catch(e) { toast('שגיאה: ' + e.message, true); }
-}
-
 async function saveSettings() {
   const body = {
     name: document.getElementById('s-name').value,
@@ -575,28 +888,65 @@ async function saveSettings() {
     sipRegistrar: document.getElementById('s-sipRegistrar').value,
     sipExtension: document.getElementById('s-sipExtension').value,
     sipAuthId: document.getElementById('s-sipAuthId').value,
-    sipPassword: document.getElementById('s-sipPassword').value, // empty = don't update
+    sipPassword: document.getElementById('s-sipPassword').value,
     sipDid: document.getElementById('s-sipDid').value,
     callWebhookUrl: document.getElementById('s-callWebhookUrl').value,
   };
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) { toast('הגדרות נשמרו ✓'); document.getElementById('s-sipPassword').value = ''; }
-    else toast('שגיאה בשמירה', true);
+    else toast('שגיאה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
+async function saveTelegramSettings() {
+  const body = {
+    telegramChatId: document.getElementById('s-telegramChatId').value,
+    telegramThreadId: document.getElementById('s-telegramThreadId').value,
+    telegramCallSummary: document.getElementById('s-telegramCallSummary').checked,
+  };
+  const token = document.getElementById('s-telegramBotToken').value;
+  if (token) body.telegramBotToken = token;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('Telegram נשמר ✓'); document.getElementById('s-telegramBotToken').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveAdminCreds() {
+  const user = document.getElementById('s-adminUser').value.trim();
+  const pass = document.getElementById('s-adminPass').value;
+  const confirm = document.getElementById('s-adminPassConfirm').value;
+  const status = document.getElementById('admin-pass-status');
+  if (pass && pass !== confirm) { status.textContent = 'הסיסמאות לא תואמות'; status.className = 'status-line err'; return; }
+  if (!user) { status.textContent = 'שם משתמש לא יכול להיות ריק'; status.className = 'status-line err'; return; }
+  const body = { adminUser: user };
+  if (pass) body.adminPass = pass;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      toast('פרטי כניסה עודכנו ✓');
+      document.getElementById('s-adminPass').value = '';
+      document.getElementById('s-adminPassConfirm').value = '';
+      status.textContent = pass ? 'סיסמה שונתה' : 'שם משתמש עודכן';
+      status.className = 'status-line ok';
+    } else { toast('שגיאה', true); }
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+// ── Health / Metrics / Status ─────────────────────────────────────────────
 async function loadHealth() {
   try {
     const r = await fetch(API + '/health');
     const h = await r.json();
-    document.getElementById('status-dot').className = 'status-dot';
+    document.getElementById('status-dot').className = 'dot on';
     document.getElementById('status-text').textContent = 'מחובר';
     const up = Math.floor(h.uptime);
     const hh = Math.floor(up/3600), mm = Math.floor((up%3600)/60), ss = up%60;
-    document.getElementById('uptime').textContent = `uptime: ${hh}h ${mm}m ${ss}s`;
+    document.getElementById('uptime').textContent = `${hh}h ${mm}m`;
   } catch(e) {
-    document.getElementById('status-dot').className = 'status-dot offline';
+    document.getElementById('status-dot').className = 'dot off';
     document.getElementById('status-text').textContent = 'לא מחובר';
   }
 }
@@ -607,14 +957,110 @@ async function loadMetrics() {
     const m = await r.json();
     const s = m.stats || {};
     document.getElementById('stat-total').textContent = s.totalCalls ?? '0';
-    document.getElementById('stat-active').textContent = s.activeCalls ?? '0';
+    const active = s.activeCalls ?? 0;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-active-hdr').textContent = active + ' שיחות';
     const avg = s.avgDurationMs ? Math.round(s.avgDurationMs/1000) : 0;
     document.getElementById('stat-avg').textContent = avg;
     document.getElementById('stat-errors').textContent = s.totalErrors ?? '0';
+    // Update badge
+    const b = document.getElementById('badge-calls');
+    if (b) b.className = 'app-badge ' + (active > 0 ? 'on' : 'na');
   } catch(e) {}
 }
 
-// ── Contacts ─────────────────────────────────────────────────────────────
+function setConn(id, ok, sub) {
+  const dot = document.getElementById('cs-dot-' + id);
+  const subEl = document.getElementById('cs-sub-' + id);
+  if (dot) dot.className = 'dot ' + (ok === true ? 'on' : ok === false ? 'off' : 'na');
+  if (subEl) subEl.textContent = sub || '';
+  // Update app grid badges
+  const badge = document.getElementById('badge-' + id);
+  if (badge) badge.className = 'app-badge ' + (ok === true ? 'on' : ok === false ? 'off' : 'na');
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(API + '/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    setConn('drachtio', d.drachtio === 'connected', d.drachtio === 'connected' ? 'מחובר' : 'מנותק');
+    const extKeys = Object.keys(d.sip || {});
+    const label = document.getElementById('cs-label-sip');
+    const providerNames = { '3cx': '3CX', zadarma: 'Zadarma', twilio: 'Twilio', custom: 'Custom', '': 'SIP Trunk' };
+    if (label) label.textContent = providerNames[d.sipProvider] || 'SIP Trunk';
+    if (extKeys.length > 0) {
+      const ext = extKeys[0]; const reg = d.sip[ext];
+      setConn('sip', true, `שלוחה ${ext} — רשום (${reg.age}s)`);
+      const b = document.getElementById('badge-sip'); if (b) b.className = 'app-badge on';
+    } else {
+      setConn('sip', false, d.sipExtension ? `שלוחה ${d.sipExtension} — לא רשום` : 'לא מוגדר');
+    }
+    for (const name of ['teamy', 'openclaw', 'ha']) {
+      const s = d.integrations?.[name];
+      if (!s || s.ok === null) setConn(name, null, 'לא מוגדר / כבוי');
+      else if (s.ok) setConn(name, true, `מחובר`);
+      else setConn(name, false, s.error || 'שגיאה');
+    }
+    // Active calls
+    const calls = d.activeCalls || [];
+    const callsEl = document.getElementById('active-calls-list');
+    if (callsEl) {
+      if (!calls.length) { callsEl.innerHTML = '<em style="color:#64748b">אין שיחות פעילות</em>'; }
+      else {
+        callsEl.innerHTML = calls.map(c => `
+          <div class="call-item">
+            <div style="flex:1"><b>${c.callerName||c.from||'—'}</b><br><span style="font-size:11px;color:#64748b">${c.callId?.slice(0,14)||''}</span></div>
+            <div class="call-dur">${c.durationS||0}ש</div>
+          </div>`).join('');
+      }
+    }
+  } catch(e) { console.error(e); }
+}
+
+function refresh() { loadHealth(); loadMetrics(); loadStatus(); }
+
+// ── Integrations ──────────────────────────────────────────────────────────
+async function loadIntegrations() {
+  try {
+    const r = await fetch(API + '/api/integrations');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('int-teamy-enabled').checked = !!d.teamy?.enabled;
+    document.getElementById('int-teamy-url').value = d.teamy?.url || '';
+    document.getElementById('int-openclaw-enabled').checked = !!d.openclaw?.enabled;
+    document.getElementById('int-openclaw-url').value = d.openclaw?.url || '';
+    document.getElementById('int-ha-enabled').checked = !!d.ha?.enabled;
+    document.getElementById('int-ha-url').value = d.ha?.url || '';
+    document.getElementById('int-ha-webhook').value = d.ha?.webhookId || '';
+  } catch(e) {}
+}
+
+async function saveIntegrations() {
+  const body = {
+    teamy: { enabled: document.getElementById('int-teamy-enabled').checked, url: document.getElementById('int-teamy-url').value, token: document.getElementById('int-teamy-token').value || undefined },
+    openclaw: { enabled: document.getElementById('int-openclaw-enabled').checked, url: document.getElementById('int-openclaw-url').value, token: document.getElementById('int-openclaw-token').value || undefined },
+    ha: { enabled: document.getElementById('int-ha-enabled').checked, url: document.getElementById('int-ha-url').value, token: document.getElementById('int-ha-token').value || undefined, webhookId: document.getElementById('int-ha-webhook').value }
+  };
+  try {
+    await fetch(API + '/api/integrations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  } catch(e) {}
+}
+
+async function testIntegration(name) {
+  const statEl = document.getElementById('int-' + name + '-status');
+  if (statEl) { statEl.className = 'status-line warn'; statEl.textContent = 'בודק...'; }
+  try {
+    const r = await fetch(API + '/api/integrations/test/' + name, { method: 'POST' });
+    const d = await r.json();
+    if (statEl) {
+      statEl.className = 'status-line ' + (d.ok ? 'ok' : 'err');
+      statEl.textContent = d.ok ? `חיבור תקין ✓` : (d.error || 'שגיאה');
+    }
+  } catch(e) { if (statEl) { statEl.className = 'status-line err'; statEl.textContent = e.message; } }
+}
+
+// ── Contacts ──────────────────────────────────────────────────────────────
 let contactsData = [];
 
 async function loadContacts() {
@@ -624,25 +1070,24 @@ async function loadContacts() {
     contactsData = d.contacts || [];
     renderContacts();
     populateContactSelect();
-  } catch(e) { document.getElementById('contacts-list').textContent = 'שגיאה בטעינה'; }
+  } catch(e) { document.getElementById('contacts-list').textContent = 'שגיאה'; }
 }
 
 function renderContacts() {
   const el = document.getElementById('contacts-list');
   if (!contactsData.length) { el.textContent = 'אין אנשי קשר עדיין.'; return; }
   el.innerHTML = contactsData.map(c => `
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #2d3148">
-      <div style="flex:1"><b style="color:#e2e8f0">${c.name}</b> <span style="color:#64748b;direction:ltr">${c.phone}</span></div>
-      <button class="btn btn-sm" style="background:#3b82f6;color:#fff;padding:4px 10px" onclick="dialContact('${c.phone}')">חייג</button>
-      <button class="btn btn-sm" style="background:#2d3148;color:#e2e8f0;padding:4px 10px" onclick="deleteContact('${c.id}')">✕</button>
+    <div class="list-row">
+      <div style="flex:1"><b>${c.name}</b> <span style="color:#64748b;direction:ltr;font-size:12px">${c.phone}</span></div>
+      <button class="btn btn-p btn-sm" onclick="dialContactFromGrid('${c.phone}')">חייג</button>
+      <button class="btn btn-g btn-sm" onclick="deleteContact('${c.id}')">✕</button>
     </div>`).join('');
 }
 
 function populateContactSelect() {
   const sel = document.getElementById('sc-contact');
   if (!sel) return;
-  sel.innerHTML = '<option value="">— מאנשי קשר —</option>' +
-    contactsData.map(c => `<option value="${c.phone}">${c.name}</option>`).join('');
+  sel.innerHTML = '<option value="">— מאנשי קשר —</option>' + contactsData.map(c => `<option value="${c.phone}">${c.name}</option>`).join('');
 }
 
 async function addContact() {
@@ -667,13 +1112,18 @@ async function deleteContact(id) {
   } catch(e) { toast('שגיאה', true); }
 }
 
+function dialContactFromGrid(phone) {
+  document.getElementById('phone-target').value = phone;
+  closePanel();
+  toast('מספר נטען — לחץ התחל שיחה');
+}
+
 function dialContact(phone) {
   document.getElementById('dial-target').value = phone;
   document.getElementById('dial-target').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ── Scheduler ─────────────────────────────────────────────────────────────
-
 function onScContact() {
   const val = document.getElementById('sc-contact').value;
   if (val) document.getElementById('sc-target').value = val;
@@ -693,33 +1143,21 @@ function renderScheduler(jobs) {
   const repeatLabel = { once: 'פעם אחת', daily: 'יומי', weekdays: 'ימי חול' };
   el.innerHTML = jobs.map(j => {
     const nextStr = j.nextAt ? new Date(j.nextAt).toLocaleString('he-IL') : '—';
-    const lastStr = j.lastRan ? new Date(j.lastRan).toLocaleTimeString('he-IL') : 'טרם הופעל';
-    return `
-    <div style="background:#0f1117;border-radius:8px;padding:10px;margin-bottom:8px;${j.enabled ? '' : 'opacity:0.5'}">
+    return `<div style="background:#0b0d14;border-radius:8px;padding:10px;margin-bottom:8px;${j.enabled?'':'opacity:.5'}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <div>
-          <b style="color:#e2e8f0">${j.name}</b>
-          <span style="color:#64748b;font-size:12px"> · ${j.time} · ${repeatLabel[j.repeat]||j.repeat}</span>
-        </div>
+        <div><b>${j.name}</b> <span style="color:#64748b;font-size:12px">· ${j.time} · ${repeatLabel[j.repeat]||j.repeat}</span></div>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="background:${j.enabled?'#64748b':'#22c55e'};color:#fff;padding:4px 10px" onclick="toggleJob('${j.id}',${!j.enabled})">${j.enabled?'השבת':'הפעל'}</button>
-          <button class="btn btn-sm btn-danger" style="padding:4px 10px" onclick="deleteJob('${j.id}')">מחק</button>
+          <button class="btn btn-sm" style="background:${j.enabled?'#374151':'#14532d'};color:#fff" onclick="toggleJob('${j.id}',${!j.enabled})">${j.enabled?'השבת':'הפעל'}</button>
+          <button class="btn btn-d btn-sm" onclick="deleteJob('${j.id}')">מחק</button>
         </div>
       </div>
-      <div style="color:#64748b;font-size:12px;margin-top:4px">יעד: <span style="direction:ltr">${j.target}</span> · הבא: ${nextStr} · אחרון: ${lastStr}</div>
-      ${j.message ? `<div style="color:#94a3b8;font-size:12px;margin-top:2px">"${j.message.slice(0,80)}"</div>` : ''}
+      <div style="color:#64748b;font-size:11px;margin-top:4px">יעד: <span style="direction:ltr">${j.target}</span> · הבא: ${nextStr}</div>
     </div>`;
   }).join('');
 }
 
 async function addScheduledJob() {
-  const body = {
-    name: document.getElementById('sc-name').value.trim() || document.getElementById('sc-target').value.trim(),
-    target: document.getElementById('sc-target').value.trim(),
-    message: document.getElementById('sc-message').value.trim(),
-    time: document.getElementById('sc-time').value,
-    repeat: document.getElementById('sc-repeat').value,
-  };
+  const body = { name: document.getElementById('sc-name').value.trim() || document.getElementById('sc-target').value.trim(), target: document.getElementById('sc-target').value.trim(), message: document.getElementById('sc-message').value.trim(), time: document.getElementById('sc-time').value, repeat: document.getElementById('sc-repeat').value };
   if (!body.target || !body.time) { toast('נדרשים יעד ושעה', true); return; }
   try {
     const r = await fetch('/api/scheduler', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -739,61 +1177,106 @@ async function toggleJob(id, enabled) {
 
 async function deleteJob(id) {
   await fetch('/api/scheduler/' + id, { method: 'DELETE' });
-  toast('תזמון נמחק ✓');
+  toast('נמחק ✓');
   loadScheduler();
 }
 
-// ── Dialer ────────────────────────────────────────────────────────────────
+// ── Dialer (SIP outbound) ─────────────────────────────────────────────────
 let activeCallId = null;
 let dialPollTimer = null;
+
+function handleCallBtn() {
+  const target = document.getElementById('phone-target').value.trim();
+  if (target) {
+    // Has target number → SIP outbound dial
+    dialOutFromBar(target);
+  } else {
+    // No target → Web Call (AI bot)
+    toggleWebCall();
+  }
+}
+
+async function dialOutFromBar(target) {
+  if (wcActive) { stopWebCall(); }
+  setDialStatus('מחייג...', '#60a5fa');
+  document.getElementById('wcb-label').textContent = 'מחייג...';
+  document.getElementById('webcall-btn').disabled = true;
+  try {
+    const r = await fetch('/call', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: target }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    activeCallId = d.callId;
+    updateWcStatus('מחייג...', '#60a5fa');
+    document.getElementById('hangup-btn').style.display = '';
+    document.getElementById('webcall-btn').style.display = 'none';
+    startDialPoll();
+  } catch(e) {
+    updateWcStatus('שגיאה: ' + e.message.slice(0,40), '#ef4444');
+    document.getElementById('webcall-btn').disabled = false;
+    document.getElementById('wcb-label').textContent = 'התחל שיחה';
+  }
+}
 
 async function dialOut() {
   const target = document.getElementById('dial-target').value.trim();
   const from = document.getElementById('dial-from').value.trim();
   if (!target) { toast('הכנס מספר יעד', true); return; }
-
   const body = { to: target };
   if (from) body.callerId = from;
-
-  setDialStatus('מתחבר...', '#60a5fa');
+  setDialStatusPanel('מחייג...', '#60a5fa');
   document.getElementById('dial-btn').disabled = true;
-
   try {
-    const r = await fetch('/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await fetch('/call', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.status);
     activeCallId = d.callId;
-    setDialStatus('שיחה פעילה ✓ — ' + target, '#22c55e');
-    document.getElementById('hangup-btn').style.display = '';
+    setDialStatusPanel('שיחה פעילה ✓ — ' + target, '#22c55e');
+    document.getElementById('hangup-btn2').style.display = '';
     document.getElementById('dial-btn').style.display = 'none';
     startDialPoll();
   } catch(e) {
-    setDialStatus('שגיאה: ' + e.message, '#ef4444');
+    setDialStatusPanel('שגיאה: ' + e.message, '#ef4444');
     document.getElementById('dial-btn').disabled = false;
   }
 }
 
 async function hangupCall() {
+  if (!activeCallId) { stopWebCall(); return; }
+  try { await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' }); } catch {}
+  dialReset();
+}
+
+async function hangupSipCall() {
   if (!activeCallId) return;
-  try {
-    await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' });
-  } catch {}
+  try { await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' }); } catch {}
   dialReset();
 }
 
 function dialReset() {
   activeCallId = null;
   if (dialPollTimer) { clearInterval(dialPollTimer); dialPollTimer = null; }
-  setDialStatus('', '#94a3b8');
+  updateWcStatus('לא מחובר', '#64748b');
+  document.getElementById('hangup-btn').style.display = 'none';
+  document.getElementById('webcall-btn').style.display = '';
+  document.getElementById('webcall-btn').disabled = false;
+  document.getElementById('wcb-icon').textContent = '📞';
+  document.getElementById('wcb-label').textContent = 'התחל שיחה';
+  document.getElementById('webcall-btn').className = 'call-btn start';
+  // panel dialer
+  setDialStatusPanel('', '#64748b');
   document.getElementById('dial-btn').disabled = false;
   document.getElementById('dial-btn').style.display = '';
-  document.getElementById('hangup-btn').style.display = 'none';
+  document.getElementById('hangup-btn2').style.display = 'none';
 }
 
 function setDialStatus(msg, color) {
+  const el = document.getElementById('webcall-status');
+  el.textContent = msg; el.style.color = color;
+}
+
+function setDialStatusPanel(msg, color) {
   const el = document.getElementById('dial-status');
-  el.textContent = msg;
-  el.style.color = color || '#94a3b8';
+  el.textContent = msg; el.style.color = color || '#64748b';
 }
 
 function startDialPoll() {
@@ -805,11 +1288,13 @@ function startDialPoll() {
       if (!r.ok) return;
       const d = await r.json();
       const call = d.calls?.find(c => c.callId === activeCallId);
-      if (!call) { dialReset(); setDialStatus('שיחה הסתיימה', '#94a3b8'); }
+      if (!call) { dialReset(); updateWcStatus('שיחה הסתיימה', '#64748b'); }
+      else if (call.status === 'connected') updateWcStatus('שיחה פעילה ✓', '#22c55e');
     } catch {}
   }, 3000);
 }
 
+// ── Chat ──────────────────────────────────────────────────────────────────
 async function sendChat() {
   const input = document.getElementById('chat-input');
   const msg = input.value.trim();
@@ -824,17 +1309,15 @@ async function sendChat() {
   } catch(e) { out.textContent = 'שגיאה: ' + e.message; }
 }
 
-// Live log polling via /api/logs endpoint (SSE or polling)
+// ── Logs ──────────────────────────────────────────────────────────────────
 const logEl = document.getElementById('logs');
-let logBuf = [];
+let lastLogTs = 0;
 
 function appendLog(line) {
   let cls = 'log-info';
   if (line.includes('"level":"warn"') || line.includes('warn')) cls = 'log-warn';
   if (line.includes('"level":"error"') || line.includes('error')) cls = 'log-error';
   if (line.includes('debug')) cls = 'log-debug';
-
-  // Try to pretty print JSON log lines
   try {
     const obj = JSON.parse(line);
     const ts = obj.timestamp ? new Date(obj.timestamp).toLocaleTimeString('he-IL') : '';
@@ -842,19 +1325,16 @@ function appendLog(line) {
     const extras = Object.entries(obj).filter(([k]) => !['message','msg','timestamp','level'].includes(k)).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(' ');
     line = `[${ts}] ${msg}${extras ? ' | '+extras : ''}`;
   } catch(_) {}
-
   const div = document.createElement('div');
   div.className = cls;
   div.textContent = line;
   logEl.appendChild(div);
   logEl.scrollTop = logEl.scrollHeight;
-  // Keep max 200 lines
   while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
 }
 
 function clearLogs() { logEl.innerHTML = ''; }
 
-let lastLogTs = 0;
 async function pollLogs() {
   try {
     const r = await fetch(API + '/api/logs?since=' + lastLogTs);
@@ -871,130 +1351,26 @@ async function pollLogs() {
   } catch(_) {}
 }
 
-async function loadIntegrations() {
-  try {
-    const r = await fetch(API + '/api/integrations');
-    if (!r.ok) return;
-    const d = await r.json();
-    document.getElementById('int-teamy-enabled').checked = !!d.teamy?.enabled;
-    document.getElementById('int-teamy-url').value = d.teamy?.url || '';
-    document.getElementById('int-openclaw-enabled').checked = !!d.openclaw?.enabled;
-    document.getElementById('int-openclaw-url').value = d.openclaw?.url || '';
-    document.getElementById('int-ha-enabled').checked = !!d.ha?.enabled;
-    document.getElementById('int-ha-url').value = d.ha?.url || '';
-    document.getElementById('int-ha-webhook').value = d.ha?.webhookId || '';
-  } catch(e) {}
-}
-
-async function saveIntegrations() {
-  const body = {
-    teamy: {
-      enabled: document.getElementById('int-teamy-enabled').checked,
-      url: document.getElementById('int-teamy-url').value,
-      token: document.getElementById('int-teamy-token').value || undefined,
-    },
-    openclaw: {
-      enabled: document.getElementById('int-openclaw-enabled').checked,
-      url: document.getElementById('int-openclaw-url').value,
-      token: document.getElementById('int-openclaw-token').value || undefined,
-    },
-    ha: {
-      enabled: document.getElementById('int-ha-enabled').checked,
-      url: document.getElementById('int-ha-url').value,
-      token: document.getElementById('int-ha-token').value || undefined,
-      webhookId: document.getElementById('int-ha-webhook').value,
-    }
-  };
-  try {
-    const r = await fetch(API + '/api/integrations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const el = document.getElementById('int-status');
-    if (r.ok) { el.style.color = '#22c55e'; el.textContent = 'הגדרות נשמרו ✓'; setTimeout(() => el.textContent = '', 2000); }
-    else { el.style.color = '#ef4444'; el.textContent = 'שגיאה בשמירה'; }
-  } catch(e) {}
-}
-
-async function testIntegration(name) {
-  const el = document.getElementById('int-status');
-  el.style.color = '#f59e0b'; el.textContent = `בודק ${name}...`;
-  try {
-    const r = await fetch(API + '/api/integrations/test/' + name, { method: 'POST' });
-    const d = await r.json();
-    if (d.ok) { el.style.color = '#22c55e'; el.textContent = `${name}: חיבור תקין ✓`; }
-    else { el.style.color = '#ef4444'; el.textContent = `${name}: ${d.error || 'שגיאה'}`; }
-  } catch(e) { el.style.color = '#ef4444'; el.textContent = `${name}: ${e.message}`; }
-}
-
-function setConn(id, ok, sub) {
-  const dot = document.getElementById('cs-dot-' + id);
-  const subEl = document.getElementById('cs-sub-' + id);
-  if (dot) dot.className = 'conn-dot ' + (ok === true ? 'ok' : ok === false ? 'err' : 'na');
-  if (subEl) subEl.textContent = sub || '';
-}
-
-async function loadStatus() {
-  try {
-    const r = await fetch(API + '/api/status');
-    if (!r.ok) return;
-    const d = await r.json();
-
-    // Drachtio
-    setConn('drachtio', d.drachtio === 'connected', d.drachtio === 'connected' ? 'מחובר' : 'מנותק');
-
-    // SIP registration
-    const extKeys = Object.keys(d.sip || {});
-    const label = document.getElementById('cs-label-sip');
-    const providerNames = { '3cx': '3CX', zadarma: 'Zadarma', twilio: 'Twilio', custom: 'Custom SIP', '': 'SIP Trunk' };
-    if (label) label.textContent = providerNames[d.sipProvider] || 'SIP Trunk';
-    if (extKeys.length > 0) {
-      const ext = extKeys[0];
-      const reg = d.sip[ext];
-      setConn('sip', true, `שלוחה ${ext} — רשום (${reg.age}s)`);
-    } else {
-      setConn('sip', false, d.sipExtension ? `שלוחה ${d.sipExtension} — לא רשום` : 'לא מוגדר');
-    }
-
-    // Integrations
-    for (const name of ['teamy', 'openclaw', 'ha']) {
-      const s = d.integrations?.[name];
-      if (!s || s.ok === null) setConn(name, null, 'לא מוגדר / כבוי');
-      else if (s.ok) setConn(name, true, `מחובר (HTTP ${s.status || '2xx'})`);
-      else setConn(name, false, s.error || 'שגיאה');
-    }
-  } catch(e) { console.error(e); }
-}
-
-function refresh() {
-  loadHealth();
-  loadMetrics();
-  loadStatus();
-}
-
-// ── Vonage ────────────────────────────────────────────────────────────────
+// ── Vonage / Twilio / WhatsApp / Calendar ─────────────────────────────────
 async function saveVonageSettings() {
   const body = { vonageApiKey: document.getElementById('s-vonageKey').value.trim(), vonagePublicUrl: document.getElementById('s-vonageUrl').value.trim() };
   const secret = document.getElementById('s-vonageSecret').value;
   if (secret) body.vonageApiSecret = secret;
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) { toast('הגדרות Vonage נשמרו ✓'); document.getElementById('s-vonageSecret').value = ''; }
+    if (r.ok) { toast('Vonage נשמר ✓'); document.getElementById('s-vonageSecret').value = ''; }
     else toast('שגיאה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 async function loadVonageNumbers() {
-  const el = document.getElementById('vonage-numbers');
-  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  const el = document.getElementById('vonage-numbers'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
   try {
-    const r = await fetch(API + '/api/vonage/numbers');
-    const d = await r.json();
+    const r = await fetch(API + '/api/vonage/numbers'); const d = await r.json();
     if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
     const nums = d.numbers || [];
-    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">אין מספרים בחשבון</em>'; return; }
-    el.innerHTML = '<b style="font-size:12px">מספרים קיימים:</b><br>' + nums.map(n => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2d3148">
-        <span style="direction:ltr">${n.msisdn} <span style="color:#8892a4">${n.country}</span></span>
-        <button class="btn btn-sm" style="background:#2d3148" onclick="configVonageNumber('${n.msisdn}','${n.country}')">הפנה לבוט</button>
-      </div>`).join('');
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">אין מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.msisdn} <span style="color:#64748b">${n.country}</span></span><button class="btn btn-g btn-sm" onclick="configVonageNumber('${n.msisdn}','${n.country}')">הפנה לבוט</button></div>`).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
@@ -1002,8 +1378,7 @@ async function configVonageNumber(msisdn, country) {
   try {
     const r = await fetch(`${API}/api/vonage/configure/${msisdn}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ country }) });
     const d = await r.json();
-    if (d.ok) toast('מספר הוגדר ✓ — Webhook: ' + d.voiceUrl);
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) toast('מספר הוגדר ✓'); else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
@@ -1011,18 +1386,14 @@ async function searchVonageNumbers() {
   const el = document.getElementById('vonage-search-results');
   const country = document.getElementById('vonage-country').value.trim() || 'IL';
   const pattern = document.getElementById('vonage-pattern').value.trim();
-  el.innerHTML = '<em style="color:#8892a4">מחפש...</em>';
+  el.innerHTML = '<em style="color:#64748b">מחפש...</em>';
   try {
     const r = await fetch(`${API}/api/vonage/search?country=${country}&pattern=${encodeURIComponent(pattern)}`);
     const d = await r.json();
     if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
     const nums = d.numbers || [];
-    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">לא נמצאו מספרים</em>'; return; }
-    el.innerHTML = nums.map(n => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #2d3148">
-        <span style="direction:ltr">${n.msisdn} <span style="color:#8892a4">${n.country} · €${n.cost}/חודש</span></span>
-        <button class="btn btn-sm btn-primary" onclick="buyVonageNumber('${n.msisdn}','${n.country}')">קנה</button>
-      </div>`).join('');
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.msisdn} <span style="color:#64748b">${n.country} · €${n.cost}/חודש</span></span><button class="btn btn-p btn-sm" onclick="buyVonageNumber('${n.msisdn}','${n.country}')">קנה</button></div>`).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
@@ -1031,40 +1402,28 @@ async function buyVonageNumber(msisdn, country) {
   try {
     const r = await fetch(`${API}/api/vonage/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ msisdn, country }) });
     const d = await r.json();
-    if (d.ok) { toast('נרכש ✓ ' + d.msisdn); loadVonageNumbers(); }
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) { toast('נרכש ✓ ' + d.msisdn); loadVonageNumbers(); } else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
-// ── Twilio ────────────────────────────────────────────────────────────────
 async function saveTwilioSettings() {
-  const body = {
-    twilioAccountSid: document.getElementById('s-twilioSid').value.trim(),
-    twilioPublicUrl: document.getElementById('s-twilioUrl').value.trim(),
-  };
+  const body = { twilioAccountSid: document.getElementById('s-twilioSid').value.trim(), twilioPublicUrl: document.getElementById('s-twilioUrl').value.trim() };
   const token = document.getElementById('s-twilioToken').value;
   if (token) body.twilioAuthToken = token;
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) { toast('הגדרות Twilio נשמרו ✓'); document.getElementById('s-twilioToken').value = ''; }
-    else toast('שגיאה', true);
+    if (r.ok) { toast('Twilio נשמר ✓'); document.getElementById('s-twilioToken').value = ''; } else toast('שגיאה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 async function loadTwilioNumbers() {
-  const el = document.getElementById('twilio-numbers');
-  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  const el = document.getElementById('twilio-numbers'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
   try {
-    const r = await fetch(API + '/api/twilio/numbers');
-    const d = await r.json();
+    const r = await fetch(API + '/api/twilio/numbers'); const d = await r.json();
     if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
     const nums = d.numbers || [];
-    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">אין מספרים בחשבון</em>'; return; }
-    el.innerHTML = '<b style="font-size:12px">מספרים קיימים:</b><br>' + nums.map(n => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2d3148">
-        <span style="direction:ltr">${n.phoneNumber} <span style="color:#8892a4">${n.friendlyName}</span></span>
-        <button class="btn btn-sm" style="background:#2d3148" onclick="configTwilioNumber('${n.sid}')">הפנה לבוט</button>
-      </div>`).join('');
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">אין מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.phoneNumber}</span><button class="btn btn-g btn-sm" onclick="configTwilioNumber('${n.sid}')">הפנה לבוט</button></div>`).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
@@ -1072,8 +1431,7 @@ async function configTwilioNumber(sid) {
   try {
     const r = await fetch(`${API}/api/twilio/configure/${sid}`, { method: 'POST' });
     const d = await r.json();
-    if (d.ok) toast('מספר הוגדר ✓ — Webhook: ' + d.voiceUrl);
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) toast('מספר הוגדר ✓'); else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
@@ -1081,18 +1439,14 @@ async function searchTwilioNumbers() {
   const el = document.getElementById('twilio-search-results');
   const country = document.getElementById('twilio-country').value.trim() || 'US';
   const area = document.getElementById('twilio-area').value.trim();
-  el.innerHTML = '<em style="color:#8892a4">מחפש...</em>';
+  el.innerHTML = '<em style="color:#64748b">מחפש...</em>';
   try {
     const r = await fetch(`${API}/api/twilio/search?country=${country}&areaCode=${area}`);
     const d = await r.json();
     if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
     const nums = d.numbers || [];
-    if (!nums.length) { el.innerHTML = '<em style="color:#8892a4">לא נמצאו מספרים</em>'; return; }
-    el.innerHTML = nums.map(n => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #2d3148">
-        <span style="direction:ltr">${n.phoneNumber} <span style="color:#8892a4">${n.region || ''}</span></span>
-        <button class="btn btn-sm btn-primary" onclick="buyTwilioNumber('${n.phoneNumber}')">קנה ~$1/חודש</button>
-      </div>`).join('');
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.phoneNumber} <span style="color:#64748b">${n.region||''}</span></span><button class="btn btn-p btn-sm" onclick="buyTwilioNumber('${n.phoneNumber}')">קנה ~$1/חודש</button></div>`).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
@@ -1101,23 +1455,17 @@ async function buyTwilioNumber(phoneNumber) {
   try {
     const r = await fetch(`${API}/api/twilio/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phoneNumber }) });
     const d = await r.json();
-    if (d.ok) { toast('נרכש ✓ ' + d.phoneNumber); loadTwilioNumbers(); }
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) { toast('נרכש ✓ ' + d.phoneNumber); loadTwilioNumbers(); } else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
-// ── WhatsApp ──────────────────────────────────────────────────────────────
 async function saveWhatsappSettings() {
-  const body = {
-    whatsappPhone: document.getElementById('s-whatsappPhone').value.trim(),
-    whatsappCallSummary: document.getElementById('s-whatsappCallSummary').checked,
-  };
+  const body = { whatsappPhone: document.getElementById('s-whatsappPhone').value.trim(), whatsappCallSummary: document.getElementById('s-whatsappCallSummary').checked };
   const key = document.getElementById('s-whatsappApiKey').value;
   if (key) body.whatsappApiKey = key;
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) { toast('הגדרות WhatsApp נשמרו ✓'); document.getElementById('s-whatsappApiKey').value = ''; }
-    else toast('שגיאה', true);
+    if (r.ok) { toast('WhatsApp נשמר ✓'); document.getElementById('s-whatsappApiKey').value = ''; } else toast('שגיאה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
@@ -1125,21 +1473,15 @@ async function testWhatsapp() {
   try {
     const r = await fetch(API + '/api/whatsapp/test', { method: 'POST' });
     const d = await r.json();
-    if (d.ok) toast('הודעת בדיקה נשלחה ל-WhatsApp ✓');
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) toast('הודעת בדיקה נשלחה ✓'); else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
-// ── Calendar ──────────────────────────────────────────────────────────────
 async function saveCalendarSettings() {
-  const body = {
-    calendarUrl: document.getElementById('s-calendarUrl').value.trim(),
-    calendarName: document.getElementById('s-calendarName').value.trim(),
-  };
+  const body = { calendarUrl: document.getElementById('s-calendarUrl').value.trim(), calendarName: document.getElementById('s-calendarName').value.trim() };
   try {
     const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) toast('הגדרות יומן נשמרו ✓');
-    else toast('שגיאה', true);
+    if (r.ok) toast('יומן נשמר ✓'); else toast('שגיאה', true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
@@ -1147,33 +1489,31 @@ async function testCalendar() {
   try {
     const r = await fetch(API + '/api/calendar/test', { method: 'POST' });
     const d = await r.json();
-    if (d.ok) toast(`יומן מחובר ✓ — ${d.count} אירועים קרובים`);
-    else toast('שגיאה: ' + d.error, true);
+    if (d.ok) toast(`יומן מחובר ✓ — ${d.count} אירועים`); else toast('שגיאה: ' + d.error, true);
   } catch(e) { toast('שגיאה: ' + e.message, true); }
 }
 
 async function loadCalendarEvents() {
-  const el = document.getElementById('calendar-events');
-  el.innerHTML = '<em style="color:#8892a4">טוען...</em>';
+  const el = document.getElementById('calendar-events'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
   try {
     const r = await fetch(API + '/api/calendar/events?days=7');
     const d = await r.json();
     const evs = d.events || [];
-    if (!evs.length) { el.innerHTML = '<em style="color:#8892a4">אין אירועים ב-7 ימים הקרובים</em>'; return; }
+    if (!evs.length) { el.innerHTML = '<em style="color:#64748b">אין אירועים ב-7 ימים הקרובים</em>'; return; }
     el.innerHTML = evs.map(e => {
       const dt = new Date(e.start).toLocaleString('he-IL', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return `<div style="padding:5px 0;border-bottom:1px solid #2d3148"><b>${e.title}</b><br><span style="color:#8892a4;font-size:12px">${dt}${e.location ? ' · ' + e.location : ''}</span></div>`;
+      return `<div style="padding:5px 0;border-bottom:1px solid #1e2545"><b>${e.title}</b><br><span style="color:#64748b;font-size:12px">${dt}</span></div>`;
     }).join('');
   } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
-// ── Browser Web Call ─────────────────────────────────────────────────────
+// ── Browser Web Call ──────────────────────────────────────────────────────
 let wcWs = null, wcCtx = null, wcStream = null, wcProcessor = null;
 let wcActive = false, wcScheduled = 0;
 
-async function toggleWebCall() {
+function toggleWebCall() {
   if (wcActive) { stopWebCall(); return; }
-  try { await startWebCall(); } catch(e) { toast('שגיאה: ' + e.message, true); updateWcStatus('שגיאה', '#ef5350'); }
+  try { startWebCall(); } catch(e) { toast('שגיאה: ' + e.message, true); updateWcStatus('שגיאה', '#ef5350'); }
 }
 
 async function startWebCall() {
@@ -1183,7 +1523,6 @@ async function startWebCall() {
   wcCtx = new AudioContext();
   wcScheduled = 0;
   document.getElementById('webcall-transcript').innerHTML = '';
-  // Use wsBase from server if provided (bypasses Cloudflare HTTP/2 which breaks WS upgrade)
   const wsBase = serverWsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
   wcWs = new WebSocket(`${wsBase}/api/browser-call?token=${token}`);
   wcWs.binaryType = 'arraybuffer';
@@ -1202,15 +1541,15 @@ async function startWebCall() {
         out[i] = Math.max(-32768, Math.min(32767, s * 32767));
       }
       const rms = Math.sqrt(out.reduce((s,v)=>s+v*v,0)/out.length);
-      const bars = '█'.repeat(Math.min(8, Math.round(rms / 500)));
-      document.getElementById('webcall-rms').textContent = bars || '·';
+      document.getElementById('webcall-rms').textContent = '█'.repeat(Math.min(8, Math.round(rms / 500))) || '·';
       wcWs.send(out.buffer);
     };
     source.connect(wcProcessor);
     wcProcessor.connect(wcCtx.destination);
     wcActive = true;
-    document.getElementById('webcall-btn').textContent = '⏹ סיים שיחה';
-    document.getElementById('webcall-btn').style.background = '#c62828';
+    document.getElementById('webcall-btn').className = 'call-btn end';
+    document.getElementById('wcb-icon').textContent = '⏹';
+    document.getElementById('wcb-label').textContent = 'סיים שיחה';
   };
   wcWs.onmessage = (e) => {
     if (e.data instanceof ArrayBuffer) {
@@ -1220,20 +1559,17 @@ async function startWebCall() {
       const buf = wcCtx.createBuffer(1, f32.length, 24000);
       buf.copyToChannel(f32, 0);
       const src = wcCtx.createBufferSource();
-      src.buffer = buf;
-      src.connect(wcCtx.destination);
+      src.buffer = buf; src.connect(wcCtx.destination);
       const now = wcCtx.currentTime;
       const at = Math.max(now, wcScheduled);
-      src.start(at);
-      wcScheduled = at + buf.duration;
+      src.start(at); wcScheduled = at + buf.duration;
     } else {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.type === 'status') updateWcStatus({ ready: 'מוכן', listening: 'מאזין', thinking: 'חושב...' }[msg.state] || msg.state, msg.state === 'listening' ? '#4caf50' : '#ff9800');
+        if (msg.type === 'status') updateWcStatus({ ready: 'מוכן', listening: '🎙 מאזין', thinking: '💭 חושב...' }[msg.state] || msg.state, msg.state === 'listening' ? '#22c55e' : '#f59e0b');
         if (msg.type === 'transcript') {
           const d = document.getElementById('webcall-transcript');
-          const icon = msg.role === 'user' ? '👤' : '🤖';
-          d.innerHTML += `<div><b>${icon}</b> ${msg.text}</div>`;
+          d.innerHTML += `<div><b>${msg.role === 'user' ? '👤' : '🤖'}</b> ${msg.text}</div>`;
           d.scrollTop = d.scrollHeight;
         }
       } catch(_) {}
@@ -1250,90 +1586,70 @@ function stopWebCall() {
   if (wcWs && wcWs.readyState < 2) wcWs.close();
   wcWs = null;
   if (wcCtx) { wcCtx.close().catch(()=>{}); wcCtx = null; }
-  document.getElementById('webcall-btn').textContent = '📞 התחל שיחה';
-  document.getElementById('webcall-btn').style.background = '';
+  document.getElementById('webcall-btn').className = 'call-btn start';
+  document.getElementById('wcb-icon').textContent = '📞';
+  document.getElementById('wcb-label').textContent = 'התחל שיחה';
   document.getElementById('webcall-rms').textContent = '';
-  updateWcStatus('לא מחובר', '#8892a4');
+  updateWcStatus('לא מחובר', '#64748b');
 }
 
 function updateWcStatus(text, color) {
   const el = document.getElementById('webcall-status');
-  el.textContent = text; el.style.color = color || '#8892a4';
+  el.textContent = text; el.style.color = color || '#64748b';
 }
 
-// ── Recordings ────────────────────────────────────────────────────────────
+// ── Recordings / Voicemails ───────────────────────────────────────────────
 async function loadRecordings() {
   const el = document.getElementById('recordings-list');
   try {
-    const r = await fetch(`${API}/api/recordings`, {});
+    const r = await fetch(`${API}/api/recordings`);
     const d = await r.json();
     const recs = d.recordings || [];
-    if (!recs.length) { el.innerHTML = '<em style="color:#8892a4">אין תמלולים עדיין</em>'; return; }
+    if (!recs.length) { el.innerHTML = '<em style="color:#64748b">אין תמלולים עדיין</em>'; return; }
     el.innerHTML = recs.map(rec => {
       const dt = new Date(rec.savedAt).toLocaleString('he-IL');
       const caller = rec.callerName || rec.callId?.slice(0,12) || '—';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2d3148">
-        <div>
-          <b>${caller}</b> &nbsp; ${dt} &nbsp;
-          <span style="color:#8892a4">${rec.durationS}ש | ${rec.lines} שורות</span>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="background:#2d3148" onclick="viewRecording('${rec.file}')">צפה</button>
-          <button class="btn btn-sm" style="background:#c62828" onclick="deleteRecording('${rec.file}')">מחק</button>
-        </div>
-      </div>`;
+      return `<div class="list-row"><div style="flex:1"><b>${caller}</b><br><span style="font-size:11px;color:#64748b">${dt} · ${rec.durationS}ש</span></div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
     }).join('');
-  } catch (e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
 async function viewRecording(file) {
-  const r = await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`, {});
+  const r = await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`);
   const d = await r.json();
   const lines = (d.transcript || []).map(l => `[${l.role === 'user' ? '👤' : '🤖'}] ${l.text}`).join('\n');
-  alert(`תמלול שיחה — ${d.callerName || d.callId}\nמשך: ${d.durationS}ש\n\n${lines || '(ריק)'}`);
+  alert(`תמלול — ${d.callerName || d.callId}\n${d.durationS}ש\n\n${lines || '(ריק)'}`);
 }
 
 async function deleteRecording(file) {
-  if (!confirm('למחוק תמלול זה?')) return;
+  if (!confirm('למחוק?')) return;
   await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`, { method: 'DELETE' });
   loadRecordings();
 }
 
-// ── Voicemails ────────────────────────────────────────────────────────────
 async function loadVoicemails() {
   const el = document.getElementById('voicemails-list');
   try {
-    const r = await fetch(`${API}/api/voicemails`, {});
+    const r = await fetch(`${API}/api/voicemails`);
     const d = await r.json();
     const vms = d.voicemails || [];
-    if (!vms.length) { el.innerHTML = '<em style="color:#8892a4">אין הודעות קוליות</em>'; return; }
+    if (!vms.length) { el.innerHTML = '<em style="color:#64748b">אין הודעות קוליות</em>'; return; }
     el.innerHTML = vms.map(vm => {
       const dt = new Date(vm.savedAt).toLocaleString('he-IL');
-      const caller = vm.callerName || '—';
       const audioUrl = `${API}/voicemail-audio/${encodeURIComponent(vm.wavFile)}`;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2d3148">
-        <div>
-          <b>${caller}</b> &nbsp; ${dt} &nbsp;
-          <span style="color:#8892a4">${vm.durationS}ש</span>
-        </div>
-        <div style="display:flex;gap:6px">
-          <audio controls src="${audioUrl}" style="height:28px;direction:ltr"></audio>
-          <button class="btn btn-sm" style="background:#c62828" onclick="deleteVoicemail('${vm.file}')">מחק</button>
-        </div>
-      </div>`;
+      return `<div class="list-row"><div style="flex:1"><b>${vm.callerName||'—'}</b><br><span style="font-size:11px;color:#64748b">${dt} · ${vm.durationS}ש</span></div><audio controls src="${audioUrl}" style="height:26px;direction:ltr"></audio><button class="btn btn-d btn-sm" onclick="deleteVoicemail('${vm.file}')">מחק</button></div>`;
     }).join('');
-  } catch (e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
 }
 
 async function deleteVoicemail(file) {
-  if (!confirm('למחוק הודעה קולית זו?')) return;
+  if (!confirm('למחוק?')) return;
   await fetch(`${API}/api/voicemails/${encodeURIComponent(file)}`, { method: 'DELETE' });
   loadVoicemails();
 }
 
-// ── IVR Builder ────────────────────────────────────────────────────────────
+// ── IVR Builder ───────────────────────────────────────────────────────────
 const IVR_ACTIONS = { ai: 'שיחה עם הבוט', voicemail: 'קח הודעה', transfer: 'העבר לשלוחה', message: 'נגן הודעה', hangup: 'נתק' };
-
 let ivrNodes = [];
 
 async function loadIvr() {
@@ -1351,22 +1667,16 @@ async function loadIvr() {
 
 function renderIvrNodes() {
   const el = document.getElementById('ivr-nodes-list');
-  if (!ivrNodes.length) { el.innerHTML = '<em style="color:#8892a4;font-size:13px">אין צמתים. לחץ "+ הוסף מקש"</em>'; return; }
+  if (!ivrNodes.length) { el.innerHTML = '<em style="color:#64748b;font-size:13px">אין מקשים. לחץ "+ הוסף מקש"</em>'; return; }
   el.innerHTML = ivrNodes.map((n, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#1a2236;border-radius:6px">
-      <input type="text" value="${n.digit}" maxlength="1" placeholder="מקש" style="width:44px;text-align:center;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:16px"
-        oninput="ivrNodes[${i}].digit=this.value">
-      <input type="text" value="${n.label || ''}" placeholder="תיאור (למשל: שירות לקוחות)" style="flex:1;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
-        oninput="ivrNodes[${i}].label=this.value">
-      <select style="background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
-        onchange="ivrNodes[${i}].action=this.value;renderIvrNodes()">
+    <div class="ivr-node">
+      <input type="text" value="${n.digit}" maxlength="1" placeholder="#" style="width:38px;text-align:center" oninput="ivrNodes[${i}].digit=this.value">
+      <input type="text" value="${n.label||''}" placeholder="תיאור" style="flex:1" oninput="ivrNodes[${i}].label=this.value">
+      <select style="flex:1" onchange="ivrNodes[${i}].action=this.value;renderIvrNodes()">
         ${Object.entries(IVR_ACTIONS).map(([v,l]) => `<option value="${v}"${n.action===v?' selected':''}>${l}</option>`).join('')}
       </select>
-      ${(n.action === 'transfer' || n.action === 'message') ? `
-        <input type="text" value="${n.value || ''}" placeholder="${n.action==='transfer'?'שלוחה/URI':'טקסט ההודעה'}"
-          style="flex:1;background:#141b2d;border:1px solid #2d3a52;border-radius:4px;padding:5px;color:#e2e8f0;font-size:13px"
-          oninput="ivrNodes[${i}].value=this.value">` : '<span style="flex:1"></span>'}
-      <button class="btn btn-sm" style="background:#c62828;padding:4px 8px" onclick="removeIvrNode(${i})">✕</button>
+      ${(n.action === 'transfer' || n.action === 'message') ? `<input type="text" value="${n.value||''}" placeholder="${n.action==='transfer'?'שלוחה':'הודעה'}" style="flex:1" oninput="ivrNodes[${i}].value=this.value">` : ''}
+      <button class="btn btn-d btn-sm" onclick="removeIvrNode(${i})">✕</button>
     </div>`).join('');
 }
 
@@ -1375,28 +1685,20 @@ function addIvrNode() {
   renderIvrNodes();
 }
 
-function removeIvrNode(i) {
-  ivrNodes.splice(i, 1);
-  renderIvrNodes();
-}
+function removeIvrNode(i) { ivrNodes.splice(i, 1); renderIvrNodes(); }
 
 async function saveIvr() {
-  const body = {
-    enabled: document.getElementById('ivr-enabled').checked,
-    greeting: document.getElementById('ivr-greeting').value,
-    timeout: parseInt(document.getElementById('ivr-timeout').value) || 5,
-    timeoutAction: document.getElementById('ivr-timeout-action').value,
-    nodes: ivrNodes
-  };
+  const body = { enabled: document.getElementById('ivr-enabled').checked, greeting: document.getElementById('ivr-greeting').value, timeout: parseInt(document.getElementById('ivr-timeout').value)||5, timeoutAction: document.getElementById('ivr-timeout-action').value, nodes: ivrNodes };
   try {
     const r = await fetch(API + '/api/ivr', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await r.json();
     const st = document.getElementById('ivr-status');
-    if (d.success) { st.style.color='#22c55e'; st.textContent = 'IVR נשמר ✓' + (body.enabled ? ' — פעיל' : ' — כבוי'); }
-    else { st.style.color='#ef5350'; st.textContent = 'שגיאה'; }
+    if (d.success) { st.className='status-line ok'; st.textContent = 'IVR נשמר ✓' + (body.enabled?' — פעיל':' — כבוי'); }
+    else { st.className='status-line err'; st.textContent = 'שגיאה'; }
   } catch(e) { document.getElementById('ivr-status').textContent = e.message; }
 }
 
+// ── Init ──────────────────────────────────────────────────────────────────
 loadSettings();
 loadIntegrations();
 loadContacts();
@@ -1408,6 +1710,60 @@ refresh();
 setInterval(refresh, 5000);
 setInterval(pollLogs, 2000);
 setInterval(loadScheduler, 30000);
+
+// ── Logout ────────────────────────────────────────────────────────────────
+function doLogout() {
+  // Force browser to forget Basic-Auth credentials by sending a bad request
+  fetch('/api/settings', { headers: { Authorization: 'Basic ' + btoa('logout:logout') } })
+    .catch(() => {})
+    .finally(() => { location.reload(); });
+}
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+const T = {
+  he: {
+    checking: 'בודק...', calls: 'שיחות', startCall: 'התחל שיחה', hangup: 'נתק',
+    notConnected: 'לא מחובר', phonePh: 'מספר יעד (ריק = בוט AI)',
+    secCalls: 'שיחות', secSettings: 'הגדרות', secIntegrations: 'אינטגרציות', secSystem: 'מערכת',
+    appStatus: 'סטטוס', appActiveCalls: 'שיחות פעילות', appTranscripts: 'תמלולים',
+    appVoicemail: 'הודעות קוליות', appDialer: 'חייגן', appContacts: 'אנשי קשר',
+    appScheduler: 'מתזמן', appSecurity: 'אבטחה', appLogs: 'לוגים', appChat: 'צ\'אט בדיקה',
+  },
+  en: {
+    checking: 'Checking...', calls: 'Calls', startCall: 'Start Call', hangup: 'Hang Up',
+    notConnected: 'Not connected', phonePh: 'Target number (empty = AI bot)',
+    secCalls: 'Calls', secSettings: 'Settings', secIntegrations: 'Integrations', secSystem: 'System',
+    appStatus: 'Status', appActiveCalls: 'Active Calls', appTranscripts: 'Transcripts',
+    appVoicemail: 'Voicemail', appDialer: 'Dialer', appContacts: 'Contacts',
+    appScheduler: 'Scheduler', appSecurity: 'Security', appLogs: 'Logs', appChat: 'Test Chat',
+  }
+};
+
+let currentLang = localStorage.getItem('lang') || 'he';
+
+function applyLang(lang) {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = T[lang][el.dataset.i18n];
+    if (v !== undefined) el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const v = T[lang][el.dataset.i18nPh];
+    if (v !== undefined) el.placeholder = v;
+  });
+  const btn = document.getElementById('lang-btn');
+  if (btn) btn.textContent = lang === 'he' ? 'EN' : 'עב';
+  currentLang = lang;
+}
+
+function toggleLang() {
+  const next = currentLang === 'he' ? 'en' : 'he';
+  localStorage.setItem('lang', next);
+  applyLang(next);
+}
+
+applyLang(currentLang);
 </script>
 </body>
 </html>

@@ -568,13 +568,19 @@ app.post('/call', async (req, res) => {
 
   const from = callerId || process.env.SIP_EXTENSION || '12611';
   const target = to.startsWith('sip:') ? to : `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
+  const callId = `out-${Date.now()}`;
+  const startedAt = Date.now();
 
-  logger.info('Outbound call requested', { to, target, from });
-  try {
-    const { endpoint, dialog } = await callHandler.makeOutboundCall(target, from);
-    const callId = dialog.id || `out-${Date.now()}`;
-    const startedAt = Date.now();
-    activeCalls.set(callId, { callId, to, from, target, startedAt, dialog });
+  logger.info('Outbound call requested', { to, target, from, callId });
+
+  // Return immediately so the browser doesn't time out waiting for SIP setup
+  activeCalls.set(callId, { callId, to, from, target, startedAt, status: 'calling', dialog: null });
+  res.json({ success: true, callId, status: 'calling' });
+
+  // Establish SIP call in the background
+  callHandler.makeOutboundCall(target, from).then(({ dialog }) => {
+    const existing = activeCalls.get(callId);
+    if (existing) activeCalls.set(callId, { ...existing, dialog, status: 'connected' });
     fireWebhook('call.started', { callId, direction: 'outbound', to, from, startedAt });
     dialog.once('destroy', () => {
       const durationS = Math.round((Date.now() - startedAt) / 1000);
@@ -588,25 +594,23 @@ app.post('/call', async (req, res) => {
         global.sendWhatsappMessage(`📞 שיחה יוצאת הסתיימה\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש`);
       }
       if (webhookUrl) {
-        // Per-call webhook override
         const orig = botSettings.callWebhookUrl;
         botSettings.callWebhookUrl = webhookUrl;
         fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
         botSettings.callWebhookUrl = orig;
       }
     });
-    res.json({ success: true, callId });
-  } catch (err) {
-    logger.error('Outbound call failed', { error: err.message });
-    fireWebhook('call.failed', { direction: 'outbound', to, from, error: err.message });
-    res.status(500).json({ error: err.message });
-  }
+  }).catch(err => {
+    logger.error('Outbound call failed', { callId, error: err.message });
+    activeCalls.delete(callId);
+    fireWebhook('call.failed', { callId, direction: 'outbound', to, from, error: err.message });
+  });
 });
 
 // List active calls
 app.get('/api/calls', (req, res) => {
-  const calls = [...activeCalls.values()].map(({ callId, to, from, startedAt }) => ({
-    callId, to, from, startedAt, durationS: Math.round((Date.now() - startedAt) / 1000)
+  const calls = [...activeCalls.values()].map(({ callId, to, from, startedAt, status }) => ({
+    callId, to, from, startedAt, status: status || 'connected', durationS: Math.round((Date.now() - startedAt) / 1000)
   }));
   res.json({ calls });
 });
