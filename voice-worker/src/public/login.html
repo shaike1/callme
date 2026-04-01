@@ -17,14 +17,10 @@
     padding: 20px;
     font-size: 14px;
   }
-  .wrap { width: 100%; max-width: 360px; }
+  .wrap { width: 100%; max-width: 380px; }
 
-  .header {
-    margin-bottom: 28px;
-    color: #6b7280;
-    font-size: 13px;
-  }
-  .header .prompt { color: #4ade80; display: inline; }
+  .header { margin-bottom: 28px; }
+  .header .prompt { color: #4ade80; }
   .header h1 {
     font-size: 16px;
     font-weight: 400;
@@ -32,17 +28,29 @@
     margin-top: 10px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
-  .header p { font-size: 12px; color: #4b5563; margin-top: 3px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  .header p {
+    font-size: 12px;
+    color: #4b5563;
+    margin-top: 3px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
 
   .form-block { margin-bottom: 20px; }
-  .field { margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
-  .field .lbl { color: #4ade80; white-space: nowrap; font-size: 13px; min-width: 80px; }
+  .field { margin-bottom: 14px; }
+  .field .lbl {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 12px;
+  }
+  .field .lbl-he { color: #4ade80; }
+  .field .lbl-en { color: #374151; font-size: 11px; }
   .field input {
-    flex: 1;
+    width: 100%;
     background: transparent;
     border: none;
     border-bottom: 1px solid #2d2d30;
-    padding: 6px 0;
+    padding: 7px 0;
     color: #e2e8f0;
     font-size: 14px;
     font-family: 'SF Mono', 'Fira Code', monospace;
@@ -51,95 +59,104 @@
   }
   .field input:focus { border-bottom-color: #6366f1; }
 
-  .btn-login {
+  .btn-row { display: flex; gap: 10px; margin-top: 6px; }
+  .btn {
+    flex: 1;
     background: transparent;
     border: 1px solid #2d2d30;
     border-radius: 4px;
-    padding: 8px 20px;
+    padding: 9px 10px;
     color: #abb2bf;
-    font-size: 13px;
+    font-size: 12px;
     font-family: 'SF Mono', 'Fira Code', monospace;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
-    width: 100%;
+    line-height: 1.3;
+    text-align: center;
   }
-  .btn-login:hover { border-color: #6366f1; color: #e2e8f0; }
-  .btn-login:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:hover { border-color: #6366f1; color: #e2e8f0; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn .he { display: block; }
+  .btn .en { display: block; color: #4b5563; font-size: 10px; margin-top: 2px; }
 
   .error {
     color: #f87171;
     font-size: 12px;
-    margin-top: 10px;
+    margin-top: 12px;
     display: none;
   }
   .error.show { display: block; }
   .error::before { content: '✗ '; }
-
-  .footer {
-    margin-top: 24px;
-    font-size: 12px;
-    color: #374151;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  }
-  .footer a { color: #374151; text-decoration: none; }
-  .footer a:hover { color: #6b7280; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="header">
-    <div><span class="prompt">callme</span><span>:~#</span></div>
+    <div class="prompt">callme:~#</div>
     <h1>CallMe Bot</h1>
     <p>AI Voice Assistant</p>
   </div>
 
-  <form id="login-form" class="form-block" onsubmit="doLogin(event)">
+  <form id="login-form" class="form-block" onsubmit="return false">
     <div class="field">
-      <span class="lbl">משתמש</span>
+      <div class="lbl"><span class="lbl-he">משתמש</span><span class="lbl-en">username</span></div>
       <input id="username" type="text" autocomplete="username" autofocus required>
     </div>
     <div class="field">
-      <span class="lbl">סיסמה</span>
+      <div class="lbl"><span class="lbl-he">סיסמה</span><span class="lbl-en">password</span></div>
       <input id="password" type="password" autocomplete="current-password" required>
     </div>
-    <button class="btn-login" type="submit" id="login-btn">[ כניסה ]</button>
+    <div class="btn-row">
+      <button class="btn" id="btn-dashboard" onclick="doLogin('dashboard')">
+        <span class="he">[ דשבורד ]</span>
+        <span class="en">Dashboard</span>
+      </button>
+      <button class="btn" id="btn-admin" onclick="doLogin('admin')">
+        <span class="he">[ טננטים ]</span>
+        <span class="en">Tenant Mgmt</span>
+      </button>
+    </div>
     <div class="error" id="error-msg"></div>
   </form>
-
-  <div class="footer">
-    <a href="/admin/login">ניהול טננטים →</a>
-  </div>
 </div>
 <script>
 if (sessionStorage.getItem('callme_auth')) { window.location.replace('/'); }
+if (sessionStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
 
-async function doLogin(e) {
-  e.preventDefault();
+async function doLogin(target) {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-  const btn = document.getElementById('login-btn');
+  if (!username || !password) return;
   const err = document.getElementById('error-msg');
+  const btnD = document.getElementById('btn-dashboard');
+  const btnA = document.getElementById('btn-admin');
   err.classList.remove('show');
-  btn.disabled = true; btn.textContent = '[ ... ]';
+  btnD.disabled = true; btnA.disabled = true;
+
+  const isAdmin = target === 'admin';
+  const endpoint = isAdmin ? '/api/admin/login' : '/api/login';
+  const storageKey = isAdmin ? 'callme_super_auth' : 'callme_auth';
+  const redirect = isAdmin ? '/admin' : '/';
+
   try {
-    const resp = await fetch('/api/login', {
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
     const data = await resp.json();
     if (resp.ok && data.token) {
-      sessionStorage.setItem('callme_auth', data.token);
-      window.location.replace('/');
+      sessionStorage.setItem(storageKey, data.token);
+      window.location.replace(redirect);
     } else {
-      err.textContent = data.error || 'שגיאת כניסה';
+      err.textContent = data.error || 'שגיאת כניסה / Login failed';
       err.classList.add('show');
-      btn.disabled = false; btn.textContent = '[ כניסה ]';
+      btnD.disabled = false; btnA.disabled = false;
     }
   } catch (ex) {
-    err.textContent = 'שגיאת רשת';
+    err.textContent = 'שגיאת רשת / Network error';
     err.classList.add('show');
-    btn.disabled = false; btn.textContent = '[ כניסה ]';
+    btnD.disabled = false; btnA.disabled = false;
   }
 }
 </script>
