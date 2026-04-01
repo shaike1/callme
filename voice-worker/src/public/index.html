@@ -135,6 +135,50 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
   .phone-inner{flex-direction:column;align-items:stretch}
   .call-btn{justify-content:center}
 }
+
+/* ── Light Mode ── */
+body.light{background:#f4f4f5;color:#3f3f46}
+body.light .hdr{background:#fff;border-color:#e4e4e7}
+body.light .hdr h1{color:#18181b}
+body.light .hdr .sub{color:#71717a}
+body.light .hdr-stat{background:#f4f4f5;border-color:#e4e4e7;color:#52525b}
+body.light .phone-bar{background:#fff;border-color:#e4e4e7}
+body.light .phone-input{background:#f4f4f5;border-color:#d4d4d8;color:#18181b}
+body.light .call-btn.start{border-color:#16a34a;color:#16a34a}
+body.light .call-btn.start:hover{background:#f0fdf4}
+body.light .call-btn.end{border-color:#dc2626;color:#dc2626}
+body.light .app-tile{background:#fff;border-color:#e4e4e7}
+body.light .app-tile:hover{background:#fafafa;border-color:#6366f1}
+body.light .app-badge{border-color:#fff}
+body.light .app-name{color:#71717a}
+body.light .grid-section-title{color:#a1a1aa}
+body.light .drawer{background:#fff;border-color:#e4e4e7}
+body.light .drawer-handle{background:#e4e4e7}
+body.light .drawer-header{border-color:#e4e4e7}
+body.light .drawer-title{color:#18181b}
+body.light .drawer-footer{border-color:#e4e4e7}
+body.light .drawer-close{border-color:#e4e4e7;color:#71717a}
+body.light input,body.light select,body.light textarea{background:#fff;border-color:#d4d4d8;color:#18181b}
+body.light .fr label{color:#71717a}
+body.light .toggle-row{border-color:#e4e4e7}
+body.light .toggle-row label{color:#52525b}
+body.light .slider{background:#d4d4d8}
+body.light .slider:before{background:#fff}
+body.light .btn{border-color:#d4d4d8;color:#52525b}
+body.light .btn:hover{border-color:#6366f1;color:#18181b}
+body.light .btn-p{border-color:#6366f1;color:#4f46e5}
+body.light .btn-p:hover{background:#eef2ff}
+body.light .btn-d{border-color:#f87171;color:#dc2626}
+body.light .btn-d:hover{background:#fef2f2}
+body.light .section-hint{background:#f4f4f5;border-color:#e4e4e7;color:#71717a}
+body.light .call-item{background:#f4f4f5;border-color:#e4e4e7}
+body.light .list-row{border-color:#e4e4e7}
+body.light #logs{background:#fafafa;border-color:#e4e4e7;color:#3f3f46}
+body.light .ivr-node{background:#f4f4f5;border-color:#e4e4e7}
+body.light .toast{background:#fff;border-color:#4ade80;color:#16a34a}
+body.light .toast.error{border-color:#f87171;color:#dc2626}
+body.light .wc-transcript-bar{color:#52525b}
+body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86efac;color:#16a34a}
 </style>
 </head>
 <body>
@@ -146,6 +190,7 @@ textarea{resize:vertical;min-height:72px;font-family:inherit}
   <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
   <span class="hdr-stat" id="uptime"></span>
   <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
+  <button onclick="toggleTheme()" id="theme-btn" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace" title="Toggle dark/light mode">☀</button>
   <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
   <a href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
   <button onclick="doLogout()" title="התנתק" style="font-size:12px;color:#f87171;background:transparent;border:1px solid #3b1a1a;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace">exit</button>
@@ -2001,6 +2046,19 @@ function toggleLang() {
 }
 
 applyLang(currentLang);
+
+// ── Theme toggle ──
+function applyTheme(t) {
+  document.body.classList.toggle('light', t === 'light');
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'light' ? '☾' : '☀';
+}
+function toggleTheme() {
+  const next = document.body.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem('theme') || 'dark');
 </script>
 </body>
 </html>
