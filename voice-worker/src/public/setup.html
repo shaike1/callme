@@ -6,73 +6,77 @@
 <title>CallMe Bot — Setup Wizard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 16px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #1a1a1c; color: #abb2bf; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 16px; }
   .wizard { width: 100%; max-width: 680px; }
-  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
-  .subtitle { color: #8892a4; font-size: 14px; margin-bottom: 30px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; color: #e2e8f0; }
+  .subtitle { color: #4b5563; font-size: 13px; margin-bottom: 30px; font-family: 'SF Mono','Fira Code',monospace; }
   /* Progress bar */
   .progress { display: flex; gap: 0; margin-bottom: 32px; }
-  .step-pill { flex: 1; text-align: center; padding: 10px 4px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 3px solid #2d3148; transition: all 0.2s; }
-  .step-pill.active { color: #60a5fa; border-color: #60a5fa; }
-  .step-pill.done { color: #22c55e; border-color: #22c55e; }
+  .step-pill { flex: 1; text-align: center; padding: 10px 4px; font-size: 11px; font-weight: 600; color: #374151; border-bottom: 2px solid #2d2d30; transition: all 0.2s; font-family: 'SF Mono','Fira Code',monospace; }
+  .step-pill.active { color: #818cf8; border-color: #6366f1; }
+  .step-pill.done { color: #4ade80; border-color: #22c55e; }
   /* Card */
-  .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 14px; padding: 28px; margin-bottom: 20px; }
-  .card h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-  .card .desc { font-size: 13px; color: #8892a4; margin-bottom: 20px; line-height: 1.6; }
+  .card { background: #111; border: 1px solid #2d2d30; border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: #e2e8f0; }
+  .card .desc { font-size: 13px; color: #4b5563; margin-bottom: 20px; line-height: 1.6; }
   /* Form */
   .field { margin-bottom: 16px; }
-  .field label { display: block; font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
-  input, select, textarea { width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 8px; padding: 10px 12px; color: #e2e8f0; font-size: 14px; outline: none; font-family: inherit; }
-  input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
+  .field label { display: block; font-size: 11px; color: #4ade80; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; font-family: 'SF Mono','Fira Code',monospace; }
+  input, select, textarea { width: 100%; background: #1a1a1c; border: 1px solid #2d2d30; border-radius: 4px; padding: 9px 12px; color: #e2e8f0; font-size: 13px; outline: none; font-family: inherit; transition: border-color 0.15s; }
+  input:focus, select:focus, textarea:focus { border-color: #6366f1; }
   textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
   /* Chips */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { padding: 6px 14px; border-radius: 20px; border: 1px solid #2d3148; background: #0f1117; color: #94a3b8; font-size: 13px; cursor: pointer; transition: all 0.15s; user-select: none; }
-  .chip.selected { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .chip { padding: 5px 12px; border-radius: 4px; border: 1px solid #2d2d30; background: transparent; color: #6b7280; font-size: 12px; cursor: pointer; transition: all 0.15s; user-select: none; font-family: 'SF Mono','Fira Code',monospace; }
+  .chip.selected { border-color: #6366f1; color: #818cf8; background: #1a1a2e; }
   /* Voice cards */
-  .voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
-  .voice-card { background: #0f1117; border: 2px solid #2d3148; border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; transition: all 0.15s; }
-  .voice-card:hover { border-color: #60a5fa; }
-  .voice-card.selected { border-color: #3b82f6; background: #1d4ed8; }
+  .voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+  .voice-card { background: #1a1a1c; border: 1px solid #2d2d30; border-radius: 6px; padding: 12px 8px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .voice-card:hover { border-color: #6366f1; }
+  .voice-card.selected { border-color: #6366f1; background: #1a1a2e; }
   .voice-card .icon { font-size: 22px; margin-bottom: 4px; }
-  .voice-card .name { font-size: 12px; font-weight: 600; }
-  .voice-card .trait { font-size: 10px; color: #64748b; margin-top: 2px; }
-  .voice-card.selected .trait { color: #93c5fd; }
+  .voice-card .name { font-size: 11px; font-weight: 600; color: #abb2bf; font-family: 'SF Mono','Fira Code',monospace; }
+  .voice-card .trait { font-size: 10px; color: #374151; margin-top: 2px; }
+  .voice-card.selected .trait { color: #6366f1; }
   /* AI generate button */
-  .generate-btn { width: 100%; background: linear-gradient(135deg, #1d4ed8, #7c3aed); color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; transition: opacity 0.15s; }
-  .generate-btn:hover { opacity: 0.88; }
+  .generate-btn { width: 100%; background: transparent; color: #818cf8; border: 1px solid #3730a3; border-radius: 4px; padding: 10px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: all 0.15s; font-family: 'SF Mono','Fira Code',monospace; }
+  .generate-btn:hover { border-color: #6366f1; background: #1a1a2e; color: #e2e8f0; }
   /* Navigation */
   .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .btn { padding: 10px 28px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 700; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: #3b82f6; color: #fff; }
-  .btn-ghost { background: transparent; color: #8892a4; border: 1px solid #2d3148; }
-  .btn-success { background: #16a34a; color: #fff; }
-  .skip { font-size: 13px; color: #64748b; cursor: pointer; text-decoration: underline; }
-  .skip:hover { color: #94a3b8; }
+  .btn { padding: 9px 24px; border-radius: 4px; border: 1px solid #2d2d30; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; background: transparent; color: #abb2bf; }
+  .btn:hover { border-color: #6366f1; color: #e2e8f0; }
+  .btn-primary { border-color: #3730a3; color: #818cf8; }
+  .btn-primary:hover { background: #1a1a2e; border-color: #6366f1; color: #e2e8f0; }
+  .btn-ghost { color: #4b5563; }
+  .btn-success { border-color: #14532d; color: #4ade80; }
+  .btn-success:hover { background: #0a1a0a; border-color: #4ade80; }
+  .skip { font-size: 12px; color: #374151; cursor: pointer; font-family: 'SF Mono','Fira Code',monospace; }
+  .skip:hover { color: #6b7280; }
   /* SIP provider cards */
-  .provider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .provider-card { background: #0f1117; border: 2px solid #2d3148; border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; }
-  .provider-card:hover { border-color: #60a5fa; }
-  .provider-card.selected { border-color: #3b82f6; }
-  .provider-card .pname { font-weight: 700; font-size: 14px; }
-  .provider-card .pdesc { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .provider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .provider-card { background: #1a1a1c; border: 1px solid #2d2d30; border-radius: 6px; padding: 14px; cursor: pointer; transition: all 0.15s; }
+  .provider-card:hover { border-color: #6366f1; }
+  .provider-card.selected { border-color: #6366f1; background: #1a1a2e; }
+  .provider-card .pname { font-weight: 600; font-size: 14px; color: #e2e8f0; }
+  .provider-card .pdesc { font-size: 12px; color: #4b5563; margin-top: 4px; }
   /* Web call area */
   #webcall-area { text-align: center; padding: 20px 0; }
-  #wc-btn { font-size: 16px; padding: 14px 36px; border-radius: 50px; border: none; background: #16a34a; color: #fff; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-  #wc-btn.active { background: #c62828; }
-  #wc-status { margin-top: 14px; color: #8892a4; font-size: 14px; min-height: 22px; }
-  #wc-transcript { margin-top: 16px; background: #0f1117; border-radius: 10px; padding: 14px; min-height: 80px; font-size: 13px; line-height: 1.7; text-align: right; max-height: 200px; overflow-y: auto; }
-  #wc-rms { font-size: 12px; color: #4caf50; min-height: 16px; margin-top: 6px; }
+  #wc-btn { font-size: 14px; padding: 10px 32px; border-radius: 4px; border: 1px solid #14532d; background: transparent; color: #4ade80; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'SF Mono','Fira Code',monospace; }
+  #wc-btn:hover { background: #0a1a0a; border-color: #4ade80; }
+  #wc-btn.active { border-color: #f87171; color: #f87171; }
+  #wc-btn.active:hover { background: #1a0a0a; }
+  #wc-status { margin-top: 14px; color: #4b5563; font-size: 13px; min-height: 22px; font-family: 'SF Mono','Fira Code',monospace; }
+  #wc-transcript { margin-top: 16px; background: #0a0a0a; border: 1px solid #2d2d30; border-radius: 4px; padding: 12px; min-height: 80px; font-size: 13px; line-height: 1.7; text-align: right; max-height: 200px; overflow-y: auto; }
+  #wc-rms { font-size: 12px; color: #4ade80; min-height: 16px; margin-top: 6px; font-family: 'SF Mono','Fira Code',monospace; }
   .hidden { display: none; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #111; border: 1px solid #4ade80; color: #4ade80; padding: 8px 20px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono','Fira Code',monospace; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
   .toast.show { opacity: 1; }
-  .toast.error { background: #ef4444; }
+  .toast.error { border-color: #f87171; color: #f87171; }
   /* Step 3 success */
   .success-box { text-align: center; padding: 30px; }
-  .success-box .icon { font-size: 56px; margin-bottom: 16px; }
-  .success-box h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-  .success-box p { color: #8892a4; font-size: 14px; line-height: 1.7; }
+  .success-box .icon { font-size: 48px; margin-bottom: 16px; }
+  .success-box h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #e2e8f0; }
+  .success-box p { color: #4b5563; font-size: 13px; line-height: 1.7; }
 </style>
 </head>
 <body>
