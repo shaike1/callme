@@ -42,8 +42,8 @@ app.use('/audio', express.static(AUDIO_DIR));
 // Credentials resolved at request time so dashboard changes take effect immediately
 function getAdminCreds() {
   // botSettings overrides env vars (so dashboard-set password wins)
-  const user = (botSettings && botSettings.adminUser) || process.env.ADMIN_USER || 'admin';
-  const pass = (botSettings && botSettings.adminPass) || process.env.ADMIN_PASS || 'callme2024';
+  const user = (botSettings && botSettings.adminUser) || process.env.SUPER_ADMIN_USER || process.env.ADMIN_USER || 'admin';
+  const pass = (botSettings && botSettings.adminPass) || process.env.SUPER_ADMIN_PASS || process.env.ADMIN_PASS || 'callme2024';
   return { user, pass };
 }
 
@@ -139,20 +139,37 @@ const defaultSettings = {
   persona: process.env.GEMINI_SYSTEM_PROMPT ||
     'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew.',
   language: process.env.CALL_LANGUAGE || 'he',
-  extension: process.env.SIP_EXTENSION || '12611',
+  extension: process.env.SIP_EXTENSION || '',
   greeting: 'שלום! ברך את המשתמש בקצרה בעברית.',
-  voice: 'Kore',
-  // SIP trunk config (optional — overrides env vars when set)
-  sipProvider: '',       // '3cx' | 'zadarma' | 'twilio' | 'custom'
+  voice: process.env.GEMINI_VOICE || 'Kore',
+  // AI engine & API keys
+  aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: '',             // blank = use server default
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || '',
+  // Bot "soul" — rules, knowledge, escalation
+  rules: '',
+  knowledge: '',
+  escalationTurns: '',
+  escalationNumber: '',
+  // Tool toggles
+  toolFindContact: true,
+  toolAddContact: true,
+  toolScheduleCall: true,
+  toolCalendar: true,
+  toolHomeAssistant: false,
+  // SIP trunk config
+  sipProvider: '',             // '3cx' | 'zadarma' | 'twilio' | 'custom'
   sipServer: process.env.SIP_DOMAIN || '',
   sipRegistrar: process.env.SIP_REGISTRAR || '',
   sipExtension: process.env.SIP_EXTENSION || '',
   sipAuthId: process.env.SIP_AUTH_ID || '',
-  sipPassword: '',       // never stored in plaintext after first load
-  sipDid: '',            // DID phone number (e.g. +972XXXXXXXXX)
-  // Admin credentials (override ADMIN_USER / ADMIN_PASS env vars when set)
-  adminUser: '',
-  adminPass: '',
+  sipPassword: process.env.SIP_PASSWORD || '',
+  sipDid: process.env.DEFAULT_CALLER_ID || '',
+  // Admin credentials
+  adminUser: process.env.SUPER_ADMIN_USER || '',
+  adminPass: process.env.SUPER_ADMIN_PASS || '',
   // Webhook URL for call events (call.started, call.ended, call.failed)
   callWebhookUrl: process.env.CALL_WEBHOOK_URL || '',
   // Telegram notifications
@@ -164,25 +181,26 @@ const defaultSettings = {
   calendarUrl: '',
   calendarName: 'My Calendar',
   // WhatsApp notifications (via CallMeBot — free, no setup)
-  whatsappPhone: '',    // e.g. +972501234567
-  whatsappApiKey: '',   // from callmebot.com
+  whatsappPhone: '',
+  whatsappApiKey: '',
   whatsappCallSummary: false,
   // Twilio integration (PSTN DID → Gemini Live via Media Streams)
   twilioAccountSid: '',
   twilioAuthToken: '',
-  twilioPhoneNumber: '',   // e.g. +19725551234
-  twilioPublicUrl: '',     // e.g. https://callme.right-api.com
+  twilioPhoneNumber: '',
+  twilioPublicUrl: '',
   // Vonage integration (PSTN DID → Gemini Live via WebSocket — native 16kHz PCM)
   vonageApiKey: '',
   vonageApiSecret: '',
-  vonagePhoneNumber: '',   // e.g. 972501234567
-  vonagePublicUrl: '',     // e.g. https://callme.right-api.com
-  vonageAppId: '',         // Vonage Voice Application ID
+  vonagePhoneNumber: '',
+  vonagePublicUrl: '',
+  vonageAppId: '',
 };
 
 let botSettings = { ...defaultSettings };
+const _settingsFileExisted = fs.existsSync(SETTINGS_FILE);
 try {
-  if (fs.existsSync(SETTINGS_FILE)) {
+  if (_settingsFileExisted) {
     botSettings = { ...defaultSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
     logger.info('Loaded bot settings from file');
   }
@@ -191,6 +209,12 @@ try {
 const saveSettings = () => {
   try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(botSettings, null, 2)); } catch (_) {}
 };
+
+// On first run: seed settings file from environment so dashboard manages everything
+if (!_settingsFileExisted) {
+  saveSettings();
+  logger.info('First-run: created bot-settings.json from environment variables');
+}
 
 // Export settings so call-handler can read them
 global.botSettings = botSettings;
@@ -204,6 +228,9 @@ app.get('/api/settings', (req, res) => {
     adminUser: botSettings.adminUser || adminUser,
     telegramBotToken: botSettings.telegramBotToken ? '✓ set' : '',
     whatsappApiKey: botSettings.whatsappApiKey ? '✓ set' : '',
+    geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
+    elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   });
 });
 
@@ -250,6 +277,24 @@ app.post('/api/settings', (req, res) => {
   if (vonagePhoneNumber !== undefined) botSettings.vonagePhoneNumber = vonagePhoneNumber;
   if (vonagePublicUrl !== undefined) botSettings.vonagePublicUrl = vonagePublicUrl;
   if (vonageAppId !== undefined) botSettings.vonageAppId = vonageAppId;
+  // AI engine, API keys, soul fields
+  const { aiEngine, geminiApiKey, geminiModel, openaiApiKey, elevenlabsApiKey,
+          rules, knowledge, escalationTurns, escalationNumber,
+          toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
+  if (aiEngine !== undefined) botSettings.aiEngine = aiEngine;
+  if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
+  if (geminiModel !== undefined) botSettings.geminiModel = geminiModel;
+  if (openaiApiKey !== undefined && openaiApiKey !== '' && openaiApiKey !== '✓ set') botSettings.openaiApiKey = openaiApiKey;
+  if (elevenlabsApiKey !== undefined && elevenlabsApiKey !== '' && elevenlabsApiKey !== '✓ set') botSettings.elevenlabsApiKey = elevenlabsApiKey;
+  if (rules !== undefined) botSettings.rules = rules;
+  if (knowledge !== undefined) botSettings.knowledge = knowledge;
+  if (escalationTurns !== undefined) botSettings.escalationTurns = escalationTurns;
+  if (escalationNumber !== undefined) botSettings.escalationNumber = escalationNumber;
+  if (toolFindContact !== undefined) botSettings.toolFindContact = toolFindContact;
+  if (toolAddContact !== undefined) botSettings.toolAddContact = toolAddContact;
+  if (toolScheduleCall !== undefined) botSettings.toolScheduleCall = toolScheduleCall;
+  if (toolCalendar !== undefined) botSettings.toolCalendar = toolCalendar;
+  if (toolHomeAssistant !== undefined) botSettings.toolHomeAssistant = toolHomeAssistant;
   saveSettings();
   logger.info('Bot settings updated', { ...botSettings, sipPassword: '***', adminPass: '***' });
   // Return settings without exposing passwords
@@ -257,6 +302,9 @@ app.post('/api/settings', (req, res) => {
     ...botSettings,
     sipPassword: botSettings.sipPassword ? '✓ set' : '',
     adminPass: botSettings.adminPass ? '✓ set' : '',
+    geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
+    elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   }});
 });
 
