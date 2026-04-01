@@ -441,6 +441,8 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
 
     <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:8px">⚙️ מנוע AI</div>
+    <div class="toggle-row"><label>הפעל מנוע AI</label><label class="switch"><input type="checkbox" id="s-aiEnabled" onchange="onAiEnabledChange()"><span class="slider"></span></label></div>
+    <div id="ai-engine-section">
     <div class="fr"><label>Engine</label>
       <select id="s-aiEngine" onchange="onEngineChange()">
         <option value="gemini-live">Gemini Live (Google)</option>
@@ -466,6 +468,8 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
       </div>
       <div class="section-hint" style="color:#f59e0b">⚠️ תמיכה ב-OpenAI Realtime — בקרוב</div>
     </div>
+    </div><!-- /ai-engine-section -->
+    <div id="ai-disabled-notice" style="display:none;font-size:12px;color:#f87171;padding:6px 0">מנוע AI כבוי — שיחות נכנסות יעברו ישירות לתא קולי.</div>
 
     <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
     <div class="fr"><label>קול</label>
@@ -996,6 +1000,13 @@ const SIP_HINTS = {
   'custom': 'Enter your SIP provider details manually.',
 };
 
+function onAiEnabledChange() {
+  const enabled = document.getElementById('s-aiEnabled').checked;
+  document.getElementById('ai-engine-section').style.display = enabled ? '' : 'none';
+  document.getElementById('ai-disabled-notice').style.display = enabled ? 'none' : '';
+  saveSettings();
+}
+
 function onEngineChange() {
   const engine = document.getElementById('s-aiEngine')?.value;
   const gemini = document.getElementById('gemini-keys-section');
@@ -1018,6 +1029,8 @@ async function loadSettings() {
     const s = await r.json();
     document.getElementById('s-name').value = s.name || '';
     document.getElementById('s-greeting').value = s.greeting || '';
+    document.getElementById('s-aiEnabled').checked = s.aiEnabled !== false;
+    onAiEnabledChange();
     document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
     document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
     if (s.geminiApiKey) { document.getElementById('s-geminiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-gemini').style.display = ''; }
@@ -1078,6 +1091,7 @@ async function saveSettings() {
   const body = {
     name: document.getElementById('s-name').value,
     greeting: document.getElementById('s-greeting').value,
+    aiEnabled: document.getElementById('s-aiEnabled').checked,
     aiEngine: document.getElementById('s-aiEngine').value,
     geminiModel: document.getElementById('s-geminiModel').value,
     geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,

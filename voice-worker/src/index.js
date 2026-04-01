@@ -327,9 +327,10 @@ app.post('/api/settings', (req, res) => {
   if (vonagePublicUrl !== undefined) botSettings.vonagePublicUrl = vonagePublicUrl;
   if (vonageAppId !== undefined) botSettings.vonageAppId = vonageAppId;
   // AI engine, API keys, soul fields
-  const { aiEngine, geminiApiKey, geminiModel, openaiApiKey, elevenlabsApiKey,
+  const { aiEnabled, aiEngine, geminiApiKey, geminiModel, openaiApiKey, elevenlabsApiKey,
           rules, knowledge, escalationTurns, escalationNumber,
           toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
+  if (aiEnabled !== undefined) botSettings.aiEnabled = aiEnabled;
   if (aiEngine !== undefined) botSettings.aiEngine = aiEngine;
   if (geminiApiKey === '__CLEAR__') botSettings.geminiApiKey = '';
   else if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;

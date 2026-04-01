@@ -125,7 +125,11 @@ class CallHandler {
 
       // Use per-tenant IVR config if tenant was resolved, else fall back to global
       const ivrCfg = tenantSettings ? null : global.ivrConfig; // tenant IVR not loaded here yet — use global for now
-      if (CONVERSATION_ENGINE === 'gemini-live' && ivrCfg && ivrCfg.enabled) {
+      const aiEnabled = effectiveSettings.aiEnabled !== false; // default true
+      if (!aiEnabled) {
+        logger.info('AI engine disabled — routing to voicemail', { callId });
+        await this._handleVoicemail(endpoint, dialog, callId, callerName);
+      } else if (CONVERSATION_ENGINE === 'gemini-live' && ivrCfg && ivrCfg.enabled) {
         await this._handleIvrCall(endpoint, dialog, callId, callerName, effectiveSettings);
       } else if (CONVERSATION_ENGINE === 'gemini-live') {
         await this._handleGeminiLiveCall(endpoint, dialog, callId, callerName, effectiveSettings);
