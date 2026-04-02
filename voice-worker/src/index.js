@@ -194,6 +194,7 @@ const defaultSettings = {
   // AI engine & API keys
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
+  aiMonthlyCostLimitUsd: 0,   // 0 = no limit
   aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
   geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
@@ -334,8 +335,9 @@ app.post('/api/settings', (req, res) => {
           rules, knowledge, escalationTurns, escalationNumber,
           toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
   if (aiEnabled !== undefined) botSettings.aiEnabled = aiEnabled;
-  const { aiDailyCostLimitUsd } = req.body || {};
+  const { aiDailyCostLimitUsd, aiMonthlyCostLimitUsd } = req.body || {};
   if (aiDailyCostLimitUsd !== undefined) botSettings.aiDailyCostLimitUsd = parseFloat(aiDailyCostLimitUsd) || 0;
+  if (aiMonthlyCostLimitUsd !== undefined) botSettings.aiMonthlyCostLimitUsd = parseFloat(aiMonthlyCostLimitUsd) || 0;
   if (aiEngine !== undefined) botSettings.aiEngine = aiEngine;
   if (geminiApiKey === '__CLEAR__') botSettings.geminiApiKey = '';
   else if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
@@ -1319,9 +1321,10 @@ app.post('/admin/tenants', requireSuperAdmin, (req, res) => {
 
 app.get('/admin/billing', requireSuperAdmin, (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
   const result = tenants.map(t => {
     const dir = path.join(AUDIO_DIR, 'tenants', t.id, 'recordings');
-    let totalCostUsd = 0, todayCostUsd = 0, callCount = 0;
+    let totalCostUsd = 0, todayCostUsd = 0, monthCostUsd = 0, callCount = 0;
     try {
       const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
       callCount = files.length;
@@ -1331,13 +1334,14 @@ app.get('/admin/billing', requireSuperAdmin, (req, res) => {
           const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
           totalCostUsd += cost;
           if (d.savedAt && d.savedAt.startsWith(today)) todayCostUsd += cost;
+          if (d.savedAt && d.savedAt.startsWith(month)) monthCostUsd += cost;
         } catch (_) {}
       }
     } catch (_) {}
-    return { id: t.id, name: t.name, callCount, totalCostUsd: Math.round(totalCostUsd * 10000) / 10000, todayCostUsd: Math.round(todayCostUsd * 10000) / 10000 };
+    return { id: t.id, name: t.name, callCount, totalCostUsd: Math.round(totalCostUsd * 10000) / 10000, todayCostUsd: Math.round(todayCostUsd * 10000) / 10000, monthCostUsd: Math.round(monthCostUsd * 10000) / 10000 };
   });
   const globalDir = RECORDINGS_DIR;
-  let globalTotal = 0, globalToday = 0, globalCalls = 0;
+  let globalTotal = 0, globalToday = 0, globalMonth = 0, globalCalls = 0;
   try {
     const files = fs.readdirSync(globalDir).filter(f => f.endsWith('.json'));
     globalCalls = files.length;
@@ -1347,10 +1351,11 @@ app.get('/admin/billing', requireSuperAdmin, (req, res) => {
         const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
         globalTotal += cost;
         if (d.savedAt && d.savedAt.startsWith(today)) globalToday += cost;
+        if (d.savedAt && d.savedAt.startsWith(month)) globalMonth += cost;
       } catch (_) {}
     }
   } catch (_) {}
-  res.json({ tenants: result, global: { callCount: globalCalls, totalCostUsd: Math.round(globalTotal * 10000) / 10000, todayCostUsd: Math.round(globalToday * 10000) / 10000 } });
+  res.json({ tenants: result, global: { callCount: globalCalls, totalCostUsd: Math.round(globalTotal * 10000) / 10000, todayCostUsd: Math.round(globalToday * 10000) / 10000, monthCostUsd: Math.round(globalMonth * 10000) / 10000 } });
 });
 
 app.delete('/admin/tenants/:tenantId', requireSuperAdmin, (req, res) => {
@@ -1468,10 +1473,31 @@ function getTodayCostUsd(recDir) {
   } catch (_) { return 0; }
 }
 
+function getMonthCostUsd(recDir) {
+  try {
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const files = fs.readdirSync(recDir).filter(f => f.endsWith('.json'));
+    return files.reduce((sum, f) => {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(recDir, f), 'utf8'));
+        if (!d.savedAt || !d.savedAt.startsWith(month)) return sum;
+        const cost = d.estimatedCostUsd ?? (d.durationS ? estimateRecordingCost(d.durationS, d.engine) : 0);
+        return sum + cost;
+      } catch (_) { return sum; }
+    }, 0);
+  } catch (_) { return 0; }
+}
+global.getMonthCostUsd = () => getMonthCostUsd(path.join(AUDIO_DIR, 'recordings'));
+
 app.get('/api/daily-cost', (req, res) => {
   const todayCost = getTodayCostUsd(RECORDINGS_DIR);
+  const monthCost = getMonthCostUsd(RECORDINGS_DIR);
   const limitUsd = botSettings.aiDailyCostLimitUsd || 0;
-  res.json({ todayCostUsd: Math.round(todayCost * 10000) / 10000, limitUsd, limitActive: limitUsd > 0, limitReached: limitUsd > 0 && todayCost >= limitUsd });
+  const monthlyLimitUsd = botSettings.aiMonthlyCostLimitUsd || 0;
+  res.json({
+    todayCostUsd: Math.round(todayCost * 10000) / 10000, limitUsd, limitActive: limitUsd > 0, limitReached: limitUsd > 0 && todayCost >= limitUsd,
+    monthCostUsd: Math.round(monthCost * 10000) / 10000, monthlyLimitUsd, monthlyLimitActive: monthlyLimitUsd > 0, monthlyLimitReached: monthlyLimitUsd > 0 && monthCost >= monthlyLimitUsd
+  });
 });
 
 // ── Recordings (call transcripts) ────────────────────────────────────────
@@ -1651,6 +1677,9 @@ app.get('/api/status', async (req, res) => {
     if (botSettings.aiEnabled === false) { ws.close(4503, 'AI engine disabled'); return; }
     if (botSettings.aiDailyCostLimitUsd > 0 && global.getTodayCostUsd && global.getTodayCostUsd() >= botSettings.aiDailyCostLimitUsd) {
       ws.close(4503, 'Daily cost limit reached'); return;
+    }
+    if (botSettings.aiMonthlyCostLimitUsd > 0 && global.getMonthCostUsd && global.getMonthCostUsd() >= botSettings.aiMonthlyCostLimitUsd) {
+      ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
     const apiKey = botSettings.geminiApiKey;
@@ -1868,10 +1897,13 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
     const sessionId = `browser-${Date.now()}`;
     logger.info('Browser WebCall connected', { sessionId });
 
-    // Enforce AI enabled/daily cost limit
+    // Enforce AI enabled/cost limits
     if (botSettings.aiEnabled === false) { ws.close(4503, 'AI engine disabled'); return; }
     if (botSettings.aiDailyCostLimitUsd > 0 && global.getTodayCostUsd && global.getTodayCostUsd() >= botSettings.aiDailyCostLimitUsd) {
       ws.close(4503, 'Daily cost limit reached'); return;
+    }
+    if (botSettings.aiMonthlyCostLimitUsd > 0 && global.getMonthCostUsd && global.getMonthCostUsd() >= botSettings.aiMonthlyCostLimitUsd) {
+      ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
     const apiKey = botSettings.geminiApiKey;

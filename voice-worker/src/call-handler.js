@@ -127,15 +127,23 @@ class CallHandler {
       const ivrCfg = tenantSettings ? null : global.ivrConfig; // tenant IVR not loaded here yet — use global for now
       const aiEnabled = effectiveSettings.aiEnabled !== false; // default true
       const dailyLimit = parseFloat(effectiveSettings.aiDailyCostLimitUsd) || 0;
-      let dailyLimitReached = false;
+      const monthlyLimit = parseFloat(effectiveSettings.aiMonthlyCostLimitUsd) || 0;
+      let costLimitReached = false;
       if (dailyLimit > 0 && global.getTodayCostUsd) {
         const todayCost = global.getTodayCostUsd();
         if (todayCost >= dailyLimit) {
-          dailyLimitReached = true;
+          costLimitReached = true;
           logger.warn('Daily cost limit reached — routing to voicemail', { callId, todayCost, dailyLimit });
         }
       }
-      if (!aiEnabled || dailyLimitReached) {
+      if (!costLimitReached && monthlyLimit > 0 && global.getMonthCostUsd) {
+        const monthCost = global.getMonthCostUsd();
+        if (monthCost >= monthlyLimit) {
+          costLimitReached = true;
+          logger.warn('Monthly cost limit reached — routing to voicemail', { callId, monthCost, monthlyLimit });
+        }
+      }
+      if (!aiEnabled || costLimitReached) {
         logger.info('AI engine disabled or limit reached — routing to voicemail', { callId });
         await this._handleVoicemail(endpoint, dialog, callId, callerName);
       } else if (CONVERSATION_ENGINE === 'gemini-live' && ivrCfg && ivrCfg.enabled) {
