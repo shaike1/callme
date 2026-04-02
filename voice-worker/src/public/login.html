@@ -138,9 +138,8 @@
   </form>
 </div>
 <script>
-// Check both sessionStorage and localStorage
+// Auto-redirect only for regular dashboard auth (not super admin — let user choose)
 if (sessionStorage.getItem('callme_auth') || localStorage.getItem('callme_auth')) { window.location.replace('/'); }
-if (sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
 
 async function doLogin(target) {
   const username = document.getElementById('username').value.trim();

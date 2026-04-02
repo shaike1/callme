@@ -1234,8 +1234,8 @@ global.resolveTenantForCall = function(calledNumber, calledExtension) {
 // Super-admin auth
 function getSuperAdminCreds() {
   return {
-    user: process.env.SUPER_ADMIN_USER || 'superadmin',
-    pass: process.env.SUPER_ADMIN_PASS || 'superadmin2024',
+    user: process.env.SUPER_ADMIN_USER || (botSettings && botSettings.adminUser) || 'superadmin',
+    pass: process.env.SUPER_ADMIN_PASS || (botSettings && botSettings.adminPass) || 'superadmin2024',
   };
 }
 
@@ -1277,6 +1277,32 @@ app.param('tenantId', (req, res, next, tenantId) => {
   next();
 });
 
+// Tenant login page (public)
+app.get('/t/:tenantId/login', (req, res) => {
+  let html = fs.readFileSync(path.join(__dirname, 'public', 'tenant-login.html'), 'utf8');
+  html = html
+    .replaceAll('__TENANT_ID__', req.tenantId)
+    .replaceAll('__TENANT_NAME__', req.tenant?.name || req.tenantId);
+  res.send(html);
+});
+
+// Tenant login API
+app.post('/t/:tenantId/api/login', express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'missing credentials' });
+  const s = req.tenantSettings || {};
+  const user = s.adminUser || 'admin';
+  const pass = s.adminPass || 'callme2024';
+  if (username === user && password === pass) {
+    return res.json({
+      success: true,
+      token: Buffer.from(`${username}:${password}`).toString('base64'),
+      tenant: { id: req.tenantId, name: req.tenant?.name || req.tenantId },
+    });
+  }
+  res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
+});
+
 // Super-admin login page (public)
 app.get('/admin/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-login.html'));
@@ -1293,8 +1319,8 @@ app.post('/api/admin/login', express.json(), (req, res) => {
   res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
 });
 
-// Super-admin panel
-app.get('/admin', requireSuperAdmin, (req, res) => {
+// Super-admin panel — serve HTML without auth; client-side JS redirects to /admin/login if no session
+app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -1366,12 +1392,12 @@ app.delete('/admin/tenants/:tenantId', requireSuperAdmin, (req, res) => {
 });
 
 // Tenant dashboard — serve index.html with injected API prefix
-app.get('/t/:tenantId', requireTenantAuth, (req, res) => {
+app.get('/t/:tenantId', (req, res) => {
   let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
   html = html.replace("const API = '';", `const API = '/t/${req.tenantId}';`);
   res.send(html);
 });
-app.get('/t/:tenantId/', requireTenantAuth, (req, res) => {
+app.get('/t/:tenantId/', (req, res) => {
   let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
   html = html.replace("const API = '';", `const API = '/t/${req.tenantId}';`);
   res.send(html);

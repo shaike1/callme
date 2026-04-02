@@ -180,17 +180,36 @@
 </div>
 
 <script>
-// Auth guard
-const _superAuth = sessionStorage.getItem('callme_super_auth');
-if (!_superAuth) { window.location.replace('/admin/login'); }
+// Auth guard — validate token immediately to avoid redirect loops
+const _superAuth = sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
+if (!_superAuth) { window.location.replace('/login'); }
+else {
+  // Validate token before proceeding — if invalid, clear and redirect
+  (async () => {
+    try {
+      const r = await fetch('/admin/tenants', { headers: { 'Authorization': 'Basic ' + _superAuth } });
+      if (r.status === 401) {
+        sessionStorage.removeItem('callme_super_auth');
+        localStorage.removeItem('callme_super_auth');
+        window.location.replace('/login');
+      }
+    } catch(_) {}
+  })();
+}
 
 // Fetch with auth
+let _redirecting = false;
 const _origFetch = window.fetch.bind(window);
 window.fetch = async (url, opts = {}) => {
-  const auth = sessionStorage.getItem('callme_super_auth');
+  const auth = sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
   if (auth) { opts = { ...opts, headers: { 'Authorization': 'Basic ' + auth, ...(opts.headers||{}) } }; }
   const resp = await _origFetch(url, opts);
-  if (resp.status === 401) { sessionStorage.removeItem('callme_super_auth'); window.location.replace('/admin/login'); }
+  if (resp.status === 401 && !_redirecting) {
+    _redirecting = true;
+    sessionStorage.removeItem('callme_super_auth');
+    localStorage.removeItem('callme_super_auth');
+    window.location.replace('/login');
+  }
   return resp;
 };
 

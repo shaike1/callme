@@ -192,7 +192,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
   <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
   <button onclick="toggleTheme()" id="theme-btn" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace" title="Toggle dark/light mode">☀</button>
   <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
-  <a href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
+  <a id="setup-link" href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
   <button onclick="doLogout()" title="התנתק" style="font-size:12px;color:#f87171;background:transparent;border:1px solid #3b1a1a;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace">exit</button>
 </div>
 
@@ -939,26 +939,38 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Auth: redirect to /login if no stored credentials ──────────────────────
-const _storedAuth = sessionStorage.getItem('callme_auth') || localStorage.getItem('callme_auth');
-if (!_storedAuth) { window.location.replace('/login'); }
+// ── Auth: support both global and tenant dashboards ────────────────────────
+const _tenantMatch = window.location.pathname.match(/^\/t\/([^/]+)/);
+const _tenantId = _tenantMatch ? decodeURIComponent(_tenantMatch[1]) : '';
+const _isTenantDashboard = Boolean(_tenantId);
+const AUTH_STORAGE_KEY = _isTenantDashboard ? `callme_tenant_auth:${_tenantId}` : 'callme_auth';
+const LOGIN_PATH = _isTenantDashboard ? `/t/${_tenantId}/login` : '/login';
+const _storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem(AUTH_STORAGE_KEY)
+  || sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
+if (!_storedAuth) { window.location.replace(LOGIN_PATH); }
 // Sync to sessionStorage so the rest of the code works uniformly
-if (!sessionStorage.getItem('callme_auth') && localStorage.getItem('callme_auth')) {
-  sessionStorage.setItem('callme_auth', localStorage.getItem('callme_auth'));
+if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+  const fallback = localStorage.getItem(AUTH_STORAGE_KEY)
+    || sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
+  if (fallback) sessionStorage.setItem(AUTH_STORAGE_KEY, fallback);
+}
+if (_isTenantDashboard) {
+  const setupLink = document.getElementById('setup-link');
+  if (setupLink) setupLink.style.display = 'none';
 }
 
 // Override fetch to inject Authorization header + handle 401
 const _origFetch = window.fetch.bind(window);
 window.fetch = async (url, opts = {}) => {
-  const auth = sessionStorage.getItem('callme_auth');
+  const auth = sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (auth) {
     opts = { ...opts, headers: { 'Authorization': 'Basic ' + auth, ...(opts.headers || {}) } };
   }
   const resp = await _origFetch(url, opts);
   if (resp.status === 401) {
-    sessionStorage.removeItem('callme_auth');
-    localStorage.removeItem('callme_auth');
-    window.location.replace('/login');
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.location.replace(LOGIN_PATH);
   }
   return resp;
 };
@@ -2058,9 +2070,9 @@ function genPass(inputId, confirmId) {
 }
 
 function doLogout() {
-  sessionStorage.removeItem('callme_auth');
-  localStorage.removeItem('callme_auth');
-  window.location.replace('/login');
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.location.replace(LOGIN_PATH);
 }
 
 // ── i18n ───────────────────────────────────────────────────────────────────
