@@ -218,6 +218,53 @@ The TTS stack tries providers in order: **Google Cloud TTS → MOSS TTS → gTTS
 
 | Cause | Solution |
 |-------|----------|
+
+### `voice-worker-gemini` answers in English on a Hebrew bot
+
+**Symptom:** The 3CX bot answers, but the voice sounds like the wrong language even though the bot text is Hebrew.
+
+**Cause:** Deepgram Aura does not provide a Hebrew TTS voice. If the worker does not have Google Cloud TTS credentials mounted, the older fallback could speak Hebrew text with an English voice.
+
+**Fix:** Mount the Google service-account file into the active worker container and recreate it.
+
+```yaml
+voice-worker-gemini:
+  volumes:
+    - ./voice-worker/google-tts-sa.json:/app/google-tts-sa.json:ro
+  environment:
+    - GOOGLE_CLOUD_TTS_KEY_PATH=/app/google-tts-sa.json
+```
+
+Then rebuild and recreate:
+
+```bash
+docker compose build voice-worker-gemini
+docker compose up -d --force-recreate voice-worker-gemini
+```
+
+Expected result:
+- Hebrew bot calls use Google `he-IL-Wavenet-*` voices
+- If the Google key is missing, Hebrew TTS now fails closed instead of falling back to an English Deepgram voice
+
+### Web dialer vs browser-call
+
+There are two separate web test paths in `voice-worker`:
+
+- The dialer buttons call `POST /call` and place a real outbound SIP call through 3CX.
+- The browser-call panel uses `/api/browser-call` WebSocket audio and does not place a SIP call through 3CX.
+
+If the browser-call panel works but the dialer does not, inspect:
+
+```bash
+docker logs voice-worker-gemini --tail 200
+docker logs drachtio --tail 200
+```
+
+Look for:
+- outbound `407` then authenticated `INVITE`
+- `180 Ringing`
+- `200 OK`
+- `Outbound media connection established`
 | Google Cloud key missing | Set `GOOGLE_CLOUD_KEY` in `.env` and force-recreate container |
 | MOSS TTS too slow (ARM) | Set `MOSS_TTS_URL=` (empty) to skip it — gTTS takes ~500 ms |
 | ElevenLabs quota exhausted | Add credits, or rely on free gTTS fallback |

@@ -104,6 +104,20 @@ docker compose up -d
 
 Dial extension `12611` from any 3CX phone. You should hear the greeting.
 
+For the browser UI in `voice-worker`, both the web dialer and browser-call test page are now wired:
+
+- The dialer buttons post to `POST /call`, which places an outbound call through 3CX and joins the bot after answer.
+- The browser-call panel uses `/api/browser-call` WebSocket audio for direct browser-to-bot testing.
+
+For Hebrew speech on the `voice-worker-gemini` / Groq pipeline path, the worker must have a Google Cloud TTS service-account file mounted. The active compose file now expects:
+
+```bash
+./voice-worker/google-tts-sa.json:/app/google-tts-sa.json:ro
+GOOGLE_CLOUD_TTS_KEY_PATH=/app/google-tts-sa.json
+```
+
+Without that file, Hebrew TTS is intentionally disabled rather than falling back to an English Deepgram voice.
+
 For full setup steps see [docs/SETUP.md](docs/SETUP.md).
 
 ---
@@ -562,4 +576,3 @@ curl http://localhost:3100/metrics
 - [ ] Add barge-in detection with VAD
 - [ ] Connect to Claude API for conversation mode
 - [ ] Run 20 test calls with 0 crashes
-

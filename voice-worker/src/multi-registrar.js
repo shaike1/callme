@@ -8,6 +8,8 @@ class MultiRegistrar {
     this.srf = srf;
     this.baseConfig = baseConfig;
     this.registrations = new Map();
+    this.timers = new Set();
+    this.stopped = false;
   }
 
   /**
@@ -15,6 +17,8 @@ class MultiRegistrar {
    * @param {Object} devices - Object keyed by extension with device configs
    */
   registerAll(devices) {
+    this.stop({ clearRegistrations: false, log: false });
+    this.stopped = false;
     const extensions = Object.keys(devices);
     console.log('[MULTI-REGISTRAR] Starting registration for ' + extensions.length + ' devices');
     
@@ -27,6 +31,7 @@ class MultiRegistrar {
    * Register a single device
    */
   registerDevice(device) {
+    if (this.stopped) return;
     const config = {
       extension: device.extension,
       auth_id: device.authId,
@@ -47,6 +52,7 @@ class MultiRegistrar {
    * Send REGISTER request for a device
    */
   sendRegister(device, config) {
+    if (this.stopped) return;
     const self = this;
     const uri = 'sip:' + config.registrar + ':' + config.registrar_port + ';transport=udp';
     // Include local_port in Contact so INVITEs come to the right port (5070 when SBC is on 5060)
@@ -70,6 +76,7 @@ class MultiRegistrar {
         password: config.password
       }
     }, function(err, req) {
+      if (self.stopped) return;
       if (err) {
         console.error('[MULTI-REGISTRAR] ' + device.name + ' request error: ' + err.message);
         self.scheduleRetry(device, config, 60);
@@ -77,6 +84,7 @@ class MultiRegistrar {
       }
 
       req.on('response', function(res) {
+        if (self.stopped) return;
         if (res.status === 200) {
           console.log('[MULTI-REGISTRAR] ' + device.name + ' SUCCESS - Registered as ext ' + config.extension);
           
@@ -110,23 +118,34 @@ class MultiRegistrar {
 
   scheduleRefresh(device, config, seconds) {
     const self = this;
-    setTimeout(function() {
+    if (this.stopped) return;
+    const timer = setTimeout(function() {
+      self.timers.delete(timer);
+      if (self.stopped) return;
       console.log('[MULTI-REGISTRAR] Refreshing ' + device.name);
       self.sendRegister(device, config);
     }, seconds * 1000);
+    this.timers.add(timer);
   }
 
   scheduleRetry(device, config, seconds) {
     const self = this;
+    if (this.stopped) return;
     console.log('[MULTI-REGISTRAR] ' + device.name + ' retry in ' + seconds + 's');
-    setTimeout(function() {
+    const timer = setTimeout(function() {
+      self.timers.delete(timer);
+      if (self.stopped) return;
       self.sendRegister(device, config);
     }, seconds * 1000);
+    this.timers.add(timer);
   }
 
-  stop() {
-    this.registrations.clear();
-    console.log('[MULTI-REGISTRAR] Stopped all registrations');
+  stop({ clearRegistrations = true, log = true } = {}) {
+    this.stopped = true;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    if (clearRegistrations) this.registrations.clear();
+    if (log) console.log('[MULTI-REGISTRAR] Stopped all registrations');
   }
 }
 

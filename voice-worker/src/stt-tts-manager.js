@@ -10,13 +10,15 @@ class SttTtsManager {
     };
 
     // Initialize STT providers
-    this.sttProviders = {
-      'openai-whisper': new OpenAIWhisper()
-    };
+    this.sttProviders = {};
+    const openAiWhisper = new OpenAIWhisper();
+    if (openAiWhisper.enabled) {
+      this.sttProviders['openai-whisper'] = openAiWhisper;
+    }
 
     this.primaryTts = process.env.PRIMARY_TTS || 'google-cloud';
     this.fallbackTts = process.env.FALLBACK_TTS || null;
-    this.primaryStt = process.env.PRIMARY_STT || 'openai-whisper';
+    this.primaryStt = process.env.PRIMARY_STT || (this.sttProviders['openai-whisper'] ? 'openai-whisper' : null);
     this.fallbackStt = process.env.FALLBACK_STT || null;
 
     logger.info('STT/TTS Manager initialized', {
@@ -32,6 +34,10 @@ class SttTtsManager {
    */
   async transcribe(audioBuffer, callId, options = {}) {
     logger.debug('STT request', { callId, provider: this.primaryStt });
+
+    if (!this.primaryStt) {
+      throw new Error('No STT provider configured');
+    }
 
     // Try primary
     try {

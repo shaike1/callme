@@ -57,3 +57,5 @@ temp/
 !assets/*.png
 !assets/*.jpg
 voice-app/config/devices.json
+voice-worker/google-tts-sa.json
+voice-worker/keys/*.json

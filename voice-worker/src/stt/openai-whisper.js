@@ -4,9 +4,17 @@ const logger = require('../logger');
 
 class OpenAIWhisper {
   constructor() {
+    const apiKey = process.env.OPENAI_WHISPER_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      this.enabled = false;
+      this.client = null;
+      logger.info('OpenAI Whisper STT disabled: no API key configured');
+      return;
+    }
+
     try {
       this.client = new OpenAI({
-        apiKey: process.env.OPENAI_WHISPER_KEY
+        apiKey
       });
       this.enabled = true;
       logger.info('OpenAI Whisper STT initialized');

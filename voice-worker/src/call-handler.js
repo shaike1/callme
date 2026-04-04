@@ -3,12 +3,15 @@ const os = require('os');
 const path = require('path');
 const logger = require('./logger');
 const GeminiLiveManager = require('./gemini-live/manager');
+const GroqPipelineManager = require('./groq-pipeline/manager');
+const { resolveGoogleTtsKeyPath } = require('./groq-pipeline/tts-config');
 
 const CONVERSATION_ENGINE = process.env.CONVERSATION_ENGINE || 'stt-tts';
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
 const MAX_CALL_DURATION_MS = parseInt(process.env.MAX_CALL_DURATION_MS || '300000');
 
 const geminiManager = new GeminiLiveManager();
+const groqManager = new GroqPipelineManager();
 
 function calcRms(buf) {
   let sum = 0;
@@ -67,11 +70,13 @@ class CallHandler {
 
     // Resolve tenant (multi-tenant mode) — falls back to global settings
     let tenantSettings = null;
+    let resolvedTenantId = null;
     if (global.resolveTenantForCall) {
       const resolved = global.resolveTenantForCall(calledRaw, calledRaw);
       if (resolved) {
         tenantSettings = resolved.settings;
-        logger.info('Tenant resolved for call', { callId, tenantId: resolved.tenant.id });
+        resolvedTenantId = resolved.tenant.id;
+        logger.info('Tenant resolved for call', { callId, tenantId: resolvedTenantId });
       }
     }
     // Use tenant settings if resolved, otherwise fall back to global
@@ -107,6 +112,7 @@ class CallHandler {
         const durationS = Math.round((Date.now() - callStartedAt) / 1000);
         logger.info('Call ended', { callId, durationS });
         geminiManager.close(callId);
+        groqManager.close(callId);
         this.audioForkServer.unregister(callId);
         endpoint.destroy().catch(() => {});
         this.metrics.record(callId, 'endCall', 'hangup');
@@ -128,19 +134,27 @@ class CallHandler {
       const aiEnabled = effectiveSettings.aiEnabled !== false; // default true
       const dailyLimit = parseFloat(effectiveSettings.aiDailyCostLimitUsd) || 0;
       const monthlyLimit = parseFloat(effectiveSettings.aiMonthlyCostLimitUsd) || 0;
+      // Use per-tenant recordings dir if tenant resolved, otherwise global
+      const costRecDir = resolvedTenantId && global.getTenantRecordingsDir
+        ? global.getTenantRecordingsDir(resolvedTenantId)
+        : null;
       let costLimitReached = false;
-      if (dailyLimit > 0 && global.getTodayCostUsd) {
-        const todayCost = global.getTodayCostUsd();
+      if (dailyLimit > 0) {
+        const todayCost = costRecDir && global.getTodayCostUsdForDir
+          ? global.getTodayCostUsdForDir(costRecDir)
+          : (global.getTodayCostUsd ? global.getTodayCostUsd() : 0);
         if (todayCost >= dailyLimit) {
           costLimitReached = true;
-          logger.warn('Daily cost limit reached — routing to voicemail', { callId, todayCost, dailyLimit });
+          logger.warn('Daily cost limit reached — routing to voicemail', { callId, todayCost, dailyLimit, tenantId: resolvedTenantId });
         }
       }
-      if (!costLimitReached && monthlyLimit > 0 && global.getMonthCostUsd) {
-        const monthCost = global.getMonthCostUsd();
+      if (!costLimitReached && monthlyLimit > 0) {
+        const monthCost = costRecDir && global.getMonthCostUsdForDir
+          ? global.getMonthCostUsdForDir(costRecDir)
+          : (global.getMonthCostUsd ? global.getMonthCostUsd() : 0);
         if (monthCost >= monthlyLimit) {
           costLimitReached = true;
-          logger.warn('Monthly cost limit reached — routing to voicemail', { callId, monthCost, monthlyLimit });
+          logger.warn('Monthly cost limit reached — routing to voicemail', { callId, monthCost, monthlyLimit, tenantId: resolvedTenantId });
         }
       }
       if (!aiEnabled || costLimitReached) {
@@ -169,16 +183,60 @@ class CallHandler {
     const callId = `outbound-${Date.now()}`;
     logger.info('Initiating outbound call', { callId, target, from });
 
-    const { endpoint, dialog } = await this.mediaServer.createEndpoint({});
+    const endpoint = await this.mediaServer.createEndpoint();
+    const settings = global.botSettings || {};
+    const sipDomain = process.env.SIP_DOMAIN || settings.sipServer || '127.0.0.1';
+    const registrarHost = process.env.SIP_REGISTRAR || settings.sipRegistrar || '127.0.0.1';
+    const registrarPort = parseInt(process.env.SIP_REGISTRAR_PORT || '5060', 10);
+    const outboundProxy = process.env.SIP_OUTBOUND_PROXY || `sip:${registrarHost}:${registrarPort};transport=udp`;
+    const fromExtension = from || settings.sipExtension || settings.extension || process.env.SIP_EXTENSION;
+    const authUsername = process.env.SIP_AUTH_ID || process.env.SIP_AUTH_USERNAME || settings.sipAuthId || fromExtension;
+    const authPassword = process.env.SIP_AUTH_PASSWORD || process.env.SIP_PASSWORD || settings.sipPassword || '';
+    const localSdp = endpoint.local && endpoint.local.sdp;
+    const sipUri = target.startsWith('sip:')
+      ? (target.includes('transport=') ? target : `${target};transport=udp`)
+      : `sip:${target}@${sipDomain};transport=udp`;
 
-    const sip = await this.srf.createUAC(target, {
-      localSipUri: `sip:${from}@${process.env.SIP_DOMAIN}`,
-      headers: { 'From': `sip:${from}@${process.env.SIP_DOMAIN}` }
+    const uacOptions = {
+      localSdp,
+      proxy: outboundProxy,
+      localSipUri: `sip:${fromExtension}@${sipDomain}`,
+      headers: {
+        'From': `<sip:${fromExtension}@${sipDomain}>`,
+        'User-Agent': 'OpenClaw-VoiceServer/1.0',
+        'X-Call-ID': callId,
+      },
+    };
+
+    if (authUsername && authPassword) {
+      uacOptions.auth = {
+        username: authUsername,
+        password: authPassword,
+      };
+    }
+
+    const sip = await this.srf.createUAC(sipUri, uacOptions, {
+      cbRequest: (err) => {
+        if (err) logger.error('INVITE send failed', { callId, error: err.message });
+      },
+      cbProvisional: (res) => {
+        logger.info('Outbound provisional response', {
+          callId,
+          status: res.status,
+          reason: res.reason,
+        });
+      },
     });
 
-    dialog.on('destroy', () => {
+    if (sip.remote && sip.remote.sdp) {
+      await endpoint.modify(sip.remote.sdp);
+      logger.info('Outbound media connection established', { callId });
+    }
+
+    sip.on('destroy', () => {
       logger.info('Outbound call ended', { callId });
       geminiManager.close(callId);
+      groqManager.close(callId);
       this.audioForkServer.unregister(callId);
       endpoint.destroy().catch(() => {});
     });
@@ -337,22 +395,43 @@ class CallHandler {
     }
 
     const voiceName = settings.voice || 'Kore';
+    const aiEngine = settings.aiEngine || 'gemini-live';
+    const useGroqPipeline = aiEngine === 'groq-pipeline';
     let session;
     try {
-      session = await geminiManager.getOrCreate(callId, {
-        systemPrompt,
-        language: settings.language || process.env.CALL_LANGUAGE || 'he',
-        model: settings.geminiModel || undefined,
-        apiKey: settings.geminiApiKey || undefined,
-        voiceConfig: {
-          voice_config: {
-            prebuilt_voice_config: { voice_name: voiceName }
-          }
-        },
-        tools: toolDeclarations,
-      });
+      if (useGroqPipeline) {
+        // Build tool handler for Groq pipeline (same logic as Gemini tool_call handler below)
+        const pipelineToolHandler = async (name, args) => {
+          return this._handleToolCall(name, args, callId, settings);
+        };
+        session = await groqManager.getOrCreate(callId, {
+          deepgramApiKey: settings.deepgramApiKey,
+          groqApiKey: settings.groqApiKey,
+          systemPrompt,
+          language: settings.language || process.env.CALL_LANGUAGE || 'he',
+          tools: toolDeclarations,
+          toolHandler: pipelineToolHandler,
+          ttsConfig: {
+            voiceName: settings.ttsVoice || undefined,
+            googleKeyPath: resolveGoogleTtsKeyPath(),
+          },
+        });
+      } else {
+        session = await geminiManager.getOrCreate(callId, {
+          systemPrompt,
+          language: settings.language || process.env.CALL_LANGUAGE || 'he',
+          model: settings.geminiModel || undefined,
+          apiKey: settings.geminiApiKey || undefined,
+          voiceConfig: {
+            voice_config: {
+              prebuilt_voice_config: { voice_name: voiceName }
+            }
+          },
+          tools: toolDeclarations,
+        });
+      }
     } catch (err) {
-      logger.error('Gemini unavailable — voicemail mode', { callId, error: err.message });
+      logger.error(`${useGroqPipeline ? 'GroqPipeline' : 'Gemini'} unavailable — voicemail mode`, { callId, error: err.message });
       await this._handleVoicemail(endpoint, dialog, callId, callerName);
       return;
     }
@@ -460,98 +539,7 @@ class CallHandler {
     session.on('tool_call', async (functionCalls) => {
       const responses = [];
       for (const fc of functionCalls) {
-        logger.info('Tool call', { callId, tool: fc.name, args: fc.args });
-        let result = {};
-        try {
-          if (fc.name === 'find_contact') {
-            const query = (fc.args.name || '').toLowerCase();
-            const found = (global.contacts || []).filter(c => c.name.toLowerCase().includes(query));
-            if (found.length === 0) {
-              result = { found: false, message: 'No contact found with that name' };
-            } else if (found.length === 1) {
-              result = { found: true, name: found[0].name, phone: found[0].phone };
-            } else {
-              result = { found: true, multiple: true, contacts: found.map(c => ({ name: c.name, phone: c.phone })) };
-            }
-          } else if (fc.name === 'add_scheduled_call') {
-            const { target, time, message, repeat } = fc.args;
-            let resolvedTarget = target;
-            if (!/\d{5,}/.test(target) && !target.startsWith('sip:')) {
-              const contact = (global.contacts || []).find(c => c.name.toLowerCase().includes(target.toLowerCase()));
-              if (contact) resolvedTarget = contact.phone;
-            }
-            const job = { id: `j-${Date.now()}`, name: target, target: resolvedTarget, message: message || '', time, repeat: repeat || 'once', enabled: true, createdAt: Date.now(), lastRan: null };
-            const [hh, mm] = time.split(':').map(Number);
-            const next = new Date(); next.setHours(hh, mm, 0, 0);
-            if (next <= new Date()) next.setDate(next.getDate() + 1);
-            job.nextAt = next.getTime();
-            (global.scheduledJobs || []).push(job);
-            if (global.saveScheduler) global.saveScheduler();
-            result = { success: true, scheduledFor: next.toLocaleTimeString('he-IL'), target: resolvedTarget };
-          } else if (fc.name === 'get_bot_status') {
-            const stats = global.metrics ? global.metrics.getStats() : {};
-            result = {
-              activeCalls: global.activeCalls ? global.activeCalls.size : 0,
-              totalCalls: stats.totalCalls || 0,
-              successfulCalls: stats.successfulCalls || 0,
-              contacts: (global.contacts || []).length,
-              scheduledJobs: (global.scheduledJobs || []).filter(j => j.enabled).length,
-            };
-          } else if (fc.name === 'add_contact') {
-            const { name, phone } = fc.args;
-            const contact = { id: `c-${Date.now()}`, name, phone, notes: '', createdAt: Date.now() };
-            (global.contacts || []).push(contact);
-            if (global.saveContacts) global.saveContacts();
-            result = { success: true, message: `Saved ${name} as ${phone}` };
-          } else if (fc.name === 'check_calendar') {
-            const days = fc.args.days || 1;
-            if (global.fetchCalendarEvents) {
-              const events = await global.fetchCalendarEvents(days);
-              if (events.length === 0) {
-                result = { found: false, message: `No events in the next ${days} day(s)` };
-              } else {
-                result = { found: true, count: events.length, events: events.slice(0, 5).map(e => ({
-                  title: e.title,
-                  start: e.start?.toLocaleString('he-IL', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
-                  location: e.location || undefined,
-                })) };
-              }
-            } else {
-              result = { error: 'Calendar not configured' };
-            }
-          } else if (fc.name === 'add_calendar_event') {
-            const { title, date, time, duration, location } = fc.args;
-            // Add to internal scheduler
-            const [hh, mm] = time.split(':').map(Number);
-            const jobTime = time;
-            const job = { id: `cal-${Date.now()}`, name: title, target: '', message: `תזכורת: ${title}`, time: jobTime, repeat: 'once', enabled: true, createdAt: Date.now(), lastRan: null };
-            const next = new Date(`${date}T${time}:00`);
-            job.nextAt = next.getTime();
-            (global.scheduledJobs || []).push(job);
-            if (global.saveScheduler) global.saveScheduler();
-            // Send Google Calendar link via Telegram
-            const startDt = `${date.replace(/-/g,'')}T${time.replace(':','')}00`;
-            const endDt = (() => { const e = new Date(next.getTime() + (duration || 60) * 60000); return e.toISOString().replace(/[-:]/g,'').slice(0,15); })();
-            const gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDt}/${endDt}${location ? '&location=' + encodeURIComponent(location) : ''}`;
-            if (global.sendTelegramMessage) {
-              global.sendTelegramMessage(`📅 <b>אירוע חדש נוסף</b>\n📌 ${title}\n🕐 ${date} ${time}\n<a href="${gcUrl}">הוסף לGoogle Calendar</a>`);
-            }
-            result = { success: true, message: `Event "${title}" scheduled for ${date} at ${time}. A Google Calendar link was sent to Telegram.` };
-          } else if (fc.name === 'control_home_assistant') {
-            const { domain, service, entity_id } = fc.args;
-            if (global.callHaService) {
-              const r = await global.callHaService(domain, service, entity_id ? { entity_id } : {});
-              result = { success: true, response: r };
-            } else {
-              result = { success: false, error: 'Home Assistant not configured' };
-            }
-          } else {
-            result = { error: 'Unknown tool: ' + fc.name };
-          }
-        } catch (e) {
-          logger.error('Tool call error', { callId, tool: fc.name, error: e.message });
-          result = { error: e.message };
-        }
+        const result = await this._handleToolCall(fc.name, fc.args, callId, settings);
         responses.push({ id: fc.id, name: fc.name, response: { output: result } });
       }
       session.sendToolResponse(responses);
@@ -565,27 +553,31 @@ class CallHandler {
     }
     session.sendText(greeting);
 
-    // Energy-based VAD with manual activity markers.
-    // Gemini's automatic VAD is disabled — we tell it exactly when speech starts/ends
-    // so it processes the full utterance as one context instead of tiny 20ms fragments.
+    // ── Audio input handling ──
+    // For Groq pipeline: Deepgram handles VAD internally, so just forward all audio.
+    // For Gemini Live: manual energy-based VAD with activity markers.
     const SPEECH_RMS_THRESHOLD = 400;
-    const SILENCE_FRAMES_NEEDED = 20;  // ~400ms silence = end of utterance
-    const MIN_SPEECH_FRAMES = 15;      // ~300ms minimum — filters noise but allows short Hebrew phrases through
+    const SILENCE_FRAMES_NEEDED = 20;
+    const MIN_SPEECH_FRAMES = 15;
 
     let speaking = false;
     let silenceCount = 0;
     let speechCount = 0;
-    // After sending activityEnd for real speech, block new activityStart until Gemini
-    // fires turn_complete or interrupted — prevents rapid interrupt cascade that stops
-    // Gemini from ever completing a response turn.
     let waitingForGemini = false;
     let waitingForGeminiTimer = null;
-    const GEMINI_RESPONSE_TIMEOUT_MS = 10000; // safety unlock after 10s if no response
+    const GEMINI_RESPONSE_TIMEOUT_MS = 10000;
 
     this.audioForkServer.register(callId, {
       onAudio: (buf) => {
         if (!firstPlayDone || isPlaying) return;
-        // Block new speech input while Gemini is generating its response
+
+        if (useGroqPipeline) {
+          // Groq pipeline: send all audio directly to Deepgram STT
+          session.sendAudio(buf);
+          return;
+        }
+
+        // Gemini Live: manual VAD
         if (waitingForGemini) return;
 
         const rms = calcRms(buf);
@@ -602,10 +594,9 @@ class CallHandler {
         } else {
           if (speaking) {
             silenceCount++;
-            session.sendAudio(buf); // send trailing silence too
+            session.sendAudio(buf);
             if (silenceCount >= SILENCE_FRAMES_NEEDED) {
               if (speechCount >= MIN_SPEECH_FRAMES) {
-                // Real speech — lock input until Gemini responds
                 session.sendActivityEnd();
                 waitingForGemini = true;
                 if (waitingForGeminiTimer) clearTimeout(waitingForGeminiTimer);
@@ -615,7 +606,6 @@ class CallHandler {
                 }, GEMINI_RESPONSE_TIMEOUT_MS);
                 logger.info('Speech end → sent to Gemini', { callId, speechFrames: speechCount });
               } else {
-                // Too short — close activity to unblock Gemini, but don't lock
                 session.sendActivityEnd();
                 logger.debug('Speech too short, closing activity', { callId, speechFrames: speechCount });
               }
@@ -669,10 +659,101 @@ class CallHandler {
     }
   }
 
+  /**
+   * Handle a tool call from either Gemini or Groq pipeline.
+   * @param {string} name - tool function name
+   * @param {object} args - tool arguments
+   * @param {string} callId
+   * @param {object} settings - effective bot settings
+   * @returns {object} result
+   */
+  async _handleToolCall(name, args, callId, settings) {
+    logger.info('Tool call', { callId, tool: name, args });
+    try {
+      if (name === 'find_contact') {
+        const query = (args.name || '').toLowerCase();
+        const found = (global.contacts || []).filter(c => c.name.toLowerCase().includes(query));
+        if (found.length === 0) return { found: false, message: 'No contact found with that name' };
+        if (found.length === 1) return { found: true, name: found[0].name, phone: found[0].phone };
+        return { found: true, multiple: true, contacts: found.map(c => ({ name: c.name, phone: c.phone })) };
+      } else if (name === 'add_scheduled_call') {
+        const { target, time, message, repeat } = args;
+        let resolvedTarget = target;
+        if (!/\d{5,}/.test(target) && !target.startsWith('sip:')) {
+          const contact = (global.contacts || []).find(c => c.name.toLowerCase().includes(target.toLowerCase()));
+          if (contact) resolvedTarget = contact.phone;
+        }
+        const job = { id: `j-${Date.now()}`, name: target, target: resolvedTarget, message: message || '', time, repeat: repeat || 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+        const [hh, mm] = time.split(':').map(Number);
+        const next = new Date(); next.setHours(hh, mm, 0, 0);
+        if (next <= new Date()) next.setDate(next.getDate() + 1);
+        job.nextAt = next.getTime();
+        (global.scheduledJobs || []).push(job);
+        if (global.saveScheduler) global.saveScheduler();
+        return { success: true, scheduledFor: next.toLocaleTimeString('he-IL'), target: resolvedTarget };
+      } else if (name === 'get_bot_status') {
+        const stats = global.metrics ? global.metrics.getStats() : {};
+        return {
+          activeCalls: global.activeCalls ? global.activeCalls.size : 0,
+          totalCalls: stats.totalCalls || 0,
+          successfulCalls: stats.successfulCalls || 0,
+          contacts: (global.contacts || []).length,
+          scheduledJobs: (global.scheduledJobs || []).filter(j => j.enabled).length,
+        };
+      } else if (name === 'add_contact') {
+        const { name: contactName, phone } = args;
+        const contact = { id: `c-${Date.now()}`, name: contactName, phone, notes: '', createdAt: Date.now() };
+        (global.contacts || []).push(contact);
+        if (global.saveContacts) global.saveContacts();
+        return { success: true, message: `Saved ${contactName} as ${phone}` };
+      } else if (name === 'check_calendar') {
+        const days = args.days || 1;
+        if (global.fetchCalendarEvents) {
+          const events = await global.fetchCalendarEvents(days);
+          if (events.length === 0) return { found: false, message: `No events in the next ${days} day(s)` };
+          return { found: true, count: events.length, events: events.slice(0, 5).map(e => ({
+            title: e.title,
+            start: e.start?.toLocaleString('he-IL', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
+            location: e.location || undefined,
+          })) };
+        }
+        return { error: 'Calendar not configured' };
+      } else if (name === 'add_calendar_event') {
+        const { title, date, time, duration, location } = args;
+        const [hh, mm] = time.split(':').map(Number);
+        const job = { id: `cal-${Date.now()}`, name: title, target: '', message: `תזכורת: ${title}`, time, repeat: 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+        const next = new Date(`${date}T${time}:00`);
+        job.nextAt = next.getTime();
+        (global.scheduledJobs || []).push(job);
+        if (global.saveScheduler) global.saveScheduler();
+        const startDt = `${date.replace(/-/g, '')}T${time.replace(':', '')}00`;
+        const endDt = (() => { const e = new Date(next.getTime() + (duration || 60) * 60000); return e.toISOString().replace(/[-:]/g, '').slice(0, 15); })();
+        const gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDt}/${endDt}${location ? '&location=' + encodeURIComponent(location) : ''}`;
+        if (global.sendTelegramMessage) {
+          global.sendTelegramMessage(`📅 <b>אירוע חדש נוסף</b>\n📌 ${title}\n🕐 ${date} ${time}\n<a href="${gcUrl}">הוסף לGoogle Calendar</a>`);
+        }
+        return { success: true, message: `Event "${title}" scheduled for ${date} at ${time}. A Google Calendar link was sent to Telegram.` };
+      } else if (name === 'control_home_assistant') {
+        const { domain, service, entity_id } = args;
+        if (global.callHaService) {
+          const r = await global.callHaService(domain, service, entity_id ? { entity_id } : {});
+          return { success: true, response: r };
+        }
+        return { success: false, error: 'Home Assistant not configured' };
+      } else {
+        return { error: 'Unknown tool: ' + name };
+      }
+    } catch (e) {
+      logger.error('Tool call error', { callId, tool: name, error: e.message });
+      return { error: e.message };
+    }
+  }
+
   _estimateCostUsd(durationS, engine) {
     // Gemini 2.5 Flash Native Audio: $0.70/hr input + $5.00/hr output = $5.70/hr combined
     // OpenAI Realtime (GPT-4o):       $6.00/hr input + $12.00/hr output = $18.00/hr combined
-    const rates = { 'gemini-live': 5.70, 'openai-realtime': 18.00 };
+    // Groq pipeline: ~$0.66/hr (Deepgram STT + Groq LLM + Google TTS)
+    const rates = { 'gemini-live': 5.70, 'openai-realtime': 18.00, 'groq-pipeline': 0.66 };
     const hourlyRate = rates[engine] || rates['gemini-live'];
     return Math.round((durationS / 3600) * hourlyRate * 10000) / 10000; // 4 decimal places
   }

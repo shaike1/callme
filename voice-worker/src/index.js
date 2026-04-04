@@ -11,6 +11,7 @@ const MultiRegistrar = require('./multi-registrar');
 const AudioForkServer = require('./audio-fork-server');
 const logger = require('./logger');
 const config = require('./config');
+const { resolveGoogleTtsKeyPath } = require('./groq-pipeline/tts-config');
 
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
 const AUDIO_DIR = process.env.AUDIO_DIR || '/tmp/voice-worker-audio';
@@ -195,9 +196,12 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiMonthlyCostLimitUsd: 0,   // 0 = no limit
-  aiEngine: 'gemini-live',    // 'gemini-live' | 'openai-realtime'
+  aiEngine: 'gemini-live',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime'
   geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
+  groqApiKey: '',               // Groq API key for groq-pipeline engine
+  deepgramApiKey: '',           // Deepgram API key for groq-pipeline STT
+  ttsVoice: '',                 // Google Cloud TTS voice name (e.g., he-IL-Wavenet-A)
   openaiApiKey: '',             // set via dashboard; blank = fall back to OPENAI_API_KEY env
   elevenlabsApiKey: '',         // set via dashboard; blank = fall back to ELEVENLABS_API_KEY env
   // Bot "soul" — rules, knowledge, escalation
@@ -217,7 +221,7 @@ const defaultSettings = {
   sipRegistrar: process.env.SIP_REGISTRAR || '',
   sipExtension: process.env.SIP_EXTENSION || '',
   sipAuthId: process.env.SIP_AUTH_ID || '',
-  sipPassword: process.env.SIP_PASSWORD || '',
+  sipPassword: process.env.SIP_AUTH_PASSWORD || process.env.SIP_PASSWORD || '',
   sipDid: process.env.DEFAULT_CALLER_ID || '',
   // Admin credentials
   adminUser: process.env.SUPER_ADMIN_USER || '',
@@ -282,6 +286,8 @@ app.get('/api/settings', (req, res) => {
     telegramBotToken: botSettings.telegramBotToken ? '✓ set' : '',
     whatsappApiKey: botSettings.whatsappApiKey ? '✓ set' : '',
     geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    groqApiKey: botSettings.groqApiKey ? '✓ set' : '',
+    deepgramApiKey: botSettings.deepgramApiKey ? '✓ set' : '',
     openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
     elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   });
@@ -331,7 +337,7 @@ app.post('/api/settings', (req, res) => {
   if (vonagePublicUrl !== undefined) botSettings.vonagePublicUrl = vonagePublicUrl;
   if (vonageAppId !== undefined) botSettings.vonageAppId = vonageAppId;
   // AI engine, API keys, soul fields
-  const { aiEnabled, aiEngine, geminiApiKey, geminiModel, openaiApiKey, elevenlabsApiKey,
+  const { aiEnabled, aiEngine, geminiApiKey, geminiModel, groqApiKey, deepgramApiKey, ttsVoice, openaiApiKey, elevenlabsApiKey,
           rules, knowledge, escalationTurns, escalationNumber,
           toolFindContact, toolAddContact, toolScheduleCall, toolCalendar, toolHomeAssistant } = req.body || {};
   if (aiEnabled !== undefined) botSettings.aiEnabled = aiEnabled;
@@ -342,6 +348,12 @@ app.post('/api/settings', (req, res) => {
   if (geminiApiKey === '__CLEAR__') botSettings.geminiApiKey = '';
   else if (geminiApiKey !== undefined && geminiApiKey !== '' && geminiApiKey !== '✓ set') botSettings.geminiApiKey = geminiApiKey;
   if (geminiModel !== undefined) botSettings.geminiModel = geminiModel;
+  // Groq pipeline keys
+  if (groqApiKey === '__CLEAR__') botSettings.groqApiKey = '';
+  else if (groqApiKey !== undefined && groqApiKey !== '' && groqApiKey !== '✓ set') botSettings.groqApiKey = groqApiKey;
+  if (deepgramApiKey === '__CLEAR__') botSettings.deepgramApiKey = '';
+  else if (deepgramApiKey !== undefined && deepgramApiKey !== '' && deepgramApiKey !== '✓ set') botSettings.deepgramApiKey = deepgramApiKey;
+  if (ttsVoice !== undefined) botSettings.ttsVoice = ttsVoice;
   if (openaiApiKey === '__CLEAR__') botSettings.openaiApiKey = '';
   else if (openaiApiKey !== undefined && openaiApiKey !== '' && openaiApiKey !== '✓ set') botSettings.openaiApiKey = openaiApiKey;
   if (elevenlabsApiKey !== undefined && elevenlabsApiKey !== '' && elevenlabsApiKey !== '✓ set') botSettings.elevenlabsApiKey = elevenlabsApiKey;
@@ -362,6 +374,8 @@ app.post('/api/settings', (req, res) => {
     sipPassword: botSettings.sipPassword ? '✓ set' : '',
     adminPass: botSettings.adminPass ? '✓ set' : '',
     geminiApiKey: botSettings.geminiApiKey ? '✓ set' : '',
+    groqApiKey: botSettings.groqApiKey ? '✓ set' : '',
+    deepgramApiKey: botSettings.deepgramApiKey ? '✓ set' : '',
     openaiApiKey: botSettings.openaiApiKey ? '✓ set' : '',
     elevenlabsApiKey: botSettings.elevenlabsApiKey ? '✓ set' : '',
   }});
@@ -1420,6 +1434,20 @@ app.post('/t/:tenantId/api/settings', requireTenantAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// Tenant API — cost tracking
+app.get('/t/:tenantId/api/daily-cost', requireTenantAuth, (req, res) => {
+  const recDir = path.join(AUDIO_DIR, 'tenants', req.tenantId, 'recordings');
+  const todayCost = getTodayCostUsd(recDir);
+  const monthCost = getMonthCostUsd(recDir);
+  const s = req.tenantSettings || {};
+  const limitUsd = parseFloat(s.aiDailyCostLimitUsd) || 0;
+  const monthlyLimitUsd = parseFloat(s.aiMonthlyCostLimitUsd) || 0;
+  res.json({
+    todayCostUsd: Math.round(todayCost * 10000) / 10000, limitUsd, limitActive: limitUsd > 0, limitReached: limitUsd > 0 && todayCost >= limitUsd,
+    monthCostUsd: Math.round(monthCost * 10000) / 10000, monthlyLimitUsd, monthlyLimitActive: monthlyLimitUsd > 0, monthlyLimitReached: monthlyLimitUsd > 0 && monthCost >= monthlyLimitUsd
+  });
+});
+
 // Tenant API — IVR
 app.get('/t/:tenantId/api/ivr', requireTenantAuth, (req, res) => {
   res.json(loadTenantData(req.tenantId, 'ivr.json', defaultIvr));
@@ -1514,6 +1542,10 @@ function getMonthCostUsd(recDir) {
   } catch (_) { return 0; }
 }
 global.getMonthCostUsd = () => getMonthCostUsd(path.join(AUDIO_DIR, 'recordings'));
+// Export cost helpers with custom dir for per-tenant tracking
+global.getMonthCostUsdForDir = getMonthCostUsd;
+global.getTodayCostUsdForDir = getTodayCostUsd;
+global.getTenantRecordingsDir = (tenantId) => path.join(AUDIO_DIR, 'tenants', tenantId, 'recordings');
 
 app.get('/api/daily-cost', (req, res) => {
   const todayCost = getTodayCostUsd(RECORDINGS_DIR);
@@ -1608,6 +1640,8 @@ app.delete('/api/voicemails/:file', (req, res) => {
 // ── Connection status ─────────────────────────────────────────────────────
 // Tracks SIP registration + integration test results for the dashboard
 let sipRegistrar = null;
+let mediaServerPromise = null;
+let mediaServerReady = false;
 const integrationStatus = {}; // { teamy: {ok, ts, error}, openclaw: {...}, ha: {...} }
 
 app.get('/api/status', async (req, res) => {
@@ -1708,15 +1742,20 @@ app.get('/api/status', async (req, res) => {
       ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
-    const apiKey = botSettings.geminiApiKey;
-    if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+    const useGroqPipeline = (botSettings.aiEngine || 'gemini-live') === 'groq-pipeline';
+    if (!useGroqPipeline) {
+      const apiKey = botSettings.geminiApiKey;
+      if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+    } else {
+      if (!botSettings.groqApiKey || !botSettings.deepgramApiKey) { ws.close(4500, 'Groq/Deepgram API keys not configured'); return; }
+    }
 
     let session = null;
     let configured = false;
     let audioChunks = [];
     let isPlaying = false;
 
-    // VAD state (same as call-handler.js)
+    // VAD state (same as call-handler.js) — only used for Gemini Live
     const SPEECH_RMS_THRESHOLD = 400;
     const SILENCE_FRAMES_NEEDED = 20;
     const MIN_SPEECH_FRAMES = 15;
@@ -1735,6 +1774,7 @@ app.get('/api/status', async (req, res) => {
 
     ws.on('message', async (data, isBinary) => {
       if (!configured) {
+        configured = true; // Prevent re-entry while async connect is in progress
         // First message must be JSON config
         try {
           const cfg = JSON.parse(data.toString());
@@ -1744,12 +1784,24 @@ app.get('/api/status', async (req, res) => {
           const voiceName = cfg.voice || settings.voice || 'Kore';
           const language = cfg.language || settings.language || 'he';
 
-          session = new GeminiLiveSession({
-            callId: sessionId, apiKey,
-            systemPrompt,
-            language,
-            voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: voiceName } } }
-          });
+          if (useGroqPipeline) {
+            const GroqPipelineSession = require('./groq-pipeline/session');
+            session = new GroqPipelineSession({
+              callId: sessionId,
+              deepgramApiKey: botSettings.deepgramApiKey,
+              groqApiKey: botSettings.groqApiKey,
+              systemPrompt,
+              language,
+              ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },
+            });
+          } else {
+            session = new GeminiLiveSession({
+              callId: sessionId, apiKey: botSettings.geminiApiKey,
+              systemPrompt,
+              language,
+              voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: voiceName } } }
+            });
+          }
 
           session.on('audio', (chunk) => {
             audioChunks.push(chunk);
@@ -1801,7 +1853,6 @@ app.get('/api/status', async (req, res) => {
           session.on('error', (err) => logger.error('Live session error', { sessionId, error: err.message }));
 
           await session.connect();
-          configured = true;
           sendStatus('ready');
           logger.info('Teamy Live session ready', { sessionId, voice: voiceName, language });
 
@@ -1811,6 +1862,7 @@ app.get('/api/status', async (req, res) => {
           isPlaying = true;
           sendStatus('thinking');
         } catch (err) {
+          configured = false; // Allow retry on failure
           logger.error('Live session setup error', { sessionId, error: err.message });
           ws.close(4500, err.message);
         }
@@ -1820,7 +1872,13 @@ app.get('/api/status', async (req, res) => {
       if (!isBinary || !session) return;
       if (waitingForGemini || isPlaying) return;
 
-      // VAD processing of incoming PCM
+      if (useGroqPipeline) {
+        // Groq pipeline: send all audio directly, Deepgram handles VAD
+        session.sendAudio(data);
+        return;
+      }
+
+      // Gemini Live: VAD processing of incoming PCM
       const rms = calcRms(data);
       if (rms > SPEECH_RMS_THRESHOLD) {
         silenceCount = 0; speechCount++;
@@ -1932,8 +1990,13 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
       ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
-    const apiKey = botSettings.geminiApiKey;
-    if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+    const _useGroqBrowser = (botSettings.aiEngine || 'gemini-live') === 'groq-pipeline';
+    if (!_useGroqBrowser) {
+      const apiKey = botSettings.geminiApiKey;
+      if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
+    } else {
+      if (!botSettings.groqApiKey || !botSettings.deepgramApiKey) { ws.close(4500, 'Groq/Deepgram API keys not configured'); return; }
+    }
 
     let session = null;
     let configured = false;
@@ -1956,6 +2019,7 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
 
     ws.on('message', async (data, isBinary) => {
       if (!configured) {
+        configured = true; // Prevent re-entry while async connect is in progress
         // If binary arrives before JSON config (race on reconnect), auto-configure with defaults
         let cfg = {};
         if (!isBinary) {
@@ -1966,12 +2030,24 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
         }
         try {
           const settings = global.botSettings || {};
-          session = new GeminiLiveSession({
-            callId: sessionId, apiKey,
-            systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
-            language: cfg.language || settings.language || 'he',
-            voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: cfg.voice || settings.voice || 'Kore' } } },
-          });
+          if (_useGroqBrowser) {
+            const GroqPipelineSession = require('./groq-pipeline/session');
+            session = new GroqPipelineSession({
+              callId: sessionId,
+              deepgramApiKey: botSettings.deepgramApiKey,
+              groqApiKey: botSettings.groqApiKey,
+              systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+              language: cfg.language || settings.language || 'he',
+              ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },
+            });
+          } else {
+            session = new GeminiLiveSession({
+              callId: sessionId, apiKey: botSettings.geminiApiKey,
+              systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+              language: cfg.language || settings.language || 'he',
+              voiceConfig: { voice_config: { prebuilt_voice_config: { voice_name: cfg.voice || settings.voice || 'Kore' } } },
+            });
+          }
           // If this was a binary message, process it as audio after configuration
 
           session.on('audio', (chunk) => {
@@ -1999,12 +2075,12 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
           session.on('error', (err) => logger.error('BrowserCall session error', { sessionId, error: err.message }));
 
           await session.connect();
-          configured = true;
           sendStatus('ready');
           const greeting = (global.botSettings || {}).greeting || 'שלום! ברך את המשתמש בקצרה בעברית.';
           session.sendText(greeting);
           sendStatus('thinking');
         } catch (err) {
+          configured = false; // Allow retry on failure
           logger.error('BrowserCall setup error', { sessionId, error: err.message });
           ws.close(4500, err.message);
         }
@@ -2012,6 +2088,14 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
       }
 
       if (!isBinary || !session || waitingForGemini) return;
+
+      if (_useGroqBrowser) {
+        // Groq pipeline: send all audio directly, Deepgram handles VAD
+        session.sendAudio(data);
+        return;
+      }
+
+      // Gemini Live: VAD processing
       const rms = calcRms(data);
       if (rms > SPEECH_RMS_THRESHOLD) {
         silenceCount = 0; speechCount++;
@@ -2418,6 +2502,77 @@ app.post('/api/vonage/buy', async (req, res) => {
   logger.info('Vonage WebSocket handler attached to port', { port: config.healthPort });
 }
 
+function resetDrachtioRuntime(reason, error) {
+  global._drachtioConnected = false;
+  mediaServerReady = false;
+  mediaServerPromise = null;
+  callHandler.setMediaServer(null);
+
+  if (sipRegistrar) {
+    sipRegistrar.stop();
+    sipRegistrar = null;
+  }
+
+  if (reason) {
+    logger.warn('Drachtio runtime reset', {
+      reason,
+      error: error && error.message ? error.message : error,
+    });
+  }
+}
+
+async function ensureMediaServerConnected() {
+  if (mediaServerReady) return;
+
+  if (!mediaServerPromise) {
+    mediaServerPromise = mrf.connect({
+      address: config.freeswitch.host,
+      port: config.freeswitch.port,
+      secret: config.freeswitch.secret
+    }).then((mediaServer) => {
+      mediaServerReady = true;
+      callHandler.setMediaServer(mediaServer);
+      logger.info('Connected to FreeSWITCH media server');
+      return mediaServer;
+    }).catch((err) => {
+      mediaServerReady = false;
+      callHandler.setMediaServer(null);
+      throw err;
+    }).finally(() => {
+      mediaServerPromise = null;
+    });
+  }
+
+  await mediaServerPromise;
+}
+
+function ensureSipRegistration() {
+  const sipExtension = process.env.SIP_EXTENSION;
+  const sipAuthId = process.env.SIP_AUTH_ID || process.env.SIP_AUTH_USERNAME || sipExtension;
+  const sipAuthPassword = process.env.SIP_AUTH_PASSWORD || process.env.SIP_PASSWORD;
+
+  if (sipRegistrar || !sipExtension || !sipAuthPassword) return;
+
+  sipRegistrar = new MultiRegistrar(srf, {
+    domain: process.env.SIP_DOMAIN,
+    registrar: process.env.SIP_REGISTRAR,
+    registrar_port: parseInt(process.env.SIP_REGISTRAR_PORT || '5060'),
+    expiry: parseInt(process.env.SIP_EXPIRY || '3600'),
+    local_address: process.env.SIP_LOCAL_ADDRESS || '127.0.0.1',
+    local_port: parseInt(process.env.DRACHTIO_SIP_PORT || '5070'),
+  });
+
+  sipRegistrar.registerAll({
+    [sipExtension]: {
+      name: `ext-${sipExtension}`,
+      extension: sipExtension,
+      authId: sipAuthId,
+      password: sipAuthPassword,
+    }
+  });
+  logger.info('SIP registration started', { extension: sipExtension, authId: sipAuthId });
+}
+
 // Connect to Drachtio
 srf.connect({
   host: config.drachtio.host,
@@ -2428,56 +2583,45 @@ srf.connect({
 srf.on('connect', (err, hostport) => {
   if (err) {
     logger.error('Failed to connect to Drachtio', { error: err.message });
-    global._drachtioConnected = false;
+    resetDrachtioRuntime('connect_failed', err);
     return;
   }
+
+  if (global._drachtioConnected && mediaServerReady) {
+    logger.info('Drachtio connect event ignored because runtime is already initialized', { hostport });
+    return;
+  }
+
   global._drachtioConnected = true;
   logger.info(`Connected to Drachtio at ${hostport}`);
 
-  // Connect to FreeSWITCH media server
-  mrf.connect({
-    address: config.freeswitch.host,
-    port: config.freeswitch.port,
-    secret: config.freeswitch.secret
-  }).then((mediaServer) => {
-    logger.info('Connected to FreeSWITCH media server');
-    callHandler.setMediaServer(mediaServer);
+  ensureMediaServerConnected().then(() => {
+    ensureSipRegistration();
   }).catch((err) => {
     logger.error('Failed to connect to FreeSWITCH', { error: err.message });
+    resetDrachtioRuntime('freeswitch_connect_failed', err);
   });
-
-  // Register with 3CX if SIP credentials are provided
-  if (process.env.SIP_EXTENSION && process.env.SIP_AUTH_PASSWORD) {
-    const registrar = new MultiRegistrar(srf, {
-      domain: process.env.SIP_DOMAIN,
-      registrar: process.env.SIP_REGISTRAR,
-      registrar_port: parseInt(process.env.SIP_REGISTRAR_PORT || '5060'),
-      expiry: parseInt(process.env.SIP_EXPIRY || '3600'),
-      local_address: process.env.SIP_LOCAL_ADDRESS || '127.0.0.1',
-      local_port: parseInt(process.env.DRACHTIO_SIP_PORT || '5070'),
-    });
-
-    sipRegistrar = registrar;
-    registrar.registerAll({
-      [process.env.SIP_EXTENSION]: {
-        name: `ext-${process.env.SIP_EXTENSION}`,
-        extension: process.env.SIP_EXTENSION,
-        authId: process.env.SIP_AUTH_ID || process.env.SIP_EXTENSION,
-        password: process.env.SIP_AUTH_PASSWORD,
-      }
-    });
-    logger.info('SIP registration started', { extension: process.env.SIP_EXTENSION });
-  }
 });
 
 srf.on('error', (err) => {
   logger.error('Drachtio error', { error: err.message });
-  global._drachtioConnected = false;
+  resetDrachtioRuntime('drachtio_error', err);
 });
 
 // Inbound call handler
 srf.invite((req, res) => {
   callHandler.handleInvite(req, res);
+});
+
+// Accept out-of-dialog NOTIFY requests such as message-summary updates
+// that the 3CX SBC sends after successful registration.
+srf.notify((req, res) => {
+  logger.info('Received SIP NOTIFY', {
+    event: req.get('Event'),
+    from: req.get('From'),
+    callId: req.get('Call-ID'),
+  });
+  res.send(200);
 });
 
 logger.info('Voice worker v2 started', {

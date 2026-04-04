@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+cfgfile=/etc/3cxsbc.conf
+tmpfile=/tmp/3cxsbc.conf
+
+if [ $# -eq 0 ]; then
+    provlink=$(awk -F "=" '/ProvLink/ {print $2}' "$cfgfile" | tr -d ' ')
+    [ -z "$provlink" ] || wget -O "$tmpfile" --tries=1 -T 5 --no-check-certificate "$provlink"
+else
+    echo "Using file $tmpfile"
+    provlink=$tmpfile
+fi
+
+[ -f "$cfgfile" ] && { chown --reference="$cfgfile" "$tmpfile"; chmod --reference="$cfgfile" "$tmpfile"; }
+
+user=$(systemctl show -p User --value 3cxsbc)
+[ -n "$user" ] || user=nobody
+
+group=$(id -gn "$user")
+[ -n "$group" ] || group=nogroup
+
+[ -f "$cfgfile" ] && chown "$user" "$tmpfile" || chown "$user:$group" "$tmpfile"
+chmod "u+rw" "$tmpfile"
+
+if grep -F "End of 3CX SBC config file" "$tmpfile" >/dev/null
+then
+    if [ -f "$cfgfile" ] && cmp -s "$tmpfile" "$cfgfile"; then
+        echo "Config already current"
+        rm -f "$tmpfile"
+        exit 0
+    fi
+
+    if mv -f "$tmpfile" "$cfgfile" 2>/dev/null
+    then
+        echo "Config has been updated"
+        exit 0
+    fi
+
+    if cat "$tmpfile" > "$cfgfile"
+    then
+        rm -f "$tmpfile"
+        echo "Config has been updated"
+        exit 0
+    fi
+
+    echo "Failed to overwrite $cfgfile"
+    exit 1
+else
+    echo "Failed to fetch config from $provlink or wrong file contents"
+    rm -f "$tmpfile"
+    exit 2
+fi

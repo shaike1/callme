@@ -57,8 +57,8 @@ services:
     network_mode: host
     command: >
       drachtio
-      --contact "sip:*:5070;transport=tcp,udp"
-      --external-ip 127.0.0.1
+      --contact "sip:${DRACHTIO_CONTACT_HOST:-127.0.0.1}:5070;transport=udp"
+      --external-ip ${DRACHTIO_EXTERNAL_IP:-127.0.0.1}
       --secret ${DRACHTIO_SECRET:-cymru}
       --port 9022
       --loglevel info
@@ -133,15 +133,17 @@ services:
     network_mode: host
     volumes:
       - /tmp/voice-worker-audio:/tmp/voice-worker-audio
+      - ./voice-worker/google-tts-sa.json:/app/google-tts-sa.json:ro
     environment:
       - DRACHTIO_HOST=127.0.0.1
       - DRACHTIO_PORT=9022
       - DRACHTIO_SECRET=${DRACHTIO_SECRET:-cymru}
       - FREESWITCH_HOST=127.0.0.1
       - FREESWITCH_PORT=8021
-      - FREESWITCH_SECRET=${FREESWITCH_SECRET:-JambonzR0ck$}
+      - FREESWITCH_SECRET=${FREESWITCH_SECRET:-JambonzR0ck$$}
       - CONVERSATION_ENGINE=gemini-live
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_CLOUD_TTS_KEY_PATH=/app/google-tts-sa.json
       - SIP_EXTENSION=${SIP_EXTENSION:-12611}
       - SIP_AUTH_ID=${SIP_AUTH_ID}
       - SIP_AUTH_PASSWORD=${SIP_AUTH_PASSWORD}

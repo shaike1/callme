@@ -190,6 +190,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
   <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
   <span class="hdr-stat" id="uptime"></span>
   <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
+  <span class="hdr-stat" id="budget-hdr" style="direction:ltr;font-family:'SF Mono','Fira Code',monospace"></span>
   <button onclick="toggleTheme()" id="theme-btn" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace" title="Toggle dark/light mode">☀</button>
   <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
   <a id="setup-link" href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
@@ -445,7 +446,8 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
     <div id="ai-engine-section">
     <div class="fr"><label>Engine</label>
       <select id="s-aiEngine" onchange="onEngineChange()">
-        <option value="gemini-live">Gemini Live (Google)</option>
+        <option value="gemini-live">Gemini Live (Google) — $5.70/שעה</option>
+        <option value="groq-pipeline">Groq Pipeline (זול!) — $0.66/שעה</option>
         <option value="openai-realtime">OpenAI Realtime (GPT-4o) 🔜</option>
       </select>
     </div>
@@ -455,6 +457,22 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
         <select id="s-geminiModel">
           <option value="gemini-2.0-flash-live-001">gemini-2.0-flash (מהיר, חינמי)</option>
           <option value="gemini-2.5-pro-preview-native-audio-dialog">gemini-2.5-pro (איכותי יותר)</option>
+        </select>
+      </div>
+    </div>
+    <div id="groq-keys-section" style="display:none">
+      <div class="section-hint" style="color:#4ade80;margin-bottom:8px">💰 Groq Pipeline: Deepgram STT → Groq LLM → Google TTS — חיסכון של ~88% מול Gemini Live</div>
+      <div class="fr"><label>Groq API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-groqApiKey" type="password" placeholder="gsk_..." style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-groq" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('groq')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>Deepgram API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-deepgramApiKey" type="password" placeholder="(STT — זיהוי דיבור)" style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-deepgram" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('deepgram')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>TTS Voice</label>
+        <select id="s-ttsVoice">
+          <option value="">ברירת מחדל (he-IL-Wavenet-A)</option>
+          <option value="he-IL-Wavenet-A">he-IL-Wavenet-A (נקבה)</option>
+          <option value="he-IL-Wavenet-B">he-IL-Wavenet-B (זכר)</option>
+          <option value="he-IL-Wavenet-C">he-IL-Wavenet-C (נקבה 2)</option>
+          <option value="he-IL-Wavenet-D">he-IL-Wavenet-D (זכר 2)</option>
+          <option value="en-US-Wavenet-D">en-US-Wavenet-D (English M)</option>
+          <option value="en-US-Wavenet-F">en-US-Wavenet-F (English F)</option>
         </select>
       </div>
     </div>
@@ -1016,18 +1034,21 @@ const SIP_HINTS = {
   'custom': 'Enter your SIP provider details manually.',
 };
 
+let _settingsLoaded = false;
 function onAiEnabledChange() {
   const enabled = document.getElementById('s-aiEnabled').checked;
   document.getElementById('ai-engine-section').style.display = enabled ? '' : 'none';
   document.getElementById('ai-disabled-notice').style.display = enabled ? 'none' : '';
-  saveSettings();
+  if (_settingsLoaded) saveSettings();
 }
 
 function onEngineChange() {
   const engine = document.getElementById('s-aiEngine')?.value;
   const gemini = document.getElementById('gemini-keys-section');
+  const groq = document.getElementById('groq-keys-section');
   const openai = document.getElementById('openai-keys-section');
-  if (gemini) gemini.style.display = engine === 'openai-realtime' ? 'none' : '';
+  if (gemini) gemini.style.display = engine === 'gemini-live' ? '' : 'none';
+  if (groq) groq.style.display = engine === 'groq-pipeline' ? '' : 'none';
   if (openai) openai.style.display = engine === 'openai-realtime' ? '' : 'none';
 }
 
@@ -1053,6 +1074,10 @@ async function loadSettings() {
     document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
     document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
     if (s.geminiApiKey) { document.getElementById('s-geminiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-gemini').style.display = ''; }
+    // Groq pipeline fields
+    if (s.groqApiKey) { document.getElementById('s-groqApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-groq').style.display = ''; }
+    if (s.deepgramApiKey) { document.getElementById('s-deepgramApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-deepgram').style.display = ''; }
+    document.getElementById('s-ttsVoice').value = s.ttsVoice || '';
     document.getElementById('s-openaiModel').value = s.openaiModel || 'gpt-4o-realtime-preview';
     if (s.openaiApiKey) { document.getElementById('s-openaiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-openai').style.display = ''; }
     onEngineChange();
@@ -1091,14 +1116,15 @@ async function loadSettings() {
     document.getElementById('s-vonageKey').value = s.vonageApiKey || '';
     document.getElementById('s-vonageUrl').value = s.vonagePublicUrl || location.origin;
     onProviderChange();
+    _settingsLoaded = true;
   } catch(e) { console.error(e); }
 }
 
 async function clearApiKey(provider) {
   if (!confirm('למחוק את ה-API key?')) return;
-  const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey' };
-  const inputMap = { gemini: 's-geminiApiKey', openai: 's-openaiApiKey' };
-  const btnMap = { gemini: 'btn-clear-gemini', openai: 'btn-clear-openai' };
+  const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey', groq: 'groqApiKey', deepgram: 'deepgramApiKey' };
+  const inputMap = { gemini: 's-geminiApiKey', openai: 's-openaiApiKey', groq: 's-groqApiKey', deepgram: 's-deepgramApiKey' };
+  const btnMap = { gemini: 'btn-clear-gemini', openai: 'btn-clear-openai', groq: 'btn-clear-groq', deepgram: 'btn-clear-deepgram' };
   await fetch(`${API}/api/settings`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [keyMap[provider]]: '__CLEAR__' }) });
   document.getElementById(inputMap[provider]).placeholder = '(ריק = ללא)';
   document.getElementById(inputMap[provider]).value = '';
@@ -1123,6 +1149,19 @@ async function loadDailyCost() {
       const mColor = d.monthlyLimitReached ? '#f87171' : d.monthlyLimitActive && d.monthCostUsd > d.monthlyLimitUsd * 0.8 ? '#fbbf24' : '#64748b';
       mel.innerHTML = `עלות החודש: <span style="color:${mColor};font-family:'SF Mono','Fira Code',monospace">${mCostStr}${mLimitStr}</span>${d.monthlyLimitReached ? ' <span style="color:#f87171">⚠ מגבלה הושגה</span>' : ''}`;
     }
+    // Update header budget display
+    const hdr = document.getElementById('budget-hdr');
+    if (hdr) {
+      const actual = `$${(d.monthCostUsd||0).toFixed(2)}`;
+      const cap = d.monthlyLimitActive ? `$${d.monthlyLimitUsd.toFixed(2)}` : '∞';
+      const pct = d.monthlyLimitActive ? ((d.monthCostUsd||0) / d.monthlyLimitUsd * 100) : 0;
+      const color = d.monthlyLimitReached ? '#f87171' : pct > 80 ? '#fbbf24' : '#22c55e';
+      hdr.style.color = color;
+      hdr.style.borderColor = color + '40';
+      hdr.style.background = color === '#f87171' ? '#1a0a0a' : color === '#fbbf24' ? '#1a1a0a' : '#0a1a0a';
+      hdr.textContent = `${actual} / ${cap}`;
+      hdr.title = d.monthlyLimitActive ? `תקציב חודשי: ${actual} מתוך ${cap}` : `עלות החודש: ${actual}`;
+    }
   } catch(_) {}
 }
 
@@ -1137,6 +1176,9 @@ async function saveSettings() {
     aiEngine: document.getElementById('s-aiEngine').value,
     geminiModel: document.getElementById('s-geminiModel').value,
     geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,
+    groqApiKey: document.getElementById('s-groqApiKey').value || undefined,
+    deepgramApiKey: document.getElementById('s-deepgramApiKey').value || undefined,
+    ttsVoice: document.getElementById('s-ttsVoice').value,
     openaiModel: document.getElementById('s-openaiModel').value,
     openaiApiKey: document.getElementById('s-openaiApiKey').value || undefined,
     persona: document.getElementById('s-persona').value,

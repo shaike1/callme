@@ -9,7 +9,13 @@ services:
     image: drachtio/drachtio-server:0.9.5
     container_name: drachtio-v2
     network_mode: host
-    command: drachtio --contact "sip:*;transport=udp" --external-ip ${SBC_PUBLIC_IP}
+    command: >
+      drachtio
+      --contact "sip:${DRACHTIO_CONTACT_HOST:-127.0.0.1}:5070;transport=udp"
+      --external-ip ${DRACHTIO_EXTERNAL_IP:-127.0.0.1}
+      --secret ${DRACHTIO_SECRET:-cymru}
+      --port 9022
+      --loglevel info
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -46,9 +52,9 @@ services:
       - DRACHTIO_SECRET=${DRACHTIO_SECRET:-cymru}
       - FREESWITCH_HOST=127.0.0.1
       - FREESWITCH_PORT=8021
-      - FREESWITCH_SECRET=${FREESWITCH_SECRET:-JambonzR0ck$}
+      - FREESWITCH_SECRET=${FREESWITCH_SECRET:-JambonzR0ck$$}
       - CLAUDE_API_URL=http://127.0.0.1:3334
-      - GOOGLE_CLOUD_TTS_KEY_PATH=/app/keys/google-tts-key.json
+      - GOOGLE_CLOUD_TTS_KEY_PATH=/app/google-tts-sa.json
       - OPENAI_WHISPER_KEY=${OPENAI_WHISPER_KEY}
       - CONVERSATION_ENGINE=${CONVERSATION_ENGINE:-gemini-live}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -62,7 +68,7 @@ services:
       - LOG_LEVEL=info
       - HEALTH_PORT=3100
     volumes:
-      - ./voice-worker/keys:/app/keys:ro
+      - ./voice-worker/google-tts-sa.json:/app/google-tts-sa.json:ro
       - ./logs/voice-worker:/app/logs
     restart: unless-stopped
     healthcheck:
