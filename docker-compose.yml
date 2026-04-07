@@ -98,7 +98,7 @@ services:
     environment:
       - OPENCLAW_HOST=127.0.0.1
       - OPENCLAW_GATEWAY_PORT=18789
-      - OPENCLAW_GATEWAY_TOKEN=OPENCLAW_GATEWAY_TOKEN_REDACTED
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 
   # ─────────────────────────────────────────
   # Voice application
