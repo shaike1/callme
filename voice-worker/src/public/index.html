@@ -190,7 +190,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
   <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
   <span class="hdr-stat" id="uptime"></span>
   <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
-  <span class="hdr-stat" id="budget-hdr" style="direction:ltr;font-family:'SF Mono','Fira Code',monospace"></span>
+  <span class="hdr-stat" id="budget-hdr" style="direction:ltr;font-family:'SF Mono','Fira Code',monospace;background:#0a1a0a;color:#22c55e">...</span>
   <button onclick="toggleTheme()" id="theme-btn" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace" title="Toggle dark/light mode">☀</button>
   <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
   <a id="setup-link" href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
@@ -448,6 +448,7 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
       <select id="s-aiEngine" onchange="onEngineChange()">
         <option value="gemini-live">Gemini Live (Google) — $5.70/שעה</option>
         <option value="groq-pipeline">Groq Pipeline (זול!) — $0.66/שעה</option>
+        <option value="openclaw">OpenClaw (Luky Bot) — חכם!</option>
         <option value="openai-realtime">OpenAI Realtime (GPT-4o) 🔜</option>
       </select>
     </div>
@@ -1162,9 +1163,11 @@ async function loadDailyCost() {
       hdr.textContent = `${actual} / ${cap}`;
       hdr.title = d.monthlyLimitActive ? `תקציב חודשי: ${actual} מתוך ${cap}` : `עלות החודש: ${actual}`;
     }
-  } catch(_) {}
+  } catch(e) { console.warn('loadDailyCost failed:', e); }
 }
 
+// Refresh budget every 30s
+setInterval(loadDailyCost, 30000);
 
 async function saveSettings() {
   const body = {
@@ -2014,6 +2017,7 @@ async function saveIvr() {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 loadSettings();
+loadDailyCost(); // also load budget independently in case settings fetch fails
 loadIntegrations();
 loadContacts();
 loadScheduler();

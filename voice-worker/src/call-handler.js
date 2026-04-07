@@ -177,7 +177,7 @@ class CallHandler {
 
   // ── Outbound call ────────────────────────────────────────────────────────
 
-  async makeOutboundCall(target, from) {
+  async makeOutboundCall(target, from, opts = {}) {
     if (!this.mediaServer) throw new Error('Media server not ready');
 
     const callId = `outbound-${Date.now()}`;
@@ -242,7 +242,10 @@ class CallHandler {
     });
 
     if (CONVERSATION_ENGINE === 'gemini-live') {
-      this._handleGeminiLiveCall(endpoint, sip, callId).catch((err) => {
+      const overrideSettings = opts.systemPrompt
+        ? { ...(global.botSettings || {}), persona: opts.systemPrompt }
+        : null;
+      this._handleGeminiLiveCall(endpoint, sip, callId, null, overrideSettings).catch((err) => {
         logger.error('Outbound Gemini call error', { callId, error: err.message });
       });
     }

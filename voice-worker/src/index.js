@@ -54,7 +54,7 @@ function getAdminCreds() {
 //   viewer   — GET only; no POST/PUT/DELETE, no settings write
 const ROLE_PERMISSIONS = {
   admin:    { allowAll: true },
-  operator: { allowPaths: ['/api/calls', '/api/call', '/api/contacts', '/api/recordings', '/api/voicemails', '/api/ivr', '/api/logs', '/api/status'], allowGet: true },
+  operator: { allowPaths: ['/call', '/api/calls', '/api/call', '/api/contacts', '/api/recordings', '/api/voicemails', '/api/ivr', '/api/logs', '/api/status'], allowGet: true },
   viewer:   { allowGet: true, allowPaths: [] },
 };
 
@@ -196,7 +196,7 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiMonthlyCostLimitUsd: 0,   // 0 = no limit
-  aiEngine: 'gemini-live',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime'
+  aiEngine: 'gemini-live',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime' | 'openclaw'
   geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
   groqApiKey: '',               // Groq API key for groq-pipeline engine
@@ -540,16 +540,16 @@ app.post('/api/ha/action', async (req, res) => {
 // POST /api/ha/webhook — HA calls this to trigger CallMe Bot to make an outbound call
 app.post('/api/ha/webhook', async (req, res) => {
   const cfg = integrations.ha;
-  const { to, callerId, webhookId } = req.body || {};
+  const { to, callerId, webhookId, persona } = req.body || {};
   if (cfg?.webhookId && webhookId !== cfg.webhookId) {
     return res.status(403).json({ error: 'invalid webhook id' });
   }
   if (!to) return res.status(400).json({ error: 'missing "to"' });
   const from = callerId || process.env.SIP_EXTENSION || '12611';
   const target = `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
-  logger.info('HA webhook: outbound call', { to, target });
+  logger.info('HA webhook: outbound call', { to, target, hasPersona: !!persona });
   try {
-    const { dialog } = await callHandler.makeOutboundCall(target, from);
+    const { dialog } = await callHandler.makeOutboundCall(target, from, { systemPrompt: persona });
     res.json({ success: true, callId: dialog.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1742,12 +1742,16 @@ app.get('/api/status', async (req, res) => {
       ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
-    const useGroqPipeline = (botSettings.aiEngine || 'gemini-live') === 'groq-pipeline';
-    if (!useGroqPipeline) {
+    const aiEngine = botSettings.aiEngine || 'gemini-live';
+    const useGroqPipeline = aiEngine === 'groq-pipeline';
+    const useOpenClaw = aiEngine === 'openclaw';
+    if (!useGroqPipeline && !useOpenClaw) {
       const apiKey = botSettings.geminiApiKey;
       if (!apiKey) { ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
-    } else {
+    } else if (useGroqPipeline) {
       if (!botSettings.groqApiKey || !botSettings.deepgramApiKey) { ws.close(4500, 'Groq/Deepgram API keys not configured'); return; }
+    } else if (useOpenClaw) {
+      if (!botSettings.deepgramApiKey) { ws.close(4500, 'Deepgram API key required for OpenClaw engine'); return; }
     }
 
     let session = null;
@@ -1790,6 +1794,19 @@ app.get('/api/status', async (req, res) => {
               callId: sessionId,
               deepgramApiKey: botSettings.deepgramApiKey,
               groqApiKey: botSettings.groqApiKey,
+              systemPrompt,
+              language,
+              ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },
+            });
+          } else if (useOpenClaw) {
+            const OpenClawSession = require('./openclaw-pipeline/session');
+            const ocInt = global.integrations?.openclaw || {};
+            session = new OpenClawSession({
+              callId: sessionId,
+              deepgramApiKey: botSettings.deepgramApiKey,
+              gatewayUrl: ocInt.url || 'http://100.64.0.7:18789',
+              gatewayToken: ocInt.token,
+              agentId: cfg.agentId || 'main',
               systemPrompt,
               language,
               ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },
@@ -1990,12 +2007,16 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
       ws.close(4503, 'Monthly cost limit reached'); return;
     }
 
-    const _useGroqBrowser = (botSettings.aiEngine || 'gemini-live') === 'groq-pipeline';
-    if (!_useGroqBrowser) {
+    const _browserEngine = botSettings.aiEngine || 'gemini-live';
+    const _useGroqBrowser = _browserEngine === 'groq-pipeline';
+    const _useOpenClawBrowser = _browserEngine === 'openclaw';
+    if (!_useGroqBrowser && !_useOpenClawBrowser) {
       const apiKey = botSettings.geminiApiKey;
       if (!apiKey) { logger.error('BrowserCall: GEMINI_API_KEY missing'); ws.close(4500, 'GEMINI_API_KEY not configured'); return; }
-    } else {
+    } else if (_useGroqBrowser) {
       if (!botSettings.groqApiKey || !botSettings.deepgramApiKey) { ws.close(4500, 'Groq/Deepgram API keys not configured'); return; }
+    } else if (_useOpenClawBrowser) {
+      if (!botSettings.deepgramApiKey) { ws.close(4500, 'Deepgram API key required for OpenClaw engine'); return; }
     }
 
     let session = null;
@@ -2036,6 +2057,19 @@ const httpServer = app.listen(config.healthPort, '0.0.0.0', () => {
               callId: sessionId,
               deepgramApiKey: botSettings.deepgramApiKey,
               groqApiKey: botSettings.groqApiKey,
+              systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
+              language: cfg.language || settings.language || 'he',
+              ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },
+            });
+          } else if (_useOpenClawBrowser) {
+            const OpenClawSession = require('./openclaw-pipeline/session');
+            const ocInt = global.integrations?.openclaw || {};
+            session = new OpenClawSession({
+              callId: sessionId,
+              deepgramApiKey: botSettings.deepgramApiKey,
+              gatewayUrl: ocInt.url || 'http://100.64.0.7:18789',
+              gatewayToken: ocInt.token,
+              agentId: cfg.agentId || 'main',
               systemPrompt: cfg.systemPrompt || settings.persona || 'You are a helpful voice assistant named CallMe Bot. Respond in Hebrew.',
               language: cfg.language || settings.language || 'he',
               ttsConfig: { voiceName: botSettings.ttsVoice || undefined, googleKeyPath: resolveGoogleTtsKeyPath() },

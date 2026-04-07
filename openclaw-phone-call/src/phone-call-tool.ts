@@ -4,48 +4,25 @@ import type { OpenClawPluginApi } from "../../../src/plugins/types.js";
 type PluginCfg = {
   voiceServerUrl?: string;
   defaultDevice?: string;
-  defaultMode?: "announce" | "conversation";
-  timeoutSeconds?: number;
+  username?: string;
+  password?: string;
 };
 
 export function createPhoneCallTool(api: OpenClawPluginApi) {
   return {
     name: "phone-call",
     description:
-      "Make an outbound phone call via the claude-phone voice server. " +
-      "Use 'announce' mode to play a one-way message then hang up. " +
-      "Use 'conversation' mode for a two-way AI voice conversation. " +
-      "The 'to' field accepts E.164 phone numbers (+15551234567) or internal extensions (e.g. 12610).",
+      "Make an outbound phone call via the CallMe voice server. " +
+      "The 'to' field accepts E.164 phone numbers (+15551234567) or internal 3CX extensions (e.g. 12610).",
 
     parameters: Type.Object({
       to: Type.String({
-        description: "Phone number or extension to call (E.164 like +15551234567, or internal extension like 12610).",
+        description: "Phone number or extension to call (E.164 like +972501234567, or internal extension like 12610).",
       }),
-      message: Type.String({
-        description:
-          "What the device says when the call connects. For 'conversation' mode this is the opening line; for 'announce' mode it's the only message played.",
-      }),
-      mode: Type.Optional(
-        Type.Union([Type.Literal("announce"), Type.Literal("conversation")], {
-          description:
-            "'announce' = play message then hang up. 'conversation' = stay on the line for a two-way AI voice conversation. Defaults to 'conversation'.",
-        }),
-      ),
       device: Type.Optional(
         Type.String({
           description:
-            "Device extension or name to use as the caller (e.g. '12611' or VoiceBot). Uses plugin default if not specified.",
-        }),
-      ),
-      context: Type.Optional(
-        Type.String({
-          description:
-            "Background context passed to the AI during a conversation call — what the AI knows but doesn't say aloud (e.g. 'User is expecting a delivery today').",
-        }),
-      ),
-      timeoutSeconds: Type.Optional(
-        Type.Number({
-          description: "How many seconds to wait for the call to be answered (5–120, default 30).",
+            "Caller extension to use (e.g. '12611'). Uses plugin default if not specified.",
         }),
       ),
     }),
@@ -62,52 +39,28 @@ export function createPhoneCallTool(api: OpenClawPluginApi) {
         throw new Error("'to' is required");
       }
 
-      const message = typeof params.message === "string" ? params.message.trim() : "";
-      if (!message) {
-        throw new Error("'message' is required");
-      }
-
-      const mode =
-        (typeof params.mode === "string" && (params.mode === "announce" || params.mode === "conversation")
-          ? params.mode
-          : null) ??
-        pluginCfg.defaultMode ??
-        "conversation";
-
       const device =
         (typeof params.device === "string" && params.device.trim()) ||
         (typeof pluginCfg.defaultDevice === "string" && pluginCfg.defaultDevice.trim()) ||
         undefined;
 
-      const context =
-        typeof params.context === "string" && params.context.trim()
-          ? params.context.trim()
-          : undefined;
+      const body: Record<string, unknown> = { to };
+      if (device) body.callerId = device;
 
-      const timeoutSeconds =
-        typeof params.timeoutSeconds === "number" && params.timeoutSeconds >= 5
-          ? Math.min(Math.round(params.timeoutSeconds), 120)
-          : typeof pluginCfg.timeoutSeconds === "number"
-            ? pluginCfg.timeoutSeconds
-            : 30;
-
-      const body: Record<string, unknown> = {
-        to,
-        message,
-        mode,
-        timeoutSeconds,
-      };
-      if (device) body.device = device;
-      if (context) body.context = context;
+      const authHeaders: Record<string, string> = {};
+      if (pluginCfg.username && pluginCfg.password) {
+        const token = Buffer.from(`${pluginCfg.username}:${pluginCfg.password}`).toString("base64");
+        authHeaders["Authorization"] = `Basic ${token}`;
+      }
 
       let callId: string;
       let callStatus: string;
 
       // Initiate the call
       try {
-        const response = await fetch(`${voiceServerUrl}/api/outbound-call`, {
+        const response = await fetch(`${voiceServerUrl}/call`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify(body),
         });
 
@@ -131,34 +84,13 @@ export function createPhoneCallTool(api: OpenClawPluginApi) {
         throw new Error(`Failed to initiate call: ${msg}`);
       }
 
-      // For announce mode, poll briefly for final status (call is short-lived)
-      if (mode === "announce") {
-        await new Promise((resolve) => setTimeout(resolve, 8000));
-        try {
-          const statusResp = await fetch(`${voiceServerUrl}/api/call/${callId}`);
-          const statusData = (await statusResp.json()) as {
-            success: boolean;
-            data?: { state?: string; reason?: string };
-          };
-          if (statusData.success && statusData.data) {
-            callStatus = statusData.data.state ?? callStatus;
-          }
-        } catch {
-          // Status check is best-effort
-        }
-      }
-
-      const summary =
-        mode === "announce"
-          ? `Called ${to} and played message. Final status: ${callStatus}.`
-          : `Started conversation call to ${to}. Call ID: ${callId}. The AI voice agent is now handling the conversation.`;
+      const summary = `Outbound call initiated to ${to}. Call ID: ${callId}. Status: ${callStatus}.`;
 
       return {
         content: [{ type: "text", text: summary }],
         details: {
           callId,
           to,
-          mode,
           device: device ?? null,
           status: callStatus,
           voiceServerUrl,

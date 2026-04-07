@@ -22,6 +22,14 @@
       "timeoutSeconds": {
         "type": "number",
         "description": "Ring timeout in seconds (default: 30)"
+      },
+      "username": {
+        "type": "string",
+        "description": "Username for CallMe API authentication (e.g. 'openclaw')"
+      },
+      "password": {
+        "type": "string",
+        "description": "Password for CallMe API authentication"
       }
     }
   }
