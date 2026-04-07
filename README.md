@@ -73,8 +73,8 @@ voice-app  ← Docker, port 3000 (HTTP) / 3001 (WS audio fork)
 ### 1. Clone and configure
 
 ```bash
-git clone git@github.com:shaike1/openclaw-3cx.git
-cd openclaw-3cx
+git clone https://github.com/shaike1/callme.git
+cd callme
 cp .env.example .env         # then edit — see Environment Reference below
 cp voice-app/config/devices.json.example voice-app/config/devices.json   # then edit
 ```
@@ -182,7 +182,7 @@ docker compose build voice-app && docker compose up -d --force-recreate voice-ap
 For first-time users (no Linux/Docker experience), use the guided setup:
 
 ```bash
-cd openclaw-3cx
+cd callme
 ./setup-interactive.sh
 ```
 
