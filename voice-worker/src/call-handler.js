@@ -43,6 +43,7 @@ class CallHandler {
     this.audioDir = audioConfig.audioDir || '/tmp/voice-worker-audio';
     this.audioPort = audioConfig.audioPort || 3101;
     this.mediaServer = null;
+    this._callContexts = new Map(); // callId → { endpoint, dialog }
   }
 
   setMediaServer(mediaServer) {
@@ -76,6 +77,7 @@ class CallHandler {
       if (resolved) {
         tenantSettings = resolved.settings;
         resolvedTenantId = resolved.tenant.id;
+        this._currentTenantId = resolvedTenantId;
         logger.info('Tenant resolved for call', { callId, tenantId: resolvedTenantId });
       }
     }
@@ -98,6 +100,30 @@ class CallHandler {
       logger.info('Caller identified', { callId, callerName, callerRaw });
     }
 
+    // Check blacklist/whitelist before accepting the call
+    if (global.checkCallFilter) {
+      const filterResult = global.checkCallFilter(callerRaw);
+      if (!filterResult.allowed) {
+        logger.info('Call rejected by filter', { callId, caller: callerRaw, reason: filterResult.reason });
+        if (global.addAuditEntry) global.addAuditEntry('call.filtered', `${callerRaw} — ${filterResult.reason}`, 'system');
+        try { res.send(403); } catch (_) {}
+        return;
+      }
+    }
+
+    // Call Queue — if bot is busy and queue is enabled
+    const activeSessions = global.activeSessions;
+    const maxConcurrent = 1; // single-call bot
+    if (global.callQueue && (global.botSettings || {}).callQueueEnabled && activeSessions && activeSessions.size >= maxConcurrent) {
+      const queued = global.enqueueCall(callerRaw, callerName);
+      if (queued) {
+        logger.info('Call queued (bot busy)', { callId, caller: callerRaw, queueSize: global.callQueue.length });
+        // Play queue message and hang up — caller will get a callback
+        try { res.send(486, { headers: { 'Retry-After': '60' } }); } catch (_) {}
+        return;
+      }
+    }
+
     try {
       const audioOnlySdp = stripVideoFromSdp(req.body);
       const { endpoint, dialog } = await this.mediaServer.connectCaller(req, res, {
@@ -106,11 +132,14 @@ class CallHandler {
 
       const callStartedAt = Date.now();
       logger.info('Call connected', { callId, uuid: endpoint.uuid });
+      this._callContexts.set(callId, { endpoint, dialog });
       if (global.fireWebhook) global.fireWebhook('call.started', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt });
 
       dialog.on('destroy', () => {
         const durationS = Math.round((Date.now() - callStartedAt) / 1000);
         logger.info('Call ended', { callId, durationS });
+        this._callContexts.delete(callId);
+        if (global.activeSessions) global.activeSessions.delete(callId);
         geminiManager.close(callId);
         groqManager.close(callId);
         this.audioForkServer.unregister(callId);
@@ -118,15 +147,12 @@ class CallHandler {
         this.metrics.record(callId, 'endCall', 'hangup');
         this.metrics.finalize(callId);
         if (global.fireWebhook) global.fireWebhook('call.ended', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt, durationS });
-        if (global.sendTelegramMessage && (global.botSettings || {}).telegramCallSummary) {
-          const callerInfo = callerName ? callerName : (callerRaw || 'לא ידוע');
-          const msg = `📞 <b>שיחה נכנסת הסתיימה</b>\n👤 מתקשר: ${callerInfo}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
-          global.sendTelegramMessage(msg);
-        }
-        if (global.sendWhatsappMessage && (global.botSettings || {}).whatsappCallSummary) {
-          const callerInfo = callerName ? callerName : (callerRaw || 'לא ידוע');
-          global.sendWhatsappMessage(`📞 שיחה נכנסת\n👤 ${callerInfo}\n⏱ ${durationS}ש`);
-        }
+        // Track potential spam (very short calls)
+        if (global.trackPotentialSpam) global.trackPotentialSpam(callerRaw, durationS);
+        // Send call summary with transcript (deferred to allow transcript to be collected)
+        setTimeout(() => {
+          this._sendCallSummary('inbound', callId, callerName, callerRaw, durationS, transcript);
+        }, 500);
       });
 
       // Use per-tenant IVR config if tenant was resolved, else fall back to global
@@ -258,6 +284,9 @@ class CallHandler {
   async _handleGeminiLiveCall(endpoint, dialog, callId, callerName = null, overrideSettings = null) {
     const callStartedAt = Date.now();
     const transcript = [];
+    // Store transcript reference for live viewing
+    const ctx = this._callContexts.get(callId);
+    if (ctx) { ctx.transcript = transcript; ctx.callerName = callerName; ctx.startedAt = callStartedAt; }
     const settings = overrideSettings || global.botSettings || {};
     let systemPrompt = settings.persona || process.env.GEMINI_SYSTEM_PROMPT ||
       'You are a helpful voice assistant named CallMe Bot. The caller speaks Hebrew. Always respond in Hebrew. The audio may have phone quality noise — do your best to understand Hebrew speech.';
@@ -274,12 +303,31 @@ class CallHandler {
       systemPrompt += `\n\nIf the caller needs to speak with a human or you cannot help after ${settings.escalationTurns} exchanges, say you are transferring them and end the call.`;
     }
 
+    // Response style — appended before language lock
+    const responseStyle = settings.responseStyle || 'concise';
+    if (responseStyle === 'brief') {
+      systemPrompt += '\n\n## Response Length\nAnswer in ONE sentence only. Never elaborate. Never ask follow-up questions unless essential.';
+    } else if (responseStyle === 'concise') {
+      systemPrompt += '\n\n## Response Length\nKeep answers to 1-2 sentences. Be direct and to the point. Do not over-explain.';
+    }
+    // 'detailed' = no constraint added
+
     // Hard language lock — always appended regardless of persona
     const lang = settings.language || 'he';
-    if (lang === 'he') {
+    if (lang === 'auto') {
+      systemPrompt += '\n\n## Response language\nAutomatically detect the language the caller is speaking and respond in the SAME language. If the caller speaks Hebrew — answer in Hebrew. If English — answer in English. If Arabic — answer in Arabic. Always match the caller\'s language.';
+    } else if (lang === 'he') {
       systemPrompt += '\n\n## שפת תגובה\nחובה לענות תמיד בעברית בלבד — גם אם המתקשר דיבר בשפה אחרת. אל תענה בערבית, אנגלית, או כל שפה אחרת. תמיד עברית.';
     } else if (lang === 'en') {
       systemPrompt += '\n\n## Response language\nAlways respond in English only, regardless of what language the caller used.';
+    } else if (lang === 'ar') {
+      systemPrompt += '\n\n## لغة الاستجابة\nيجب الرد دائماً باللغة العربية فقط.';
+    } else if (lang === 'ru') {
+      systemPrompt += '\n\n## Язык ответа\nВсегда отвечайте только на русском языке, независимо от языка звонящего.';
+    } else if (lang === 'fr') {
+      systemPrompt += '\n\n## Langue de réponse\nRépondez toujours en français uniquement.';
+    } else if (lang === 'es') {
+      systemPrompt += '\n\n## Idioma de respuesta\nResponde siempre únicamente en español.';
     }
 
     const integrations = global.integrations || {};
@@ -290,6 +338,7 @@ class CallHandler {
       scheduleCall:   settings.toolScheduleCall   !== false,
       calendar:       settings.toolCalendar       !== false,
       homeAssistant:  settings.toolHomeAssistant  !== false,
+      transferCall:   settings.toolTransferCall   !== false,
     };
 
     const toolDeclarations = [];
@@ -392,6 +441,35 @@ class CallHandler {
       activeToolNames.push('control_home_assistant — שליטה בבית חכם (Home Assistant)');
     }
 
+    // Transfer call tool
+    if (toolToggles.transferCall) {
+    toolDeclarations.push({
+      name: 'transfer_call',
+      description: 'Transfer the current call to another phone number or extension. Use this when the caller asks to speak with a human, a specific person, or another department. You can look up the contact first with find_contact.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: 'Phone number, SIP extension, or contact name to transfer to' },
+          announce: { type: 'string', description: 'Optional announcement to say before transferring, e.g. "מעביר אותך עכשיו"' },
+        },
+        required: ['target']
+      }
+    });
+    activeToolNames.push('transfer_call — העברת שיחה לשלוחה או מספר אחר');
+    }
+
+    // Custom tools from dashboard
+    const customTools = settings.customTools || [];
+    for (const ct of customTools) {
+      if (!ct.enabled || !ct.name) continue;
+      toolDeclarations.push({
+        name: ct.name,
+        description: ct.description || ct.name,
+        parameters: { type: 'object', properties: { input: { type: 'string', description: 'User input for this tool' } } }
+      });
+      activeToolNames.push(`${ct.name} — ${ct.description || ''}`);
+    }
+
     // Inject active tools list into system prompt so the bot knows its capabilities
     if (activeToolNames.length > 0) {
       systemPrompt += `\n\n## כלים זמינים\nיש לך גישה לכלים הבאים — השתמש בהם באופן יזום כשרלוונטי:\n${activeToolNames.map(t => `- ${t}`).join('\n')}`;
@@ -407,11 +485,12 @@ class CallHandler {
         const pipelineToolHandler = async (name, args) => {
           return this._handleToolCall(name, args, callId, settings);
         };
+        const callLang = settings.language || process.env.CALL_LANGUAGE || 'he';
         session = await groqManager.getOrCreate(callId, {
           deepgramApiKey: settings.deepgramApiKey,
           groqApiKey: settings.groqApiKey,
           systemPrompt,
-          language: settings.language || process.env.CALL_LANGUAGE || 'he',
+          language: callLang === 'auto' ? 'multi' : callLang,
           tools: toolDeclarations,
           toolHandler: pipelineToolHandler,
           ttsConfig: {
@@ -440,6 +519,9 @@ class CallHandler {
     }
 
     let audioChunks = [];
+
+    // Register in global session map so inject endpoint can reach this call
+    if (global.activeSessions) global.activeSessions.set(callId, session);
 
     session.on('error', (err) => {
       logger.error('GeminiLive session error', { callId, error: err.message });
@@ -723,19 +805,56 @@ class CallHandler {
         return { error: 'Calendar not configured' };
       } else if (name === 'add_calendar_event') {
         const { title, date, time, duration, location } = args;
-        const [hh, mm] = time.split(':').map(Number);
-        const job = { id: `cal-${Date.now()}`, name: title, target: '', message: `תזכורת: ${title}`, time, repeat: 'once', enabled: true, createdAt: Date.now(), lastRan: null };
+        // Schedule a local reminder
         const next = new Date(`${date}T${time}:00`);
-        job.nextAt = next.getTime();
+        const job = { id: `cal-${Date.now()}`, name: title, target: '', message: `תזכורת: ${title}`, time, repeat: 'once', enabled: true, createdAt: Date.now(), lastRan: null, nextAt: next.getTime() };
         (global.scheduledJobs || []).push(job);
         if (global.saveScheduler) global.saveScheduler();
-        const startDt = `${date.replace(/-/g, '')}T${time.replace(':', '')}00`;
-        const endDt = (() => { const e = new Date(next.getTime() + (duration || 60) * 60000); return e.toISOString().replace(/[-:]/g, '').slice(0, 15); })();
-        const gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDt}/${endDt}${location ? '&location=' + encodeURIComponent(location) : ''}`;
-        if (global.sendTelegramMessage) {
-          global.sendTelegramMessage(`📅 <b>אירוע חדש נוסף</b>\n📌 ${title}\n🕐 ${date} ${time}\n<a href="${gcUrl}">הוסף לGoogle Calendar</a>`);
+
+        // Try OAuth calendar first, then SA, then fallback to link
+        let gcResult = null;
+        const tenantId = this._currentTenantId || 'global';
+        if (global.goauth && global.goauth.isConnected(tenantId, process.env.AUDIO_DIR || '/tmp/voice-worker-audio')) {
+          try {
+            const { calendar } = global.goauth.getCalendarClient(tenantId, process.env.AUDIO_DIR || '/tmp/voice-worker-audio');
+            const startDt2 = new Date(`${date}T${time}:00`);
+            const endDt2 = new Date(startDt2.getTime() + (duration || 60) * 60000);
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jerusalem';
+            const res = await calendar.events.insert({
+              calendarId: 'primary',
+              resource: {
+                summary: title,
+                start: { dateTime: startDt2.toISOString(), timeZone },
+                end: { dateTime: endDt2.toISOString(), timeZone },
+                ...(location ? { location } : {}),
+              },
+            });
+            gcResult = { id: res.data.id, htmlLink: res.data.htmlLink };
+            logger.info('Calendar event created via OAuth', { callId, eventId: gcResult.id });
+          } catch (err) {
+            logger.warn('OAuth calendar create failed, trying SA', { error: err.message });
+          }
         }
-        return { success: true, message: `Event "${title}" scheduled for ${date} at ${time}. A Google Calendar link was sent to Telegram.` };
+        if (!gcResult && global.gcal && global.gcal.isAvailable()) {
+          try {
+            gcResult = await global.gcal.createEvent({ title, date, time, duration: duration || 60, location });
+            logger.info('Calendar event created via SA', { callId, eventId: gcResult.id });
+          } catch (err) {
+            logger.warn('SA calendar create failed, falling back to link', { error: err.message });
+          }
+        }
+
+        if (global.sendTelegramMessage) {
+          if (gcResult) {
+            global.sendTelegramMessage(`📅 <b>אירוע נוסף ליומן</b>\n📌 ${title}\n🕐 ${date} ${time}${location ? '\n📍 ' + location : ''}\n✅ נוסף ישירות ל-Google Calendar`);
+          } else {
+            const startDt = `${date.replace(/-/g, '')}T${time.replace(':', '')}00`;
+            const endDt = (() => { const e = new Date(next.getTime() + (duration || 60) * 60000); return e.toISOString().replace(/[-:]/g, '').slice(0, 15); })();
+            const gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDt}/${endDt}${location ? '&location=' + encodeURIComponent(location) : ''}`;
+            global.sendTelegramMessage(`📅 <b>אירוע חדש נוסף</b>\n📌 ${title}\n🕐 ${date} ${time}\n<a href="${gcUrl}">הוסף לGoogle Calendar</a>`);
+          }
+        }
+        return { success: true, message: gcResult ? `Event "${title}" added to Google Calendar for ${date} at ${time}.` : `Event "${title}" scheduled for ${date} at ${time}. A Google Calendar link was sent to Telegram.` };
       } else if (name === 'control_home_assistant') {
         const { domain, service, entity_id } = args;
         if (global.callHaService) {
@@ -743,7 +862,63 @@ class CallHandler {
           return { success: true, response: r };
         }
         return { success: false, error: 'Home Assistant not configured' };
+      } else if (name === 'transfer_call') {
+        let { target, announce } = args;
+        // Resolve contact name to number
+        if (target && !/\d{3,}/.test(target) && !target.startsWith('sip:')) {
+          const contact = (global.contacts || []).find(c => c.name.toLowerCase().includes(target.toLowerCase()));
+          if (contact) {
+            logger.info('Transfer: resolved contact', { callId, name: target, phone: contact.phone });
+            target = contact.phone;
+          }
+        }
+        const ctx = this._callContexts.get(callId);
+        if (!ctx || !ctx.endpoint) {
+          return { success: false, error: 'Call context not available for transfer' };
+        }
+        try {
+          // Build SIP URI if just a number/extension
+          let sipTarget = target;
+          if (!target.startsWith('sip:')) {
+            const domain = (settings.sipServer || process.env.SIP_DOMAIN || '127.0.0.1:5060');
+            sipTarget = `sip:${target}@${domain}`;
+          }
+          logger.info('Transferring call', { callId, target: sipTarget, announce });
+          // Execute blind transfer via FreeSWITCH endpoint
+          await ctx.endpoint.execute('transfer', target);
+          if (global.sendTelegramMessage && settings.telegramCallSummary) {
+            global.sendTelegramMessage(`🔀 <b>שיחה הועברה</b>\n📱 יעד: ${target}\n🆔 ${callId.slice(0, 12)}`);
+          }
+          return { success: true, message: `Call transferred to ${target}` };
+        } catch (err) {
+          logger.error('Call transfer failed', { callId, target, error: err.message });
+          return { success: false, error: 'Transfer failed: ' + err.message };
+        }
       } else {
+        // Check custom tools
+        const customTools = (settings || global.botSettings || {}).customTools || [];
+        const customTool = customTools.find(ct => ct.name === name && ct.enabled);
+        if (customTool) {
+          // Fire webhook if configured
+          if (customTool.webhookUrl) {
+            try {
+              const payload = JSON.stringify({ tool: name, args, callId, timestamp: new Date().toISOString() });
+              const url = new URL(customTool.webhookUrl);
+              const mod = url.protocol === 'https:' ? require('https') : require('http');
+              const resp = await new Promise((resolve, reject) => {
+                const req = mod.request({ hostname: url.hostname, port: url.port, path: url.pathname + url.search, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 10000 }, (r) => {
+                  let data = ''; r.on('data', c => data += c); r.on('end', () => { try { resolve(JSON.parse(data)); } catch(_) { resolve({ result: data }); } });
+                });
+                req.on('error', reject);
+                req.write(payload); req.end();
+              });
+              return resp;
+            } catch (err) {
+              return { result: customTool.defaultResponse || 'בוצע', error: err.message };
+            }
+          }
+          return { result: customTool.defaultResponse || 'בוצע' };
+        }
         return { error: 'Unknown tool: ' + name };
       }
     } catch (e) {
@@ -774,6 +949,225 @@ class CallHandler {
       logger.info('Transcript saved', { callId, filename, lines: transcript.length, estimatedCostUsd });
     } catch (err) {
       logger.error('Failed to save transcript', { callId, error: err.message });
+    }
+  }
+
+  /**
+   * Generate AI summary + intent from transcript using Gemini.
+   * @returns {{ summary: string, intent: string, actionItems: string[] } | null}
+   */
+  async _generateAISummary(transcript) {
+    const apiKey = (global.botSettings || {}).geminiApiKey;
+    if (!apiKey || !transcript || transcript.length < 2) return null;
+
+    const convo = transcript.map(t => `${t.role === 'user' ? 'מתקשר' : 'בוט'}: ${t.text}`).join('\n');
+    const prompt = `אתה מנתח שיחות. קיבלת תמלול שיחה טלפונית. תן תשובה ב-JSON בלבד (בלי markdown):
+{"summary":"תקציר של 1-2 משפטים בעברית","intent":"כוונת המתקשר - מילה אחת או שתיים (למשל: קביעת פגישה, שאלה, תלונה, בירור, הזמנה, תמיכה טכנית, אחר)","sentiment":"positive/neutral/negative/frustrated","sentimentScore":0.8,"actionItems":["פעולה 1","פעולה 2"]}
+
+תמלול:
+${convo.slice(0, 3000)}`;
+
+    try {
+      const https = require('https');
+      const body = JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 300 },
+      });
+      const result = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          timeout: 10000,
+        }, (res) => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              // Extract JSON from response (may have markdown wrapping)
+              const jsonMatch = text.match(/\{[\s\S]*\}/);
+              if (jsonMatch) resolve(JSON.parse(jsonMatch[0]));
+              else resolve(null);
+            } catch (e) { resolve(null); }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        req.write(body);
+        req.end();
+      });
+      if (result && result.summary) {
+        logger.info('AI summary generated', { intent: result.intent, actionItems: result.actionItems?.length || 0 });
+        return result;
+      }
+    } catch (err) {
+      logger.warn('AI summary generation failed', { error: err.message });
+    }
+    return null;
+  }
+
+  /**
+   * Send call summary to Telegram & WhatsApp with AI-generated insights.
+   */
+  async _sendCallSummary(direction, callId, callerName, callerNumber, durationS, transcript) {
+    const settings = global.botSettings || {};
+    const dirLabel = direction === 'inbound' ? 'שיחה נכנסת' : 'שיחה יוצאת';
+    const mins = Math.floor(durationS / 60);
+    const secs = durationS % 60;
+    const durationStr = mins > 0 ? `${mins}:${String(secs).padStart(2, '0')} דק׳` : `${secs} שנ׳`;
+
+    // Generate AI summary
+    let aiSection = '';
+    let aiData = null;
+    try {
+      aiData = await this._generateAISummary(transcript);
+      if (aiData) {
+        aiSection = `\n\n🧠 <b>סיכום AI:</b> ${aiData.summary}`;
+        if (aiData.intent) aiSection += `\n🎯 <b>כוונה:</b> ${aiData.intent}`;
+        if (aiData.sentiment) {
+          const sEmoji = { positive: '😊', neutral: '😐', negative: '😞', frustrated: '😤' };
+          aiSection += `\n${sEmoji[aiData.sentiment] || '❓'} <b>רגש:</b> ${aiData.sentiment}`;
+        }
+        if (aiData.actionItems && aiData.actionItems.length > 0) {
+          aiSection += `\n📋 <b>פעולות:</b>\n${aiData.actionItems.map(a => '  • ' + a).join('\n')}`;
+        }
+        // Save AI summary to recording file
+        this._updateRecordingWithAI(callId, aiData);
+      }
+    } catch (err) {
+      logger.warn('AI summary failed', { callId, error: err.message });
+    }
+
+    // Fallback: transcript preview if no AI summary
+    let preview = '';
+    if (!aiData && transcript && transcript.length > 0) {
+      const lines = transcript.slice(0, 4).map(t => {
+        const role = t.role === 'user' ? '👤' : '🤖';
+        const text = (t.text || '').slice(0, 100);
+        return `${role} ${text}`;
+      });
+      preview = '\n\n💬 <b>תקציר:</b>\n' + lines.join('\n');
+      if (transcript.length > 4) preview += `\n<i>... עוד ${transcript.length - 4} הודעות</i>`;
+    }
+
+    // Telegram notification
+    if (global.sendTelegramMessage && settings.telegramCallSummary) {
+      const msg = `📞 <b>${dirLabel} הסתיימה</b>\n` +
+        `👤 ${callerName || 'לא ידוע'}${callerNumber ? ' (' + callerNumber + ')' : ''}\n` +
+        `⏱ ${durationStr}\n` +
+        `🆔 ${callId.slice(0, 12)}` +
+        aiSection + preview;
+      global.sendTelegramMessage(msg);
+    }
+
+    // WhatsApp notification
+    if (global.sendWhatsappMessage && settings.whatsappCallSummary) {
+      const plain = `📞 ${dirLabel} הסתיימה\n👤 ${callerName || 'לא ידוע'}\n⏱ ${durationStr}${aiData ? '\n🧠 ' + aiData.summary : ''}`;
+      global.sendWhatsappMessage(plain);
+    }
+
+    // SMS notification
+    if (global.sendSmsMessage && settings.smsCallSummary) {
+      const smsText = `${dirLabel} | ${callerName || 'לא ידוע'} ${callerNumber ? '(' + callerNumber + ')' : ''} | ${durationStr}${aiData ? ' | ' + aiData.summary : ''}`;
+      global.sendSmsMessage(smsText);
+    }
+
+    // CRM webhook — send structured data to external system
+    const crmUrl = settings.crmWebhookUrl;
+    if (crmUrl) {
+      try {
+        const payload = JSON.stringify({
+          event: 'call.completed',
+          callId,
+          direction,
+          callerName: callerName || null,
+          callerNumber: callerNumber || null,
+          durationS,
+          timestamp: new Date().toISOString(),
+          aiSummary: aiData ? aiData.summary : null,
+          aiIntent: aiData ? aiData.intent : null,
+          aiActionItems: aiData ? aiData.actionItems : [],
+          transcriptLines: transcript ? transcript.length : 0,
+        });
+        const url = new URL(crmUrl);
+        const mod = url.protocol === 'https:' ? require('https') : require('http');
+        const sendCrmWebhook = (attempt) => {
+          const crmReq = mod.request({ hostname: url.hostname, port: url.port, path: url.pathname + url.search, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 10000 }, (r) => {
+            r.resume();
+            if (r.statusCode >= 400 && attempt < 3) {
+              logger.warn('CRM webhook failed, retrying', { callId, status: r.statusCode, attempt });
+              setTimeout(() => sendCrmWebhook(attempt + 1), attempt * 5000);
+            }
+          });
+          crmReq.on('error', (e) => {
+            logger.warn('CRM webhook error', { error: e.message, attempt });
+            if (attempt < 3) setTimeout(() => sendCrmWebhook(attempt + 1), attempt * 5000);
+          });
+          crmReq.write(payload);
+          crmReq.end();
+        };
+        sendCrmWebhook(1);
+        logger.info('CRM webhook sent', { callId, url: crmUrl });
+      } catch (err) {
+        logger.warn('CRM webhook error', { callId, error: err.message });
+      }
+    }
+
+    // Email notification
+    if (global.sendEmailNotification && settings.emailNotify) {
+      global.sendEmailNotification('call', { direction, callerName, callerNumber, durationS, aiSummary: aiData?.summary, aiIntent: aiData?.intent, aiSentiment: aiData?.sentiment, callId });
+    }
+
+    // Zapier/Make webhook
+    if (global.fireZapierWebhook) {
+      global.fireZapierWebhook('call.completed', { callId, direction, callerName, callerNumber, durationS, aiSummary: aiData?.summary, aiIntent: aiData?.intent, aiSentiment: aiData?.sentiment, aiActionItems: aiData?.actionItems });
+    }
+
+    // Google Sheets sync
+    if (global.syncToGoogleSheets) {
+      global.syncToGoogleSheets({ callId, direction, callerName, callerNumber, durationS, savedAt: new Date().toISOString(), aiSummary: aiData?.summary, aiIntent: aiData?.intent, aiSentiment: aiData?.sentiment, estimatedCostUsd: 0 });
+    }
+
+    // Auto follow-up
+    if (global.scheduleAutoFollowUp && aiData) {
+      global.scheduleAutoFollowUp({ callerNumber, callerName, aiActionItems: aiData.actionItems });
+    }
+
+    // Dequeue next call if queue has waiters
+    if (global.dequeueCall && global.callQueue && global.callQueue.length > 0) {
+      const next = global.dequeueCall();
+      if (next) {
+        logger.info('Dequeuing next call', { caller: next.callerNumber });
+        if (global.sendTelegramMessage) global.sendTelegramMessage(`📞 <b>מחזיר שיחה מהתור</b>\n👤 ${next.callerName || next.callerNumber}`);
+      }
+    }
+
+    logger.info('Call summary sent', { callId, direction, hasAI: !!aiData, transcript: transcript ? transcript.length : 0 });
+  }
+
+  /**
+   * Update a saved recording file with AI summary data.
+   */
+  _updateRecordingWithAI(callId, aiData) {
+    try {
+      const recDir = path.join(this.audioDir, 'recordings');
+      const files = fs.readdirSync(recDir).filter(f => f.includes(callId.replace(/[^a-z0-9-]/gi, '_')));
+      if (files.length > 0) {
+        const filePath = path.join(recDir, files[files.length - 1]);
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        data.aiSummary = aiData.summary;
+        data.aiIntent = aiData.intent;
+        data.aiActionItems = aiData.actionItems || [];
+        data.aiSentiment = aiData.sentiment || null;
+        data.aiSentimentScore = aiData.sentimentScore || null;
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        logger.info('Recording updated with AI summary', { callId, file: files[files.length - 1] });
+      }
+    } catch (err) {
+      logger.warn('Failed to update recording with AI', { callId, error: err.message });
     }
   }
 
@@ -834,13 +1228,22 @@ class CallHandler {
           wavFile: path.basename(wavFile),
         }, null, 2));
         logger.info('Voicemail saved', { callId, wavFile, durationS });
+        // Voicemail-to-Text: transcribe using Gemini
+        const vmTranscript = await this._transcribeVoicemail(wavFile, metaFile).catch(() => null);
+        const who = callerName || 'לא ידוע';
         if (global.sendTelegramMessage && (global.botSettings || {}).telegramCallSummary) {
-          const who = callerName || 'לא ידוע';
-          global.sendTelegramMessage(`📩 <b>הודעה קולית חדשה</b>\n👤 מ: ${who}\n⏱ ~${durationS}ש\n🆔 ${callId.slice(0,12)}`);
+          let vmMsg = `📩 <b>הודעה קולית חדשה</b>\n👤 מ: ${who}\n⏱ ~${durationS}ש\n🆔 ${callId.slice(0,12)}`;
+          if (vmTranscript) vmMsg += `\n\n💬 <b>תמלול:</b>\n${vmTranscript.replace(/</g, '&lt;').replace(/>/g, '&gt;')}`;
+          global.sendTelegramMessage(vmMsg);
         }
         if (global.sendWhatsappMessage && (global.botSettings || {}).whatsappCallSummary) {
-          const who = callerName || 'לא ידוע';
-          global.sendWhatsappMessage(`📩 הודעה קולית חדשה\n👤 מ: ${who}\n⏱ ~${durationS}ש`);
+          let wmMsg = `📩 הודעה קולית חדשה\n👤 מ: ${who}\n⏱ ~${durationS}ש`;
+          if (vmTranscript) wmMsg += `\n💬 ${vmTranscript}`;
+          global.sendWhatsappMessage(wmMsg);
+        }
+        // Email notification
+        if (global.sendEmailNotification) {
+          global.sendEmailNotification('voicemail', { callerName: who, durationS, callId, transcript: vmTranscript });
         }
       } catch (err) {
         logger.error('Failed to save voicemail', { callId, error: err.message });
@@ -848,6 +1251,57 @@ class CallHandler {
     }
 
     this.audioForkServer.unregister(callId);
+  }
+
+  async _transcribeVoicemail(wavFilePath, metaFilePath) {
+    const apiKey = (global.botSettings || {}).geminiApiKey;
+    if (!apiKey) return null;
+    try {
+      const audioData = fs.readFileSync(wavFilePath);
+      const base64Audio = audioData.toString('base64');
+      const https = require('https');
+      const body = JSON.stringify({
+        contents: [{ parts: [
+          { inlineData: { mimeType: 'audio/wav', data: base64Audio } },
+          { text: 'תמלל את ההודעה הקולית הזו לעברית. אם השפה אחרת, תמלל בשפה המקורית. תן רק את הטקסט, בלי הסברים.' }
+        ] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
+      });
+      const result = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          timeout: 30000,
+        }, (res) => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              resolve(parsed.candidates?.[0]?.content?.parts?.[0]?.text || null);
+            } catch (_) { resolve(null); }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        req.write(body);
+        req.end();
+      });
+      if (result && metaFilePath) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaFilePath, 'utf8'));
+          meta.transcript = result;
+          fs.writeFileSync(metaFilePath, JSON.stringify(meta, null, 2));
+        } catch (_) {}
+      }
+      logger.info('Voicemail transcribed', { file: path.basename(wavFilePath), length: result?.length });
+      return result;
+    } catch (err) {
+      logger.warn('Voicemail transcription failed', { error: err.message });
+      return null;
+    }
   }
 
   async _savePcmAsWav(pcmBuffer, callId) {

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^5.0.0",
+    "googleapis": "^144.0.0",
     "axios": "^1.6.0",
     "dotenv": "^16.3.0",
     "drachtio-fsmrf": "^1.2.0",

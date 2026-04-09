@@ -28,6 +28,8 @@ class OpenClawPipelineSession extends EventEmitter {
     this._utteranceText = '';
     this._utteranceTimer = null;
     this._processing = false;
+    this._autoLang = language === 'auto' || language === 'multi';
+    this._detectedLang = null;
 
     this.stt = new DeepgramSTT({
       apiKey: deepgramApiKey,
@@ -58,8 +60,12 @@ class OpenClawPipelineSession extends EventEmitter {
 
       await this.stt.connect();
 
-      this.stt.on('transcript', ({ text, isFinal }) => {
+      this.stt.on('transcript', ({ text, isFinal, detectedLang }) => {
         if (isFinal && text.trim()) {
+          if (this._autoLang && detectedLang) {
+            this._detectedLang = detectedLang;
+            logger.info('Auto-detected language', { callId: this.callId, lang: detectedLang });
+          }
           this._utteranceText += (this._utteranceText ? ' ' : '') + text.trim();
           if (this._utteranceTimer) clearTimeout(this._utteranceTimer);
           this._utteranceTimer = setTimeout(() => this._processUtterance(), 800);
@@ -102,7 +108,8 @@ class OpenClawPipelineSession extends EventEmitter {
       logger.info('OpenClaw response', { callId: this.callId, text: response.slice(0, 100) });
       this.emit('output_transcript', response);
 
-      const pcm = await this.tts.synthesize(response);
+      const ttsOpts = this._autoLang && this._detectedLang ? { language: this._detectedLang } : {};
+      const pcm = await this.tts.synthesize(response, ttsOpts);
       if (!this._closed) {
         this.emit('audio', pcm);
         this.emit('turn_complete');
@@ -128,7 +135,8 @@ class OpenClawPipelineSession extends EventEmitter {
       const response = await this.llm.chat(text);
       if (response && !this._closed) {
         this.emit('output_transcript', response);
-        const pcm = await this.tts.synthesize(response);
+        const ttsOpts = this._autoLang && this._detectedLang ? { language: this._detectedLang } : {};
+        const pcm = await this.tts.synthesize(response, ttsOpts);
         if (!this._closed) {
           this.emit('audio', pcm);
           this.emit('turn_complete');

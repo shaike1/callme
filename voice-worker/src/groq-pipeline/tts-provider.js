@@ -79,19 +79,38 @@ class TTSProvider {
    * @param {string} text
    * @returns {Promise<Buffer>} PCM audio buffer
    */
-  async synthesize(text) {
+  /**
+   * Synthesize text to 24kHz 16-bit PCM mono buffer.
+   * @param {string} text
+   * @param {object} [opts] - Optional overrides
+   * @param {string} [opts.language] - Override language for this call (e.g. 'he', 'en', 'ar')
+   * @returns {Promise<Buffer>} PCM audio buffer
+   */
+  async synthesize(text, opts = {}) {
     if (!this.enabled) throw new Error('TTS provider not enabled');
-    if (this._useGoogle) return this._synthesizeGoogle(text);
+    if (this._useGoogle) return this._synthesizeGoogle(text, opts.language);
     return this._synthesizeDeepgram(text);
   }
 
-  async _synthesizeGoogle(text) {
-    logger.info('Google TTS: starting synthesis', { textLength: text.length });
+  async _synthesizeGoogle(text, langOverride) {
+    // Resolve voice/lang for this synthesis
+    let langCode = this.googleLang;
+    let voiceName = this.googleVoice;
+    if (langOverride) {
+      const lo = String(langOverride).toLowerCase();
+      if (lo.startsWith('he')) { langCode = 'he-IL'; voiceName = 'he-IL-Wavenet-A'; }
+      else if (lo.startsWith('en')) { langCode = 'en-US'; voiceName = 'en-US-Wavenet-C'; }
+      else if (lo.startsWith('ar')) { langCode = 'ar-XA'; voiceName = 'ar-XA-Wavenet-A'; }
+      else if (lo.startsWith('ru')) { langCode = 'ru-RU'; voiceName = 'ru-RU-Wavenet-A'; }
+      else if (lo.startsWith('fr')) { langCode = 'fr-FR'; voiceName = 'fr-FR-Wavenet-A'; }
+      else if (lo.startsWith('es')) { langCode = 'es-ES'; voiceName = 'es-ES-Wavenet-A'; }
+    }
+    logger.info('Google TTS: starting synthesis', { textLength: text.length, langCode, voiceName });
     const [response] = await this.client.synthesizeSpeech({
       input: { text },
       voice: {
-        languageCode: this.googleLang,
-        name: this.googleVoice,
+        languageCode: langCode,
+        name: voiceName,
       },
       audioConfig: {
         audioEncoding: 'LINEAR16',

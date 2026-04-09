@@ -32,6 +32,10 @@ class GroqPipelineSession extends EventEmitter {
     this._utteranceTimer = null;
     this._processing = false;
 
+    // Auto language detection
+    this._autoLang = language === 'auto' || language === 'multi';
+    this._detectedLang = null;
+
     // Tool handler for LLM tool calls
     this._toolHandler = toolHandler || (async () => ({ error: 'No handler' }));
 
@@ -73,8 +77,13 @@ class GroqPipelineSession extends EventEmitter {
       await this.stt.connect();
 
       // Listen for transcripts
-      this.stt.on('transcript', ({ text, isFinal }) => {
+      this.stt.on('transcript', ({ text, isFinal, detectedLang }) => {
         if (isFinal && text.trim()) {
+          // Track detected language for auto-mode TTS
+          if (this._autoLang && detectedLang) {
+            this._detectedLang = detectedLang;
+            logger.info('Auto-detected language', { callId: this.callId, lang: detectedLang });
+          }
           this._utteranceText += (this._utteranceText ? ' ' : '') + text.trim();
           // Debounce: wait 800ms after last final transcript before processing
           if (this._utteranceTimer) clearTimeout(this._utteranceTimer);
@@ -121,8 +130,9 @@ class GroqPipelineSession extends EventEmitter {
       this.emit('text', response);
       this.emit('output_transcript', response);
 
-      // Synthesize speech
-      const pcm = await this.tts.synthesize(response);
+      // Synthesize speech (pass detected language for auto-mode)
+      const ttsOpts = this._autoLang && this._detectedLang ? { language: this._detectedLang } : {};
+      const pcm = await this.tts.synthesize(response, ttsOpts);
       if (!this._closed) {
         this.emit('audio', pcm);
         this.emit('turn_complete');
@@ -158,7 +168,8 @@ class GroqPipelineSession extends EventEmitter {
       if (response && !this._closed) {
         this.emit('text', response);
         this.emit('output_transcript', response);
-        const pcm = await this.tts.synthesize(response);
+        const ttsOpts = this._autoLang && this._detectedLang ? { language: this._detectedLang } : {};
+        const pcm = await this.tts.synthesize(response, ttsOpts);
         if (!this._closed) {
           this.emit('audio', pcm);
           this.emit('turn_complete');

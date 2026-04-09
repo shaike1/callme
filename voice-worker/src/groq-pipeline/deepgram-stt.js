@@ -12,6 +12,7 @@ const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 
 function normalizeDeepgramLanguage(language) {
   const normalized = String(language || '').toLowerCase();
+  if (normalized === 'auto' || normalized === 'multi') return 'multi';
   if (normalized.startsWith('he')) return 'he';
   if (normalized.startsWith('en')) return 'en';
   return language;
@@ -30,9 +31,9 @@ class DeepgramSTT extends EventEmitter {
   }
 
   async connect() {
+    const isMulti = this.language === 'multi';
     const params = new URLSearchParams({
       model: 'nova-3',
-      language: this.language,
       encoding: 'linear16',
       sample_rate: '16000',
       channels: '1',
@@ -42,6 +43,11 @@ class DeepgramSTT extends EventEmitter {
       smart_format: 'true',
       punctuate: 'true',
     });
+    if (isMulti) {
+      params.set('detect_language', 'true');
+    } else {
+      params.set('language', this.language);
+    }
 
     const url = `${DEEPGRAM_WS_URL}?${params.toString()}`;
     this.ws = new WebSocket(url, {
@@ -93,12 +99,15 @@ class DeepgramSTT extends EventEmitter {
       const transcript = alt.transcript || '';
       if (!transcript) return;
 
+      // Extract detected language (available when detect_language=true)
+      const detectedLang = msg.channel?.detected_language || alt.detected_language || null;
+
       const isFinal = msg.is_final;
       if (isFinal) {
-        logger.info('Deepgram final transcript', { callId: this.callId, text: transcript });
-        this.emit('transcript', { text: transcript, isFinal: true });
+        logger.info('Deepgram final transcript', { callId: this.callId, text: transcript, detectedLang });
+        this.emit('transcript', { text: transcript, isFinal: true, detectedLang });
       } else {
-        this.emit('transcript', { text: transcript, isFinal: false });
+        this.emit('transcript', { text: transcript, isFinal: false, detectedLang });
       }
     } else if (msg.type === 'UtteranceEnd') {
       logger.debug('Deepgram utterance end', { callId: this.callId });
