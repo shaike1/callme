@@ -111,13 +111,33 @@ class CallHandler {
       }
     }
 
+    // Business Hours check — route to voicemail outside hours
+    if (global.isWithinBusinessHours && !global.isWithinBusinessHours()) {
+      logger.info('Call outside business hours', { callId, caller: callerRaw });
+      if (global.addAuditEntry) global.addAuditEntry('call.after-hours', `${callerRaw} — outside business hours`, 'system');
+      // Send auto-reply SMS if enabled
+      if (global.sendAutoReplySms) global.sendAutoReplySms(callerRaw);
+      // Route to voicemail instead of rejecting
+      try {
+        const audioOnlySdp = stripVideoFromSdp(req.body);
+        const { endpoint, dialog } = await this.mediaServer.connectCaller(req, res, { remoteSdp: audioOnlySdp });
+        await this._handleVoicemail(endpoint, dialog, callId, callerName);
+      } catch (err) {
+        logger.error('After-hours voicemail error', { callId, error: err.message });
+        try { res.send(480); } catch (_) {}
+      }
+      return;
+    }
+
     // Call Queue — if bot is busy and queue is enabled
-    const activeSessions = global.activeSessions;
+    const liveCalls = global.liveCalls;
     const maxConcurrent = 1; // single-call bot
-    if (global.callQueue && (global.botSettings || {}).callQueueEnabled && activeSessions && activeSessions.size >= maxConcurrent) {
+    if (global.callQueue && (global.botSettings || {}).callQueueEnabled && liveCalls && liveCalls.size >= maxConcurrent) {
       const queued = global.enqueueCall(callerRaw, callerName);
       if (queued) {
         logger.info('Call queued (bot busy)', { callId, caller: callerRaw, queueSize: global.callQueue.length });
+        // Send auto-reply SMS if enabled
+        if (global.sendAutoReplySms) global.sendAutoReplySms(callerRaw);
         // Play queue message and hang up — caller will get a callback
         try { res.send(486, { headers: { 'Retry-After': '60' } }); } catch (_) {}
         return;
@@ -132,13 +152,26 @@ class CallHandler {
 
       const callStartedAt = Date.now();
       logger.info('Call connected', { callId, uuid: endpoint.uuid });
-      this._callContexts.set(callId, { endpoint, dialog });
+      this._callContexts.set(callId, {
+        endpoint,
+        dialog,
+        callerName,
+        callerNumber: callerRaw,
+        startedAt: callStartedAt,
+        engine: CONVERSATION_ENGINE,
+        transcript: [],
+      });
+      // Register for live call monitoring
+      if (global.liveCalls) global.liveCalls.set(callId, { callerNumber: callerRaw, callerName, startedAt: callStartedAt, engine: CONVERSATION_ENGINE, transcriptLines: 0 });
       if (global.fireWebhook) global.fireWebhook('call.started', { callId, direction: 'inbound', callerName, callerNumber: callerRaw, startedAt: callStartedAt });
 
       dialog.on('destroy', () => {
         const durationS = Math.round((Date.now() - callStartedAt) / 1000);
+        const ctx = this._callContexts.get(callId);
+        const transcript = Array.isArray(ctx && ctx.transcript) ? ctx.transcript : [];
         logger.info('Call ended', { callId, durationS });
         this._callContexts.delete(callId);
+        if (global.liveCalls) global.liveCalls.delete(callId);
         if (global.activeSessions) global.activeSessions.delete(callId);
         geminiManager.close(callId);
         groqManager.close(callId);
@@ -206,7 +239,10 @@ class CallHandler {
   async makeOutboundCall(target, from, opts = {}) {
     if (!this.mediaServer) throw new Error('Media server not ready');
 
-    const callId = `outbound-${Date.now()}`;
+    if (typeof opts === 'string') {
+      opts = { systemPrompt: opts };
+    }
+    const callId = opts.callId || `outbound-${Date.now()}`;
     logger.info('Initiating outbound call', { callId, target, from });
 
     const endpoint = await this.mediaServer.createEndpoint();
@@ -259,8 +295,31 @@ class CallHandler {
       logger.info('Outbound media connection established', { callId });
     }
 
+    const callStartedAt = Date.now();
+    this._callContexts.set(callId, {
+      endpoint,
+      dialog: sip,
+      callerName: opts.callerName || null,
+      callerNumber: target,
+      startedAt: callStartedAt,
+      engine: CONVERSATION_ENGINE,
+      transcript: [],
+    });
+    if (global.liveCalls) {
+      global.liveCalls.set(callId, {
+        callerNumber: target,
+        callerName: opts.callerName || null,
+        startedAt: callStartedAt,
+        engine: CONVERSATION_ENGINE,
+        transcriptLines: 0,
+      });
+    }
+
     sip.on('destroy', () => {
       logger.info('Outbound call ended', { callId });
+      this._callContexts.delete(callId);
+      if (global.liveCalls) global.liveCalls.delete(callId);
+      if (global.activeSessions) global.activeSessions.delete(callId);
       geminiManager.close(callId);
       groqManager.close(callId);
       this.audioForkServer.unregister(callId);
@@ -276,7 +335,7 @@ class CallHandler {
       });
     }
 
-    return { endpoint, dialog: sip };
+    return { endpoint, dialog: sip, callId };
   }
 
   // ── Gemini Live path ─────────────────────────────────────────────────────
@@ -530,11 +589,15 @@ class CallHandler {
     session.on('input_transcript', (text) => {
       logger.info('Caller said', { callId, text });
       transcript.push({ role: 'user', text, ts: Date.now() });
+      const liveCall = global.liveCalls && global.liveCalls.get(callId);
+      if (liveCall) liveCall.transcriptLines = transcript.length;
     });
 
     session.on('output_transcript', (text) => {
       logger.info('Bot said', { callId, text });
       transcript.push({ role: 'bot', text, ts: Date.now() });
+      const liveCall = global.liveCalls && global.liveCalls.get(callId);
+      if (liveCall) liveCall.transcriptLines = transcript.length;
     });
 
     // Suppress audio input until the first greeting has been played, then during

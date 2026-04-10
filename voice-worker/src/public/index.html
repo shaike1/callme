@@ -384,6 +384,30 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
         <div class="app-icon ic-indigo">🛠</div>
         <div class="app-name">Custom Tools</div>
       </div>
+      <div class="app-tile" onclick="openPanel('panel-callqueue')">
+        <div class="app-icon ic-amber">📋</div>
+        <div class="app-name">תור שיחות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-webhooklogs')">
+        <div class="app-icon ic-teal">🔗</div>
+        <div class="app-name">Webhook Logs</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-apikeys')">
+        <div class="app-icon ic-purple">🔑</div>
+        <div class="app-name">API Keys</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-speeddial')">
+        <div class="app-icon ic-sky">⚡</div>
+        <div class="app-name">חיוג מהיר</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-livecalls')">
+        <div class="app-icon ic-green">📡</div>
+        <div class="app-name">Live Monitor</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-businesshours')">
+        <div class="app-icon ic-lime">🕐</div>
+        <div class="app-name">שעות פעילות</div>
+      </div>
     </div>
   </div>
 
@@ -1179,6 +1203,122 @@ body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86ef
   </div>
 </div>
 
+<!-- Call Queue -->
+<div class="drawer" id="panel-callqueue">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-amber" style="width:36px;height:36px;font-size:18px;border-radius:10px">📋</span> תור שיחות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="toggle-row"><label>הפעל תור שיחות</label><label class="switch"><input type="checkbox" id="cq-enabled" onchange="saveCqSettings()"><span class="slider"></span></label></div>
+    <div class="fr" style="margin-top:8px"><label>גודל תור מקסימלי</label><input id="cq-maxsize" type="number" min="1" max="20" value="5" style="width:80px" onblur="saveCqSettings()"></div>
+    <div class="fr"><label>הודעת המתנה</label><input id="cq-message" placeholder="כרגע אנחנו עסוקים..." onblur="saveCqSettings()"></div>
+    <div class="toggle-row" style="margin-top:8px"><label>SMS תשובה אוטומטית</label><label class="switch"><input type="checkbox" id="cq-autoreply" onchange="saveCqSettings()"><span class="slider"></span></label></div>
+    <div class="fr"><label>הודעת SMS</label><input id="cq-autoreply-msg" placeholder="תודה שהתקשרת..." onblur="saveCqSettings()"></div>
+    <hr style="border:none;border-top:1px solid #2d2d30;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:8px">שיחות בתור כרגע</div>
+    <div id="cq-list"><em style="color:#64748b">אין שיחות בתור</em></div>
+  </div>
+</div>
+
+<!-- Webhook Logs -->
+<div class="drawer" id="panel-webhooklogs">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-teal" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔗</span> Webhook Logs</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="wh-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g btn-sm" onclick="loadWebhookLogs()">רענן</button>
+  </div>
+</div>
+
+<!-- API Keys -->
+<div class="drawer" id="panel-apikeys">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔑</span> API Keys</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">צור מפתחות API לגישה חיצונית למערכת. המפתח המלא מוצג פעם אחת בלבד.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="ak-name" placeholder="שם המפתח (למשל: Zapier)" style="flex:1">
+      <button class="btn btn-p btn-sm" onclick="createApiKey()">צור מפתח</button>
+    </div>
+    <div id="ak-new" style="display:none;background:#0b2e0b;border:1px solid #22c55e;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+      <div style="color:#22c55e;margin-bottom:4px">מפתח חדש נוצר! העתק עכשיו — לא יוצג שוב:</div>
+      <code id="ak-new-key" style="color:#e2e8f0;word-break:break-all;font-size:11px"></code>
+    </div>
+    <div id="ak-list"></div>
+  </div>
+</div>
+
+<!-- Speed Dial -->
+<div class="drawer" id="panel-speeddial">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;font-size:18px;border-radius:10px">⚡</span> חיוג מהיר</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="sd-name" placeholder="שם" style="flex:1">
+      <input id="sd-phone" placeholder="מספר טלפון" style="flex:1;direction:ltr">
+      <button class="btn btn-p btn-sm" onclick="addSpeedDial()">הוסף</button>
+    </div>
+    <div id="sd-list"></div>
+  </div>
+</div>
+
+<!-- Live Call Monitor -->
+<div class="drawer" id="panel-livecalls">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">📡</span> Live Monitor</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="lc-status" style="margin-bottom:12px;font-size:13px;color:#64748b"></div>
+    <div id="lc-list"><em style="color:#64748b">אין שיחות פעילות</em></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g btn-sm" onclick="loadLiveCalls()">רענן</button>
+  </div>
+</div>
+
+<!-- Business Hours -->
+<div class="drawer" id="panel-businesshours">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-lime" style="width:36px;height:36px;font-size:18px;border-radius:10px">🕐</span> שעות פעילות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="toggle-row"><label>הפעל שעות פעילות</label><label class="switch"><input type="checkbox" id="bh-enabled" onchange="saveBusinessHours()"><span class="slider"></span></label></div>
+    <div id="bh-status" style="margin:8px 0;font-size:13px;padding:8px 12px;border-radius:6px"></div>
+    <div class="fr" style="margin-top:8px"><label>שעת פתיחה</label><input id="bh-start" type="time" value="09:00" onchange="saveBusinessHours()"></div>
+    <div class="fr"><label>שעת סגירה</label><input id="bh-end" type="time" value="18:00" onchange="saveBusinessHours()"></div>
+    <div style="margin:12px 0">
+      <label style="font-size:12px;color:#4b5563;display:block;margin-bottom:6px">ימי פעילות:</label>
+      <div id="bh-days" style="display:flex;gap:6px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="0" onchange="saveBusinessHours()"> א׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="1" onchange="saveBusinessHours()"> ב׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="2" onchange="saveBusinessHours()"> ג׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="3" onchange="saveBusinessHours()"> ד׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="4" onchange="saveBusinessHours()"> ה׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="5" onchange="saveBusinessHours()"> ו׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="6" onchange="saveBusinessHours()"> ש׳</label>
+      </div>
+    </div>
+    <div class="fr"><label>הודעה מחוץ לשעות</label><textarea id="bh-message" rows="2" onblur="saveBusinessHours()"></textarea></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1238,6 +1378,12 @@ function openPanel(id) {
   if (id === 'panel-callfilter') loadCallFilter();
   if (id === 'panel-callbacks') loadCallbacks();
   if (id === 'panel-customtools') loadCustomTools();
+  if (id === 'panel-callqueue') loadCallQueue();
+  if (id === 'panel-webhooklogs') loadWebhookLogs();
+  if (id === 'panel-apikeys') loadApiKeys();
+  if (id === 'panel-speeddial') loadSpeedDial();
+  if (id === 'panel-livecalls') loadLiveCalls();
+  if (id === 'panel-businesshours') loadBusinessHours();
 }
 
 function closePanel() {
@@ -1245,6 +1391,7 @@ function closePanel() {
     document.getElementById(currentPanel).classList.remove('open');
     currentPanel = null;
   }
+  clearInterval(_lcInterval);
   document.getElementById('overlay').classList.remove('open');
 }
 
@@ -1256,6 +1403,19 @@ function toast(msg, err) {
   t.textContent = msg;
   t.className = 'toast show' + (err ? ' error' : '');
   setTimeout(() => t.className = 'toast', 2500);
+}
+
+async function fetchJsonChecked(url, opts = {}) {
+  const resp = await fetch(url, opts);
+  let data = null;
+  try {
+    data = await resp.json();
+  } catch (_) {}
+  if (!resp.ok) {
+    const message = data && (data.error || data.message) ? (data.error || data.message) : `HTTP ${resp.status}`;
+    throw new Error(message);
+  }
+  return data;
 }
 
 // ── SIP hints ─────────────────────────────────────────────────────────────
@@ -1392,11 +1552,11 @@ async function clearApiKey(provider) {
   const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey', groq: 'groqApiKey', deepgram: 'deepgramApiKey' };
   const inputMap = { gemini: 's-geminiApiKey', openai: 's-openaiApiKey', groq: 's-groqApiKey', deepgram: 's-deepgramApiKey' };
   const btnMap = { gemini: 'btn-clear-gemini', openai: 'btn-clear-openai', groq: 'btn-clear-groq', deepgram: 'btn-clear-deepgram' };
-  await fetch(`${API}/api/settings`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [keyMap[provider]]: '__CLEAR__' }) });
+  await fetchJsonChecked(`${API}/api/settings`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [keyMap[provider]]: '__CLEAR__' }) });
   document.getElementById(inputMap[provider]).placeholder = '(ריק = ללא)';
   document.getElementById(inputMap[provider]).value = '';
   document.getElementById(btnMap[provider]).style.display = 'none';
-  showToast('API key נמחק');
+  toast('API key נמחק');
 }
 
 async function loadDailyCost() {
@@ -2390,7 +2550,8 @@ function renderRecordings(recs, totalCost) {
     }).join('');
     const notesCount = rec.notes ? `<span style="color:#64748b;font-size:10px">📝${rec.notes}</span>` : '';
     const summary = rec.aiSummary ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${rec.aiSummary.slice(0,100)}</div>` : '';
-    return `<div class="list-row"><div style="flex:1"><b>${caller}</b> ${sentiment}${intent}${tags} ${notesCount}<br><span style="font-size:11px;color:#64748b">${dt} · ⏱${dur} ${cost}</span>${summary}</div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><a class="btn btn-g btn-sm" href="${API}/api/recordings/${encodeURIComponent(rec.file)}/audio" download style="text-decoration:none">⬇</a><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
+    const stars = [1,2,3,4,5].map(s => `<span style="cursor:pointer;color:${s <= (rec.rating||0) ? '#fbbf24' : '#374151'};font-size:12px" onclick="event.stopPropagation();rateCall('${rec.file}',${s})">★</span>`).join('');
+    return `<div class="list-row"><div style="flex:1"><b>${caller}</b> ${sentiment}${intent}${tags} ${notesCount}<br><span style="font-size:11px;color:#64748b">${dt} · ⏱${dur} ${cost}</span> ${stars}${summary}</div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><a class="btn btn-g btn-sm" href="${API}/api/recordings/${encodeURIComponent(rec.file)}/audio" download style="text-decoration:none">⬇</a><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
   }).join('');
 }
 
@@ -2959,6 +3120,267 @@ async function deleteCallback(id) {
   await fetch(API + '/api/callbacks/' + id, { method: 'DELETE' });
   loadCallbacks();
   toast('בוטל');
+}
+
+// ── Call Queue ─────────────────────────────────────────────────────────
+async function loadCallQueue() {
+  try {
+    const [qr, sr] = await Promise.all([
+      fetchJsonChecked(API + '/api/call-queue'),
+      fetchJsonChecked(API + '/api/settings'),
+    ]);
+    document.getElementById('cq-enabled').checked = !!sr.callQueueEnabled;
+    document.getElementById('cq-maxsize').value = sr.callQueueMaxSize || 5;
+    document.getElementById('cq-message').value = sr.callQueueMessage || '';
+    document.getElementById('cq-autoreply').checked = !!sr.autoReplySms;
+    document.getElementById('cq-autoreply-msg').value = sr.autoReplySmsMessage || '';
+    const el = document.getElementById('cq-list');
+    if (!qr.queue || qr.queue.length === 0) { el.innerHTML = '<em style="color:#64748b">אין שיחות בתור</em>'; return; }
+    el.innerHTML = qr.queue.map(q => {
+      const t = new Date(q.enqueuedAt);
+      const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="font-family:monospace">${q.callerName || q.callerNumber}</span><br><span style="color:#888;font-size:11px">${q.callerNumber}</span></div>
+        <div style="text-align:left"><span style="color:#888;font-size:11px">${time}</span><br><button class="btn btn-d btn-sm" style="font-size:10px;padding:2px 6px" onclick="removeCqEntry('${q.id}')">הסר</button></div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadCallQueue', e); }
+}
+
+async function saveCqSettings() {
+  try {
+    await fetchJsonChecked(API + '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      callQueueEnabled: document.getElementById('cq-enabled').checked,
+      callQueueMaxSize: parseInt(document.getElementById('cq-maxsize').value) || 5,
+      callQueueMessage: document.getElementById('cq-message').value,
+      autoReplySms: document.getElementById('cq-autoreply').checked,
+      autoReplySmsMessage: document.getElementById('cq-autoreply-msg').value,
+    })});
+    toast('נשמר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function removeCqEntry(id) {
+  try {
+    await fetchJsonChecked(API + '/api/call-queue/' + id, { method: 'DELETE' });
+    loadCallQueue();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Webhook Logs ────────────────────────────────────────────────────────
+async function loadWebhookLogs() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/webhook-logs?limit=100');
+    const el = document.getElementById('wh-list');
+    if (!d.logs || d.logs.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין לוגים עדיין</div>'; return; }
+    el.innerHTML = d.logs.map(l => {
+      const t = new Date(l.ts);
+      const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit' });
+      const statusColor = l.status === 'sent' ? '#22c55e' : '#f87171';
+      return `<div style="padding:6px 0;border-bottom:1px solid #ffffff10;font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:${statusColor};font-weight:600">${l.type}</span>
+          <span style="color:#888;font-size:11px">${time}</span>
+        </div>
+        <div style="color:#64748b;font-size:11px;direction:ltr;word-break:break-all">${l.url}</div>
+        ${l.error ? '<div style="color:#f87171;font-size:11px">' + l.error + '</div>' : ''}
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadWebhookLogs', e); }
+}
+
+// ── API Keys ────────────────────────────────────────────────────────────
+async function loadApiKeys() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/api-keys');
+    const el = document.getElementById('ak-list');
+    if (!d.keys || d.keys.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין מפתחות API</div>'; return; }
+    el.innerHTML = d.keys.map(k => {
+      const t = new Date(k.createdAt);
+      const time = t.toLocaleDateString('he-IL');
+      const lastUsed = k.lastUsed ? new Date(k.lastUsed).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'never';
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="font-weight:600">${k.name}</span><br><code style="color:#64748b;font-size:11px">${k.key}</code><br><span style="color:#888;font-size:11px">Last used: ${lastUsed}</span></div>
+        <div style="text-align:left"><span style="color:#888;font-size:11px">${time}</span><br><button class="btn btn-d btn-sm" style="font-size:10px;padding:2px 6px" onclick="deleteApiKey('${k.id}')">מחק</button></div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadApiKeys', e); }
+}
+
+async function createApiKey() {
+  const name = document.getElementById('ak-name').value.trim();
+  if (!name) { toast('נא להזין שם'); return; }
+  try {
+    const d = await fetchJsonChecked(API + '/api/api-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    document.getElementById('ak-name').value = '';
+    if (d.entry && d.entry.key) {
+      document.getElementById('ak-new').style.display = 'block';
+      document.getElementById('ak-new-key').textContent = d.entry.key;
+    }
+    loadApiKeys();
+    toast('מפתח נוצר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteApiKey(id) {
+  try {
+    await fetchJsonChecked(API + '/api/api-keys/' + id, { method: 'DELETE' });
+    loadApiKeys();
+    toast('מפתח נמחק');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Speed Dial ──────────────────────────────────────────────────────────
+async function loadSpeedDial() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/speed-dial');
+    const el = document.getElementById('sd-list');
+    if (!d.entries || d.entries.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין מספרים מועדפים</div>'; return; }
+    el.innerHTML = d.entries.map(e => {
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">${e.icon || '📞'}</span>
+          <div><span style="font-weight:600">${e.name}</span><br><span style="color:#888;font-family:monospace;font-size:12px">${e.phone}</span></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-p btn-sm" style="font-size:11px" onclick="quickDial('${e.phone}')">📞 חייג</button>
+          <button class="btn btn-d btn-sm" style="font-size:10px" onclick="deleteSpeedDial('${e.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadSpeedDial', e); }
+}
+
+async function addSpeedDial() {
+  const name = document.getElementById('sd-name').value.trim();
+  const phone = document.getElementById('sd-phone').value.trim();
+  if (!name || !phone) { toast('נא למלא שם ומספר'); return; }
+  try {
+    await fetchJsonChecked(API + '/api/speed-dial', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone }) });
+    document.getElementById('sd-name').value = '';
+    document.getElementById('sd-phone').value = '';
+    loadSpeedDial();
+    toast('מספר נוסף');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteSpeedDial(id) {
+  try {
+    await fetchJsonChecked(API + '/api/speed-dial/' + id, { method: 'DELETE' });
+    loadSpeedDial();
+    toast('מספר הוסר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function quickDial(phone) {
+  document.getElementById('phone-target').value = phone;
+  closePanel();
+  handleCallBtn();
+}
+
+// ── Live Call Monitor ───────────────────────────────────────────────────
+let _lcInterval = null;
+async function loadLiveCalls() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/live-calls');
+    const el = document.getElementById('lc-list');
+    document.getElementById('lc-status').innerHTML = `<span style="color:#22c55e">${d.calls.length}</span> שיחות פעילות | <span style="color:#fbbf24">${d.queueSize}</span> בתור`;
+    if (!d.calls || d.calls.length === 0) { el.innerHTML = '<em style="color:#64748b">אין שיחות פעילות כרגע</em>'; return; }
+    el.innerHTML = d.calls.map(c => {
+      const dur = c.durationS;
+      const mins = Math.floor(dur / 60);
+      const secs = dur % 60;
+      return `<div style="background:#0b0d14;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;color:#e2e8f0">${c.callerName || c.callerNumber || 'Unknown'}</div>
+          <div style="font-size:12px;color:#64748b;font-family:monospace">${c.callerNumber}</div>
+          <div style="font-size:11px;color:#64748b">${c.engine}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#3b82f6;font-family:monospace">${mins}:${secs.toString().padStart(2,'0')}</div>
+          <div style="font-size:11px;color:#64748b">${c.transcriptLines} שורות</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadLiveCalls', e); }
+  // Auto-refresh every 3 seconds while panel is open
+  clearInterval(_lcInterval);
+  _lcInterval = setInterval(() => {
+    if (currentPanel === 'panel-livecalls') loadLiveCalls();
+    else clearInterval(_lcInterval);
+  }, 3000);
+}
+
+// ── Business Hours ──────────────────────────────────────────────────────
+async function loadBusinessHours() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/business-hours');
+    document.getElementById('bh-enabled').checked = !!d.enabled;
+    document.getElementById('bh-start').value = d.start || '09:00';
+    document.getElementById('bh-end').value = d.end || '18:00';
+    document.getElementById('bh-message').value = d.message || '';
+    // Set day checkboxes
+    const days = d.days || [0, 1, 2, 3, 4];
+    document.querySelectorAll('#bh-days input[type=checkbox]').forEach(cb => {
+      cb.checked = days.includes(parseInt(cb.value));
+    });
+    // Show current status
+    const statusEl = document.getElementById('bh-status');
+    if (d.enabled) {
+      statusEl.style.background = d.currentlyOpen ? '#0b2e0b' : '#2e0b0b';
+      statusEl.style.color = d.currentlyOpen ? '#22c55e' : '#f87171';
+      statusEl.textContent = d.currentlyOpen ? '🟢 פתוח כרגע' : '🔴 סגור כרגע — שיחות יועברו לתא קולי';
+    } else {
+      statusEl.style.background = '#1a1a2e';
+      statusEl.style.color = '#818cf8';
+      statusEl.textContent = 'שעות פעילות כבויות — הבוט פעיל 24/7';
+    }
+  } catch(e) { console.error('loadBusinessHours', e); }
+}
+
+async function saveBusinessHours() {
+  const days = [];
+  document.querySelectorAll('#bh-days input[type=checkbox]').forEach(cb => {
+    if (cb.checked) days.push(parseInt(cb.value));
+  });
+  try {
+    await fetchJsonChecked(API + '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      businessHoursEnabled: document.getElementById('bh-enabled').checked,
+      businessHoursStart: document.getElementById('bh-start').value,
+      businessHoursEnd: document.getElementById('bh-end').value,
+      businessHoursDays: days,
+      businessHoursMessage: document.getElementById('bh-message').value,
+    })});
+    loadBusinessHours();
+    toast('נשמר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Call Rating ──────────────────────────────────────────────────────────
+async function rateCall(file, rating) {
+  try {
+    await fetchJsonChecked(API + '/api/recordings/' + encodeURIComponent(file) + '/rating', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating })
+    });
+    toast('דירוג נשמר');
+    loadRecordings();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 </script>
 </body>

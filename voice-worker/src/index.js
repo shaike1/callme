@@ -12,6 +12,18 @@ const AudioForkServer = require('./audio-fork-server');
 const logger = require('./logger');
 const config = require('./config');
 const { resolveGoogleTtsKeyPath } = require('./groq-pipeline/tts-config');
+const {
+  buildLiveCallsList,
+  evaluateCallFilter,
+  isWithinBusinessHoursAt,
+  maskApiKeys,
+  matchesAllowedPath,
+  normalizeCallFilterEntry,
+  normalizeCallFilterList,
+  parseCallRating,
+  resolveRequestRole,
+  touchApiKeyUsage,
+} = require('./dashboard-helpers');
 const { google } = require('googleapis');
 const gcal = require('./google-calendar');
 const goauth = require('./google-oauth');
@@ -57,22 +69,18 @@ function getAdminCreds() {
 //   viewer   — GET only; no POST/PUT/DELETE, no settings write
 const ROLE_PERMISSIONS = {
   admin:    { allowAll: true },
+  api:      { allowPaths: ['/call', '/api/calls', '/api/call', '/api/live-calls', '/api/status'], allowGet: false },
   operator: { allowPaths: ['/call', '/api/calls', '/api/call', '/api/contacts', '/api/recordings', '/api/voicemails', '/api/ivr', '/api/logs', '/api/status'], allowGet: true },
   viewer:   { allowGet: true, allowPaths: [] },
 };
 
 function getRequestRole(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Basic ')) return null;
-  const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-  const colonIdx = decoded.indexOf(':');
-  const user = decoded.slice(0, colonIdx);
-  const pass = decoded.slice(colonIdx + 1);
-  const { user: ADMIN_USER, pass: ADMIN_PASS } = getAdminCreds();
-  if (user === ADMIN_USER && pass === ADMIN_PASS) return { role: 'admin', username: user };
-  const found = (botSettings.users || []).find(u => u.username === user && u.password === pass);
-  if (found) return { role: found.role || 'viewer', username: user };
-  return null;
+  return resolveRequestRole(req.headers, {
+    adminCreds: getAdminCreds(),
+    users: botSettings.users || [],
+    apiKeys: botSettings.apiKeys || [],
+    onApiKeyUsed: (entry) => touchApiKeyUsage(entry, saveSettings),
+  });
 }
 
 function requireAuth(req, res, next) {
@@ -108,7 +116,7 @@ function requireAuth(req, res, next) {
   // Viewer: GET requests only (static files + read APIs)
   if (perms.allowGet && req.method === 'GET') { req.userRole = identity.role; return next(); }
   // Operator: also allow mutating calls/contacts/IVR paths
-  if (perms.allowPaths && perms.allowPaths.some(p => req.path.startsWith(p))) { req.userRole = identity.role; return next(); }
+  if (perms.allowPaths && perms.allowPaths.some(p => matchesAllowedPath(req.path, p))) { req.userRole = identity.role; return next(); }
   return res.status(403).json({ error: 'Forbidden — insufficient permissions for your role (' + identity.role + ')' });
 }
 app.use(requireAuth);
@@ -297,6 +305,21 @@ const defaultSettings = {
   vonagePhoneNumber: '',
   vonagePublicUrl: '',
   vonageAppId: '',
+  // Business Hours
+  businessHoursEnabled: false,
+  businessHoursStart: '09:00',
+  businessHoursEnd: '18:00',
+  businessHoursDays: [0, 1, 2, 3, 4], // Sunday-Thursday (Israel workweek)
+  businessHoursMessage: 'שלום, אנחנו זמינים בין השעות 09:00-18:00. נא להשאיר הודעה.',
+  // Speed Dial
+  speedDial: [], // [{id, name, phone, icon}]
+  // Auto-Reply SMS
+  autoReplySms: false,
+  autoReplySmsMessage: 'תודה שהתקשרת. נחזור אליך בהקדם.',
+  // Call Rating
+  callRatingEnabled: true,
+  // API Keys
+  apiKeys: [], // [{id, name, key, createdAt, lastUsed}]
 };
 
 let botSettings = { ...defaultSettings };
@@ -452,6 +475,17 @@ app.post('/api/settings', (req, res) => {
   if (zapierWebhookEvents !== undefined) botSettings.zapierWebhookEvents = Array.isArray(zapierWebhookEvents) ? zapierWebhookEvents : botSettings.zapierWebhookEvents;
   if (googleSheetsId !== undefined) botSettings.googleSheetsId = googleSheetsId;
   if (googleSheetsSync !== undefined) botSettings.googleSheetsSync = googleSheetsSync;
+  // Business hours settings
+  const { businessHoursEnabled, businessHoursStart, businessHoursEnd, businessHoursDays, businessHoursMessage } = req.body || {};
+  if (businessHoursEnabled !== undefined) botSettings.businessHoursEnabled = businessHoursEnabled;
+  if (businessHoursStart !== undefined) botSettings.businessHoursStart = businessHoursStart;
+  if (businessHoursEnd !== undefined) botSettings.businessHoursEnd = businessHoursEnd;
+  if (businessHoursDays !== undefined) botSettings.businessHoursDays = Array.isArray(businessHoursDays) ? businessHoursDays : botSettings.businessHoursDays;
+  if (businessHoursMessage !== undefined) botSettings.businessHoursMessage = businessHoursMessage;
+  // Auto-reply SMS
+  const { autoReplySms, autoReplySmsMessage } = req.body || {};
+  if (autoReplySms !== undefined) botSettings.autoReplySms = autoReplySms;
+  if (autoReplySmsMessage !== undefined) botSettings.autoReplySmsMessage = autoReplySmsMessage;
   saveSettings();
   if (global.addAuditEntry) {
     const changed = Object.keys(req.body || {}).filter(k => !['sipPassword','adminPass','geminiApiKey','openaiApiKey','telegramBotToken','whatsappApiKey','elevenlabsApiKey'].includes(k));
@@ -639,8 +673,8 @@ app.post('/api/ha/webhook', async (req, res) => {
   const target = `sip:${to}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
   logger.info('HA webhook: outbound call', { to, target, hasPersona: !!persona });
   try {
-    const { dialog } = await callHandler.makeOutboundCall(target, from, { systemPrompt: persona });
-    res.json({ success: true, callId: dialog.id });
+    const { callId } = await callHandler.makeOutboundCall(target, from, { systemPrompt: persona });
+    res.json({ success: true, callId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -758,10 +792,11 @@ function fireWebhook(event, payload) {
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
       timeout: 5000,
     }, () => {});
-    req2.on('error', (e) => logger.warn('Webhook delivery failed', { url, error: e.message }));
+    req2.on('error', (e) => { logger.warn('Webhook delivery failed', { url, error: e.message }); if (global.logWebhookDelivery) global.logWebhookDelivery('call-webhook', url, 'error', e.message); });
     req2.write(body);
     req2.end();
     logger.debug('Webhook fired', { event, url });
+    if (global.logWebhookDelivery) global.logWebhookDelivery('call-webhook', url, 'sent');
   } catch (e) {
     logger.warn('Webhook error', { error: e.message });
   }
@@ -918,24 +953,7 @@ global.sendEmailNotification = sendEmailNotification;
  * Returns { allowed: boolean, reason: string }
  */
 function checkCallFilter(callerNumber) {
-  const mode = botSettings.callFilterMode || 'none';
-  if (mode === 'none' || !callerNumber) return { allowed: true, reason: '' };
-  const list = botSettings.callFilterList || [];
-  if (list.length === 0) return { allowed: true, reason: '' };
-  const norm = (n) => (n || '').replace(/[^0-9+]/g, '');
-  const callerNorm = norm(callerNumber);
-  const matched = list.some(pattern => {
-    const pNorm = norm(pattern);
-    if (!pNorm) return false;
-    // Support wildcard prefix match: "050*" matches any number starting with 050
-    if (pNorm.endsWith('*')) {
-      return callerNorm.startsWith(pNorm.slice(0, -1)) || callerNorm.endsWith(pNorm.slice(0, -1));
-    }
-    return callerNorm.endsWith(pNorm) || pNorm.endsWith(callerNorm);
-  });
-  if (mode === 'blacklist') return { allowed: !matched, reason: matched ? 'blacklisted' : '' };
-  if (mode === 'whitelist') return { allowed: matched, reason: !matched ? 'not in whitelist' : '' };
-  return { allowed: true, reason: '' };
+  return evaluateCallFilter(botSettings, callerNumber);
 }
 global.checkCallFilter = checkCallFilter;
 
@@ -1096,6 +1114,9 @@ const activeCalls = new Map(); // callId → { callId, to, from, startedAt, dial
 // Active AI session registry — for inject endpoint
 const activeSessions = new Map(); // callId → session object with sendText()
 
+// Live SIP call registry — for dashboard monitoring / queue checks
+const liveCalls = new Map(); // callId → { callId, callerNumber, callerName, startedAt, engine, transcriptLines }
+
 // Outbound call endpoint — triggers bot to call a SIP extension
 app.post('/call', async (req, res) => {
   const { to, callerId, webhookUrl } = req.body || {};
@@ -1113,16 +1134,20 @@ app.post('/call', async (req, res) => {
   res.json({ success: true, callId, status: 'calling' });
 
   // Establish SIP call in the background
-  callHandler.makeOutboundCall(target, from).then(({ dialog }) => {
+  callHandler.makeOutboundCall(target, from, { callId }).then(({ dialog, callId: resolvedCallId }) => {
+    const trackedCallId = resolvedCallId || callId;
     const existing = activeCalls.get(callId);
-    if (existing) activeCalls.set(callId, { ...existing, dialog, status: 'connected' });
-    fireWebhook('call.started', { callId, direction: 'outbound', to, from, startedAt });
+    if (existing) {
+      activeCalls.delete(callId);
+      activeCalls.set(trackedCallId, { ...existing, callId: trackedCallId, dialog, status: 'connected' });
+    }
+    fireWebhook('call.started', { callId: trackedCallId, direction: 'outbound', to, from, startedAt });
     dialog.once('destroy', () => {
       const durationS = Math.round((Date.now() - startedAt) / 1000);
-      activeCalls.delete(callId);
-      fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
+      activeCalls.delete(trackedCallId);
+      fireWebhook('call.ended', { callId: trackedCallId, direction: 'outbound', to, from, startedAt, durationS });
       if (global.sendTelegramMessage && botSettings.telegramCallSummary) {
-        const msg = `📞 <b>שיחה יוצאת הסתיימה</b>\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש\n🆔 ${callId.slice(0,12)}`;
+        const msg = `📞 <b>שיחה יוצאת הסתיימה</b>\n📱 יעד: ${to}\n⏱ משך: ${durationS}ש\n🆔 ${trackedCallId.slice(0,12)}`;
         global.sendTelegramMessage(msg);
       }
       if (global.sendWhatsappMessage && botSettings.whatsappCallSummary) {
@@ -1131,7 +1156,7 @@ app.post('/call', async (req, res) => {
       if (webhookUrl) {
         const orig = botSettings.callWebhookUrl;
         botSettings.callWebhookUrl = webhookUrl;
-        fireWebhook('call.ended', { callId, direction: 'outbound', to, from, startedAt, durationS });
+        fireWebhook('call.ended', { callId: trackedCallId, direction: 'outbound', to, from, startedAt, durationS });
         botSettings.callWebhookUrl = orig;
       }
     });
@@ -1391,7 +1416,7 @@ app.get('/api/call-filter', (req, res) => {
 app.post('/api/call-filter', (req, res) => {
   const { mode, list } = req.body || {};
   if (mode !== undefined) botSettings.callFilterMode = mode;
-  if (Array.isArray(list)) botSettings.callFilterList = list;
+  if (Array.isArray(list)) botSettings.callFilterList = normalizeCallFilterList(list);
   saveSettings();
   if (global.addAuditEntry) global.addAuditEntry('call-filter.updated', `mode=${botSettings.callFilterMode}, ${(botSettings.callFilterList || []).length} numbers`, req.ip);
   res.json({ success: true, mode: botSettings.callFilterMode, list: botSettings.callFilterList });
@@ -1401,7 +1426,8 @@ app.post('/api/call-filter/add', (req, res) => {
   const { number } = req.body || {};
   if (!number) return res.status(400).json({ error: 'number required' });
   if (!botSettings.callFilterList) botSettings.callFilterList = [];
-  const norm = number.replace(/[^0-9+*]/g, '');
+  const norm = normalizeCallFilterEntry(number);
+  if (!norm) return res.status(400).json({ error: 'invalid number or pattern' });
   if (!botSettings.callFilterList.includes(norm)) {
     botSettings.callFilterList.push(norm);
     saveSettings();
@@ -1499,6 +1525,7 @@ global.contacts = contacts;
 global.scheduledJobs = scheduledJobs;
 global.activeCalls = activeCalls;
 global.activeSessions = activeSessions;
+global.liveCalls = liveCalls;
 global.saveContacts = saveContacts;
 global.saveScheduler = saveScheduler;
 global.metrics = metrics;
@@ -1568,8 +1595,7 @@ setInterval(async () => {
     try {
       const from = process.env.SIP_EXTENSION || '12611';
       const target = job.target.startsWith('sip:') ? job.target : `sip:${job.target}@${process.env.SIP_DOMAIN || '127.0.0.1'}`;
-      const { dialog } = await callHandler.makeOutboundCall(target, from);
-      const callId = dialog.id || `sched-${Date.now()}`;
+      const { dialog, callId } = await callHandler.makeOutboundCall(target, from);
       activeCalls.set(callId, { callId, to: job.target, from, target, startedAt: now, dialog });
       dialog.once('destroy', () => {
         activeCalls.delete(callId);
@@ -1605,7 +1631,7 @@ setInterval(async () => {
           const target = botSettings.reminderPhone || botSettings.sipExtension || process.env.SIP_EXTENSION;
           if (target && callHandler) {
             logger.info('Morning briefing — calling', { target });
-            callHandler.makeOutboundCall(`sip:${target}@${botSettings.sipServer || process.env.SIP_DOMAIN}`, botSettings.sipDid || process.env.DEFAULT_CALLER_ID, briefingText);
+            callHandler.makeOutboundCall(`sip:${target}@${botSettings.sipServer || process.env.SIP_DOMAIN}`, botSettings.sipDid || process.env.DEFAULT_CALLER_ID, { systemPrompt: briefingText });
           }
           if (global.sendTelegramMessage) {
             global.sendTelegramMessage(`☀️ <b>תקציר בוקר</b>\n${briefingText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}`);
@@ -1632,8 +1658,7 @@ setInterval(async () => {
       const target = cb.phone.startsWith('sip:') ? cb.phone : `sip:${cb.phone}@${botSettings.sipServer || process.env.SIP_DOMAIN || '127.0.0.1'}`;
       const prevGreeting = (global.botSettings || {}).greeting;
       if (cb.reason && global.botSettings) global.botSettings.greeting = `שלום, אני מתקשר חזרה בנוגע ל: ${cb.reason}. מה אוכל לעזור?`;
-      const { dialog } = await callHandler.makeOutboundCall(target, from);
-      const callId = dialog.id || `cb-${Date.now()}`;
+      const { dialog, callId } = await callHandler.makeOutboundCall(target, from);
       activeCalls.set(callId, { callId, to: cb.phone, from, target, startedAt: cbNow, dialog });
       dialog.once('destroy', () => {
         activeCalls.delete(callId);
@@ -2517,7 +2542,7 @@ app.get('/api/recordings', (req, res) => {
           data.estimatedCostUsd = cost;
           fs.writeFileSync(path.join(RECORDINGS_DIR, f), JSON.stringify(data, null, 2));
         }
-        return { file: f, callId: data.callId, callerName: data.callerName, callerNumber: data.callerNumber || null, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine || 'gemini-live', estimatedCostUsd: cost, aiSummary: data.aiSummary || null, aiIntent: data.aiIntent || null, aiActionItems: data.aiActionItems || null, aiSentiment: data.aiSentiment || null, tags: data.tags || [], notes: (data.notes || []).length };
+        return { file: f, callId: data.callId, callerName: data.callerName, callerNumber: data.callerNumber || null, durationS: data.durationS, savedAt: data.savedAt, lines: data.transcript?.length || 0, engine: data.engine || 'gemini-live', estimatedCostUsd: cost, aiSummary: data.aiSummary || null, aiIntent: data.aiIntent || null, aiActionItems: data.aiActionItems || null, aiSentiment: data.aiSentiment || null, tags: data.tags || [], notes: (data.notes || []).length, rating: data.rating || null };
       } catch (_) { return null; }
     }).filter(Boolean).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
     const totalCostUsd = recordings.reduce((s, r) => s + (r.estimatedCostUsd || 0), 0);
@@ -2729,6 +2754,117 @@ app.delete('/api/call-queue/:id', (req, res) => {
   res.json({ success: true, queue: callQueue });
 });
 
+// ── Business Hours ──────────────────────────────────────────────────────
+function isWithinBusinessHours() {
+  return isWithinBusinessHoursAt(botSettings);
+}
+global.isWithinBusinessHours = isWithinBusinessHours;
+global.getBusinessHoursMessage = () => botSettings.businessHoursMessage || 'אנחנו לא זמינים כרגע. נא להשאיר הודעה.';
+
+app.get('/api/business-hours', (req, res) => {
+  res.json({
+    enabled: !!botSettings.businessHoursEnabled,
+    start: botSettings.businessHoursStart || '09:00',
+    end: botSettings.businessHoursEnd || '18:00',
+    days: botSettings.businessHoursDays || [0, 1, 2, 3, 4],
+    message: botSettings.businessHoursMessage || '',
+    currentlyOpen: isWithinBusinessHours(),
+  });
+});
+
+// ── Call Rating ─────────────────────────────────────────────────────────
+app.post('/api/recordings/:file/rating', (req, res) => {
+  const filePath = path.join(RECORDINGS_DIR, path.basename(req.params.file));
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not found' });
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const rating = parseCallRating(req.body && req.body.rating);
+    if (rating === null) return res.status(400).json({ error: 'rating must be an integer from 1 to 5' });
+    data.rating = rating;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    res.json({ success: true, rating });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Speed Dial ──────────────────────────────────────────────────────────
+app.get('/api/speed-dial', (req, res) => {
+  res.json({ entries: botSettings.speedDial || [] });
+});
+
+app.post('/api/speed-dial', (req, res) => {
+  const { name, phone, icon } = req.body || {};
+  if (!name || !phone) return res.status(400).json({ error: 'name and phone required' });
+  if (!botSettings.speedDial) botSettings.speedDial = [];
+  const entry = { id: `sd-${Date.now()}`, name, phone, icon: icon || '📞' };
+  botSettings.speedDial.push(entry);
+  saveSettings();
+  res.json({ success: true, entries: botSettings.speedDial });
+});
+
+app.delete('/api/speed-dial/:id', (req, res) => {
+  if (!botSettings.speedDial) botSettings.speedDial = [];
+  botSettings.speedDial = botSettings.speedDial.filter(e => e.id !== req.params.id);
+  saveSettings();
+  res.json({ success: true, entries: botSettings.speedDial });
+});
+
+// ── Webhook Logs ────────────────────────────────────────────────────────
+const WEBHOOK_LOG = [];
+const WEBHOOK_LOG_MAX = 200;
+
+function logWebhookDelivery(type, url, status, error) {
+  WEBHOOK_LOG.push({ ts: new Date().toISOString(), type, url: url ? url.substring(0, 80) : '', status, error: error || null });
+  if (WEBHOOK_LOG.length > WEBHOOK_LOG_MAX) WEBHOOK_LOG.shift();
+}
+global.logWebhookDelivery = logWebhookDelivery;
+
+app.get('/api/webhook-logs', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  res.json({ logs: WEBHOOK_LOG.slice(-limit).reverse() });
+});
+
+// ── API Keys ────────────────────────────────────────────────────────────
+const crypto = require('crypto');
+
+app.get('/api/api-keys', (req, res) => {
+  res.json({ keys: maskApiKeys(botSettings.apiKeys || []) });
+});
+
+app.post('/api/api-keys', (req, res) => {
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name required' });
+  if (!botSettings.apiKeys) botSettings.apiKeys = [];
+  const key = 'cmb_' + crypto.randomBytes(24).toString('hex');
+  const entry = { id: `ak-${Date.now()}`, name, key, createdAt: new Date().toISOString(), lastUsed: null };
+  botSettings.apiKeys.push(entry);
+  saveSettings();
+  if (global.addAuditEntry) global.addAuditEntry('api-key.created', name, req.ip);
+  res.json({ success: true, entry: { ...entry } }); // Return full key on creation
+});
+
+app.delete('/api/api-keys/:id', (req, res) => {
+  if (!botSettings.apiKeys) botSettings.apiKeys = [];
+  botSettings.apiKeys = botSettings.apiKeys.filter(k => k.id !== req.params.id);
+  saveSettings();
+  if (global.addAuditEntry) global.addAuditEntry('api-key.deleted', req.params.id, req.ip);
+  res.json({ success: true });
+});
+
+// ── Live Call Monitor API ───────────────────────────────────────────────
+app.get('/api/live-calls', (req, res) => {
+  const sessions = global.liveCalls || new Map();
+  const calls = buildLiveCallsList(sessions, activeCalls, Date.now(), process.env.CONVERSATION_ENGINE || 'stt-tts');
+  res.json({ calls, queueSize: callQueue.length });
+});
+
+// ── Auto-Reply SMS ──────────────────────────────────────────────────────
+global.sendAutoReplySms = function(callerNumber) {
+  if (!botSettings.autoReplySms || !callerNumber) return;
+  const msg = botSettings.autoReplySmsMessage || 'תודה שהתקשרת. נחזור אליך בהקדם.';
+  sendSmsMessage(msg, callerNumber);
+  logger.info('Auto-reply SMS sent', { to: callerNumber });
+};
+
 // ── Zapier/Make Generic Webhook ──────────────────────────────────────────
 function fireZapierWebhook(event, data) {
   const url = botSettings.zapierWebhookUrl;
@@ -2740,10 +2876,11 @@ function fireZapierWebhook(event, data) {
     const parsed = new URL(url);
     const mod = parsed.protocol === 'https:' ? require('https') : require('http');
     const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 10000 }, (r) => { r.resume(); });
-    req.on('error', (e) => logger.warn('Zapier webhook failed', { error: e.message }));
+    req.on('error', (e) => { logger.warn('Zapier webhook failed', { error: e.message }); if (global.logWebhookDelivery) global.logWebhookDelivery('zapier', url, 'error', e.message); });
     req.write(payload);
     req.end();
     logger.debug('Zapier webhook fired', { event, url });
+    if (global.logWebhookDelivery) global.logWebhookDelivery('zapier', url, 'sent');
   } catch (err) { logger.warn('Zapier webhook error', { error: err.message }); }
 }
 global.fireZapierWebhook = fireZapierWebhook;
