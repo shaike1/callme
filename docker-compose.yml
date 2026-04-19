@@ -14,6 +14,10 @@ services:
     environment:
       # Server
       - PORT=3101
+      - HEALTH_PORT=3101
+      - OCPLATFORM_GATEWAY_URL=http://100.64.0.7:20129
+      - OCPLATFORM_ENABLED=true
+      - AI_ENGINE=openclaw
       - AUDIO_WS_PORT=3001
       - HOST=0.0.0.0
       
@@ -25,9 +29,6 @@ services:
       - THREECX_API_TOKEN=${THREECX_API_TOKEN:-}
       
       # OpenClaw Brain
-      - OCPLATFORM_GATEWAY_URL=${OCPLATFORM_GATEWAY_URL:-http://100.64.0.7:20129}
-      - OCPLATFORM_TOKEN=${OCPLATFORM_TOKEN:-}
-      - OCPLATFORM_MODEL=${OCPLATFORM_MODEL:-auto-route}
       
       # Whisper STT
       - WHISPER_API_URL=${WHISPER_API_URL:-}

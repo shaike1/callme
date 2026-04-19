@@ -207,7 +207,7 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiMonthlyCostLimitUsd: 0,   // 0 = no limit
-  aiEngine: 'gemini-live',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime' | 'openclaw'
+  aiEngine: process.env.AI_ENGINE || 'ocplatform',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime' | 'openclaw'
   geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
   groqApiKey: '',               // Groq API key for groq-pipeline engine
@@ -731,7 +731,9 @@ app.post('/api/tts', async (req, res) => {
 // ── Webhook: text chat with the bot ──────────────────────────────────────
 const https = require('https');
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', express.json(), async (req, res) => {
+  logger.info("🔥 CHAT CALLED");
+  logger.info('🔥 /api/chat called', { message: req.body?.message, hasBody: !!req.body });
   const { message, sessionId } = req.body || {};
   if (!message) return res.status(400).json({ error: 'missing "message" field' });
 
@@ -745,12 +747,20 @@ app.post('/api/chat', async (req, res) => {
     ? integrations.openclaw.url
     : process.env.OCPLATFORM_GATEWAY_URL;
 
+  logger.info('🔍 ocpUrl check', { 
+    enabled: integrations.openclaw?.enabled, 
+    url: integrations.openclaw?.url, 
+    env: process.env.OCPLATFORM_GATEWAY_URL,
+    final: ocpUrl 
+  });
+
   if (ocpUrl) {
+    logger.info('🟡 Entering OCP block');
     try {
       const urlObj = new URL(ocpUrl + '/v1/chat/completions');
       const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
       const payload = JSON.stringify({
-        model: 'auto-route',
+        model: 'gh/claude-sonnet-4.5',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
@@ -764,7 +774,7 @@ app.post('/api/chat', async (req, res) => {
           path: urlObj.pathname,
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-          timeout: 30000
+          timeout: 10000
         };
         const req2 = mod.request(opts, (r) => {
           let data = '';
@@ -772,21 +782,34 @@ app.post('/api/chat', async (req, res) => {
           r.on('end', () => resolve({ status: r.statusCode, body: data }));
         });
         req2.on('error', reject);
-        req2.on('timeout', () => reject(new Error('OCPlatform timeout')));
+        req2.on('timeout', () => { req2.destroy(); reject(new Error('OCPlatform timeout 10s')); });
         req2.write(payload);
         req2.end();
       });
+      logger.info('🔍 OCP response', { status: response.status, bodyLen: response.body?.length });
       // Handle SSE stream or plain JSON
       const rawBody = response.body;
+      logger.info('[RAW] rawBody check', { hasData: rawBody?.includes('data: '), sample: rawBody?.slice(0, 150) });
       let text = '';
-      if (rawBody && rawBody.includes('data: ')) {
+      // Check if it's SSE stream (lines starting with "data: ") or plain JSON
+      const isSSE = rawBody && rawBody.trim().startsWith('data: ');
+      if (isSSE) {
         for (const line of rawBody.split('\n')) {
           if (line.startsWith('data: ') && !line.includes('[DONE]')) {
             try { text += JSON.parse(line.slice(6))?.choices?.[0]?.delta?.content || ''; } catch (_) {}
           }
         }
       } else {
-        try { text = JSON.parse(rawBody)?.choices?.[0]?.message?.content || ''; } catch(_) {}
+        try { 
+          // OmniRoute returns JSON + SSE headers. Extract JSON part.
+          const jsonEnd = rawBody.indexOf('\n:');
+          const jsonPart = jsonEnd > 0 ? rawBody.slice(0, jsonEnd) : rawBody;
+          const result = JSON.parse(jsonPart);
+          text = result?.choices?.[0]?.message?.content || '';
+          logger.info('[PARSE] ✅ Success', { textLen: text?.length });
+        } catch(e) {
+          logger.warn('[PARSE ERROR]', { error: e.message, body: rawBody?.slice(0, 200) });
+        }
       }
       if (text) {
         logger.info('API chat via OCPlatform', { sessionId, responseLength: text.length });
