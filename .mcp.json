@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "telegram": {
+      "command": "/root/.bun/bin/bun",
+      "args": [
+        "run",
+        "--cwd",
+        "/root/relay/mcp-telegram",
+        "server.ts"
+      ],
+      "env": {
+        "TELEGRAM_THREAD_ID": "201",
+        "SESSION_NAME": "voice"
+      }
+    }
+  }
+}

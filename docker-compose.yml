@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  callme:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: callme:latest
+    container_name: callme-voice-bot
+    restart: unless-stopped
+    ports:
+      - "3101:3101"   # HTTP API
+      - "3001:3001"   # WebSocket audio
+    environment:
+      # Server
+      - PORT=3101
+      - AUDIO_WS_PORT=3001
+      - HOST=0.0.0.0
+      
+      # 3CX
+      - THREECX_HOST=${THREECX_HOST:-1664.3cx.cloud}
+      - THREECX_USER=${THREECX_USER:-12610}
+      - THREECX_PASSWORD=${THREECX_PASSWORD:-3cx!3Cx!3CX}
+      - THREECX_EXTENSION=${THREECX_EXTENSION:-9000}
+      - THREECX_API_TOKEN=${THREECX_API_TOKEN:-}
+      
+      # OpenClaw Brain
+      - OCPLATFORM_GATEWAY_URL=${OCPLATFORM_GATEWAY_URL:-http://100.64.0.7:20129}
+      - OCPLATFORM_TOKEN=${OCPLATFORM_TOKEN:-}
+      - OCPLATFORM_MODEL=${OCPLATFORM_MODEL:-auto-route}
+      
+      # Whisper STT
+      - WHISPER_API_URL=${WHISPER_API_URL:-}
+      - WHISPER_DEFAULT_LANG=${WHISPER_DEFAULT_LANG:-he}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      
+      # TTS
+      - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-}
+      - AZURE_TTS_KEY=${AZURE_TTS_KEY:-}
+      - AZURE_TTS_REGION=${AZURE_TTS_REGION:-israelcentral}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-}
+      
+    volumes:
+      - ./src/personas/devices.json:/app/src/personas/devices.json
+      - callme-audio:/tmp/callme-tts
+    
+    networks:
+      - callme-net
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3101/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  callme-audio:
+
+networks:
+  callme-net:
+    driver: bridge

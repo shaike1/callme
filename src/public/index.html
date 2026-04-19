@@ -1,0 +1,3387 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<title>CallMe Bot</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#1a1a1c;color:#abb2bf;min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+.hdr{background:#111;border-bottom:1px solid #2d2d30;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.hdr h1{font-size:18px;font-weight:600;letter-spacing:-.3px;color:#e2e8f0}
+.hdr .sub{font-size:12px;color:#4b5563;margin-right:auto}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.dot.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
+.dot.off{background:#ef4444;box-shadow:0 0 6px #ef4444}
+.dot.na{background:#374151}
+.hdr-stat{font-size:12px;color:#6b7280;padding:4px 10px;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap}
+
+/* ── Phone Bar ── */
+.phone-bar{background:#111;border-bottom:1px solid #2d2d30;padding:12px 18px}
+.phone-inner{max-width:680px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phone-input{flex:1;min-width:150px;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:8px 14px;color:#e2e8f0;font-size:14px;outline:none;direction:ltr;transition:border-color .15s}
+.phone-input:focus{border-color:#6366f1}
+.phone-input::placeholder{color:#4b5563;direction:rtl}
+.call-btn{padding:8px 18px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;transition:all .15s;background:transparent}
+.call-btn.start{color:#4ade80;border-color:#14532d}
+.call-btn.start:hover{border-color:#4ade80;background:#0a1a0a}
+.call-btn.end{color:#f87171;border-color:#3b1a1a}
+.call-btn.end:hover{border-color:#f87171;background:#1a0a0a}
+.call-btn.mute{color:#fbbf24;border-color:#78350f}
+.call-btn.mute:hover{border-color:#fbbf24;background:#1a1000}
+.call-btn.mute.active{color:#1a1000;background:#fbbf24;border-color:#fbbf24}
+.wc-status{font-size:13px;color:#64748b}
+.wc-rms{font-size:11px;color:#22c55e;direction:ltr;min-width:50px}
+.wc-transcript-bar{max-width:680px;margin:8px auto 0;max-height:120px;overflow-y:auto;font-size:12px;line-height:1.6;color:#94a3b8}
+.wc-transcript-bar div{padding:2px 0}
+
+/* ── App Grid ── */
+.grid-wrap{flex:1;padding:20px 16px;max-width:780px;margin:0 auto;width:100%}
+.grid-section{margin-bottom:24px}
+.grid-section-title{font-size:11px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;padding-right:4px;font-family:'SF Mono','Fira Code',monospace}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:500px){.grid{grid-template-columns:repeat(3,1fr);gap:10px}}
+
+.app-tile{background:#111;border:1px solid #2d2d30;border-radius:12px;padding:16px 10px 12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;user-select:none}
+.app-tile:hover{background:#161618;border-color:#6366f1;transform:translateY(-1px)}
+.app-tile:active{transform:scale(.96)}
+.app-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+.app-name{font-size:11px;font-weight:500;color:#6b7280;text-align:center;line-height:1.3;font-family:'SF Mono','Fira Code',monospace}
+.app-badge{position:absolute;top:8px;left:8px;width:9px;height:9px;border-radius:50%;border:2px solid #111}
+.app-badge.on{background:#22c55e}
+.app-badge.off{background:#ef4444}
+.app-badge.na{background:#374151}
+
+/* Icon colors */
+.ic-blue{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.ic-green{background:linear-gradient(135deg,#15803d,#22c55e)}
+.ic-haBlue{background:linear-gradient(135deg,#c2410c,#f97316)}
+.ic-purple{background:linear-gradient(135deg,#7e22ce,#a855f7)}
+.ic-red{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+.ic-teal{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+.ic-sky{background:linear-gradient(135deg,#0369a1,#38bdf8)}
+.ic-haBlue{background:linear-gradient(135deg,#1565c0,#41bdf5)}
+.ic-lime{background:linear-gradient(135deg,#4d7c0f,#84cc16)}
+.ic-amber{background:linear-gradient(135deg,#b45309,#f59e0b)}
+.ic-pink{background:linear-gradient(135deg,#be185d,#ec4899)}
+.ic-indigo{background:linear-gradient(135deg,#3730a3,#6366f1)}
+.ic-gray{background:linear-gradient(135deg,#374151,#6b7280)}
+.ic-rose{background:linear-gradient(135deg,#9f1239,#fb7185)}
+.ic-cyan{background:linear-gradient(135deg,#164e63,#22d3ee)}
+
+/* ── Drawer ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #2d2d30;border-radius:12px 12px 0 0;z-index:101;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);max-height:88vh;display:flex;flex-direction:column}
+.drawer.open{transform:translateY(0)}
+.drawer-handle{width:36px;height:3px;background:#2d2d30;border-radius:2px;margin:10px auto 0}
+.drawer-header{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2d2d30;flex-shrink:0}
+.drawer-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px;color:#e2e8f0}
+.drawer-close{width:28px;height:28px;background:transparent;border:1px solid #2d2d30;color:#6b7280;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+.drawer-close:hover{border-color:#6366f1;color:#e2e8f0}
+.drawer-body{padding:16px 20px;overflow-y:auto;flex:1}
+.drawer-footer{padding:12px 20px;border-top:1px solid #2d2d30;flex-shrink:0;display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Forms ── */
+.fr{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;align-items:center;margin-bottom:10px}
+.fr label{font-size:12px;color:#4b5563;font-family:'SF Mono','Fira Code',monospace}
+input,select,textarea{width:100%;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:8px 12px;color:#e2e8f0;font-size:13px;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:#6366f1}
+textarea{resize:vertical;min-height:72px;font-family:inherit}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2d2d30}
+.toggle-row label{font-size:13px;color:#6b7280}
+.switch{position:relative;display:inline-block;width:42px;height:24px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#2d2d30;border-radius:24px;transition:.3s;cursor:pointer}
+.slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#888;border-radius:50%;transition:.3s}
+.switch input:checked + .slider{background:#22c55e}
+.switch input:checked + .slider:before{transform:translateX(18px);background:#fff}
+.btn{padding:7px 16px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:transparent;color:#abb2bf}
+.btn:hover{border-color:#6366f1;color:#e2e8f0}
+.btn-p{background:transparent;color:#818cf8;border-color:#3730a3}
+.btn-p:hover{background:#1a1a2e;border-color:#6366f1;color:#e2e8f0}
+.btn-d{background:transparent;color:#f87171;border-color:#3b1a1a}
+.btn-d:hover{background:#1a0a0a;border-color:#f87171}
+.btn-g{background:transparent;color:#6b7280;border-color:#2d2d30}
+.btn-sm{padding:4px 10px;font-size:12px}
+.section-hint{background:#111;border:1px solid #2d2d30;border-radius:4px;padding:10px 12px;font-size:12px;color:#4b5563;margin-bottom:12px;line-height:1.6}
+.status-line{font-size:12px;min-height:16px;margin-top:8px}
+.ok{color:#22c55e} .err{color:#ef4444} .warn{color:#f59e0b}
+
+/* ── Active Calls ── */
+.call-item{background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px}
+.call-dur{color:#3b82f6;font-weight:600;white-space:nowrap}
+
+/* ── Contacts / Scheduler rows ── */
+.list-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #2d2d30}
+.list-row:last-child{border-bottom:none}
+
+/* ── Logs ── */
+#logs{background:#0a0a0a;border:1px solid #2d2d30;border-radius:4px;padding:10px 12px;height:220px;overflow-y:auto;font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:11px;line-height:1.6;word-break:break-all}
+.log-info{color:#3b82f6}.log-warn{color:#f59e0b}.log-error{color:#ef4444}.log-debug{color:#374151}
+
+/* ── IVR ── */
+.ivr-node{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#111;border:1px solid #2d2d30;border-radius:4px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #4ade80;color:#4ade80;padding:8px 20px;border-radius:4px;font-size:13px;font-family:'SF Mono','Fira Code',monospace;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+.toast.error{border-color:#f87171;color:#f87171;background:#111}
+
+@media(max-width:480px){
+  .fr{grid-template-columns:1fr}
+  .fr label{margin-bottom:0}
+  .hdr-stat{display:none}
+  .phone-inner{flex-direction:column;align-items:stretch}
+  .call-btn{justify-content:center}
+}
+
+/* ── Light Mode ── */
+body.light{background:#f4f4f5;color:#3f3f46}
+body.light .hdr{background:#fff;border-color:#e4e4e7}
+body.light .hdr h1{color:#18181b}
+body.light .hdr .sub{color:#71717a}
+body.light .hdr-stat{background:#f4f4f5;border-color:#e4e4e7;color:#52525b}
+body.light .phone-bar{background:#fff;border-color:#e4e4e7}
+body.light .phone-input{background:#f4f4f5;border-color:#d4d4d8;color:#18181b}
+body.light .call-btn.start{border-color:#16a34a;color:#16a34a}
+body.light .call-btn.start:hover{background:#f0fdf4}
+body.light .call-btn.end{border-color:#dc2626;color:#dc2626}
+body.light .app-tile{background:#fff;border-color:#e4e4e7}
+body.light .app-tile:hover{background:#fafafa;border-color:#6366f1}
+body.light .app-badge{border-color:#fff}
+body.light .app-name{color:#71717a}
+body.light .grid-section-title{color:#a1a1aa}
+body.light .drawer{background:#fff;border-color:#e4e4e7}
+body.light .drawer-handle{background:#e4e4e7}
+body.light .drawer-header{border-color:#e4e4e7}
+body.light .drawer-title{color:#18181b}
+body.light .drawer-footer{border-color:#e4e4e7}
+body.light .drawer-close{border-color:#e4e4e7;color:#71717a}
+body.light input,body.light select,body.light textarea{background:#fff;border-color:#d4d4d8;color:#18181b}
+body.light .fr label{color:#71717a}
+body.light .toggle-row{border-color:#e4e4e7}
+body.light .toggle-row label{color:#52525b}
+body.light .slider{background:#d4d4d8}
+body.light .slider:before{background:#fff}
+body.light .btn{border-color:#d4d4d8;color:#52525b}
+body.light .btn:hover{border-color:#6366f1;color:#18181b}
+body.light .btn-p{border-color:#6366f1;color:#4f46e5}
+body.light .btn-p:hover{background:#eef2ff}
+body.light .btn-d{border-color:#f87171;color:#dc2626}
+body.light .btn-d:hover{background:#fef2f2}
+body.light .section-hint{background:#f4f4f5;border-color:#e4e4e7;color:#71717a}
+body.light .call-item{background:#f4f4f5;border-color:#e4e4e7}
+body.light .list-row{border-color:#e4e4e7}
+body.light #logs{background:#fafafa;border-color:#e4e4e7;color:#3f3f46}
+body.light .ivr-node{background:#f4f4f5;border-color:#e4e4e7}
+body.light .toast{background:#fff;border-color:#4ade80;color:#16a34a}
+body.light .toast.error{border-color:#f87171;color:#dc2626}
+body.light .wc-transcript-bar{color:#52525b}
+body.light .hdr-stat:has(#stat-active-hdr){background:#f0fdf4;border-color:#86efac;color:#16a34a}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="dot na" id="status-dot"></div>
+  <h1>📞 CallMe Bot</h1>
+  <span class="sub" id="status-text" data-i18n="checking">בודק...</span>
+  <span class="hdr-stat" id="uptime"></span>
+  <span class="hdr-stat" id="stat-active-hdr" style="background:#1a2e1a;color:#22c55e">0 <span data-i18n="calls">שיחות</span></span>
+  <span class="hdr-stat" id="budget-hdr" style="direction:ltr;font-family:'SF Mono','Fira Code',monospace;background:#0a1a0a;color:#22c55e">...</span>
+  <button onclick="toggleTheme()" id="theme-btn" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace" title="Toggle dark/light mode">☀</button>
+  <button onclick="toggleLang()" style="font-size:12px;color:#6b7280;background:transparent;border:1px solid #2d2d30;border-radius:4px;padding:5px 12px;cursor:pointer;white-space:nowrap;font-family:'SF Mono','Fira Code',monospace" id="lang-btn">EN</button>
+  <a id="setup-link" href="/setup" style="font-size:12px;color:#6b7280;text-decoration:none;padding:5px 12px;border:1px solid #2d2d30;border-radius:4px;white-space:nowrap">Setup</a>
+  <button onclick="doLogout()" title="התנתק" style="font-size:12px;color:#f87171;background:transparent;border:1px solid #3b1a1a;border-radius:4px;padding:5px 10px;cursor:pointer;font-family:'SF Mono','Fira Code',monospace">exit</button>
+</div>
+
+<!-- Phone Bar -->
+<div class="phone-bar">
+  <div class="phone-inner">
+    <input class="phone-input" id="phone-target" data-i18n-ph="phonePh" placeholder="מספר יעד (ריק = בוט AI)" maxlength="80">
+    <button class="call-btn start" id="webcall-btn" onclick="handleCallBtn()">
+      <span id="wcb-icon">📞</span>
+      <span id="wcb-label" data-i18n="startCall">התחל שיחה</span>
+    </button>
+    <button class="call-btn end" id="hangup-btn" onclick="hangupCall()" style="display:none">⏹ <span data-i18n="hangup">נתק</span></button>
+    <button class="call-btn mute" id="mute-btn" onclick="toggleMute()" style="display:none">🎙 <span id="mute-label">השתק</span></button>
+    <span class="wc-status" id="webcall-status" data-i18n="notConnected">לא מחובר</span>
+    <span class="wc-rms" id="webcall-rms"></span>
+    <span id="engine-badge" style="display:none;font-size:11px;padding:3px 8px;border-radius:4px;background:#1e1035;color:#a855f7;border:1px solid #7e22ce;font-family:'SF Mono','Fira Code',monospace">🦞 OpenClaw</span>
+  </div>
+  <div class="wc-transcript-bar" id="webcall-transcript"></div>
+</div>
+
+<!-- App Grid -->
+<div class="grid-wrap">
+
+  <!-- Stats widgets -->
+  <div id="stats-bar" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div class="stat-widget" style="background:#111;border:1px solid #2d2d30;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:#64748b">היום</div>
+      <div style="font-size:22px;font-weight:700;color:#4ade80" id="sw-today-calls">—</div>
+      <div style="font-size:10px;color:#4b5563">שיחות</div>
+    </div>
+    <div class="stat-widget" style="background:#111;border:1px solid #2d2d30;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:#64748b">השבוע</div>
+      <div style="font-size:22px;font-weight:700;color:#818cf8" id="sw-week-calls">—</div>
+      <div style="font-size:10px;color:#4b5563">שיחות</div>
+    </div>
+    <div class="stat-widget" style="background:#111;border:1px solid #2d2d30;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:#64748b">עלות היום</div>
+      <div style="font-size:22px;font-weight:700;color:#fbbf24" id="sw-today-cost">—</div>
+      <div style="font-size:10px;color:#4b5563">USD</div>
+    </div>
+    <div class="stat-widget" style="background:#111;border:1px solid #2d2d30;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:#64748b">uptime</div>
+      <div style="font-size:22px;font-weight:700;color:#e2e8f0" id="sw-uptime">—</div>
+      <div style="font-size:10px;color:#4b5563">שעות</div>
+    </div>
+  </div>
+
+  <!-- Onboarding hint — shown when setup is incomplete -->
+  <div id="onboarding-hint" style="display:none;background:#111;border:1px solid #6366f1;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:13px;line-height:1.7">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:16px">🚀</span><b style="color:#e2e8f0">התחל כאן</b><span style="margin-right:auto;font-size:11px;color:#64748b;cursor:pointer" onclick="this.closest('#onboarding-hint').style.display='none'">✕ הסתר</span></div>
+    <div id="onboarding-steps"></div>
+  </div>
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secCalls">שיחות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-status')">
+        <div class="app-badge na" id="badge-status"></div>
+        <div class="app-icon ic-blue">📊</div>
+        <div class="app-name" data-i18n="appStatus">סטטוס</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-calls')">
+        <div class="app-badge na" id="badge-calls"></div>
+        <div class="app-icon ic-green">📞</div>
+        <div class="app-name" data-i18n="appActiveCalls">שיחות פעילות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-recordings')">
+        <div class="app-icon ic-gray">📹</div>
+        <div class="app-name" data-i18n="appTranscripts">תמלולים</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-voicemails')">
+        <div class="app-icon ic-rose">🎙️</div>
+        <div class="app-name" data-i18n="appVoicemail">הודעות קוליות</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secSettings">הגדרות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-bot')">
+        <div class="app-icon ic-purple">🤖</div>
+        <div class="app-name">AI Bot</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-sip')">
+        <div class="app-badge na" id="badge-sip"></div>
+        <div class="app-icon ic-green">☎️</div>
+        <div class="app-name">SIP Trunk</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-ivr')">
+        <div class="app-icon ic-lime" style="font-size:28px">🔀</div>
+        <div class="app-name">IVR</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-dialer')">
+        <div class="app-icon ic-sky">🔢</div>
+        <div class="app-name" data-i18n="appDialer">חייגן</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-contacts')">
+        <div class="app-icon ic-pink">👥</div>
+        <div class="app-name" data-i18n="appContacts">אנשי קשר</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-scheduler')">
+        <div class="app-icon ic-amber">⏰</div>
+        <div class="app-name" data-i18n="appScheduler">מתזמן</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-security')">
+        <div class="app-icon ic-gray">🔒</div>
+        <div class="app-name" data-i18n="appSecurity">אבטחה</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secIntegrations">אינטגרציות</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-ha')">
+        <div class="app-badge na" id="badge-ha"></div>
+        <div class="app-icon ic-haBlue"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Home Assistant</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-openclaw')">
+        <div class="app-badge na" id="badge-openclaw"></div>
+        <div class="app-icon ic-purple" style="font-size:28px">🦞</div>
+        <div class="app-name">OpenClaw</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-teamy')">
+        <div class="app-badge na" id="badge-teamy"></div>
+        <div class="app-icon ic-sky">🔴</div>
+        <div class="app-name">Teamy</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-telegram')">
+        <div class="app-badge na" id="badge-telegram"></div>
+        <div class="app-icon ic-sky"><img src="https://cdn.simpleicons.org/telegram/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Telegram</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-whatsapp')">
+        <div class="app-badge na" id="badge-whatsapp"></div>
+        <div class="app-icon ic-green"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">WhatsApp</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-calendar')">
+        <div class="app-badge na" id="badge-calendar"></div>
+        <div class="app-icon ic-indigo"><img src="https://cdn.simpleicons.org/googlecalendar/ffffff" style="width:30px;height:30px"></div>
+        <div class="app-name">Google Calendar</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-twilio')">
+        <div class="app-icon ic-red"><img src="https://www.twilio.com/assets/icons/twilio-icon-red.svg" style="width:30px;height:30px" onerror="this.outerHTML='<span style=\'font-size:18px;font-weight:900;color:#fff;font-family:sans-serif\'>T</span>'"></div>
+        <div class="app-name">Twilio DID</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-vonage')">
+        <div class="app-icon ic-teal"><img src="https://cdn.simpleicons.org/vonage/ffffff" style="width:30px;height:30px" onerror="this.style.display='none';this.parentElement.insertAdjacentText('beforeend','📞')"></div>
+        <div class="app-name">Vonage DID</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-section">
+    <div class="grid-section-title" data-i18n="secSystem">מערכת</div>
+    <div class="grid">
+      <div class="app-tile" onclick="openPanel('panel-logs')">
+        <div class="app-icon ic-gray">📋</div>
+        <div class="app-name" data-i18n="appLogs">לוגים</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-chat')">
+        <div class="app-icon ic-cyan">💭</div>
+        <div class="app-name" data-i18n="appChat">צ'אט בדיקה</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-audit')">
+        <div class="app-icon ic-gray">🔍</div>
+        <div class="app-name">יומן פעולות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-callfilter')">
+        <div class="app-icon ic-red">🚫</div>
+        <div class="app-name">חסימת שיחות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-callbacks')">
+        <div class="app-icon ic-green">🔄</div>
+        <div class="app-name">Callbacks</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-customtools')">
+        <div class="app-icon ic-indigo">🛠</div>
+        <div class="app-name">Custom Tools</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-callqueue')">
+        <div class="app-icon ic-amber">📋</div>
+        <div class="app-name">תור שיחות</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-webhooklogs')">
+        <div class="app-icon ic-teal">🔗</div>
+        <div class="app-name">Webhook Logs</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-apikeys')">
+        <div class="app-icon ic-purple">🔑</div>
+        <div class="app-name">API Keys</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-speeddial')">
+        <div class="app-icon ic-sky">⚡</div>
+        <div class="app-name">חיוג מהיר</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-livecalls')">
+        <div class="app-icon ic-green">📡</div>
+        <div class="app-name">Live Monitor</div>
+      </div>
+      <div class="app-tile" onclick="openPanel('panel-businesshours')">
+        <div class="app-icon ic-lime">🕐</div>
+        <div class="app-name">שעות פעילות</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /grid-wrap -->
+
+<!-- Overlay -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+
+<!-- ─────────────── DRAWERS ─────────────── -->
+
+<!-- Status / Stats -->
+<div class="drawer" id="panel-status">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-blue" style="width:36px;height:36px;font-size:18px;border-radius:10px">📊</span> סטטוס מערכת</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#3b82f6" id="stat-total">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">סה"כ שיחות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#22c55e" id="stat-active">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">שיחות פעילות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#f59e0b" id="stat-avg">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">ממוצע שניות</div>
+      </div>
+      <div style="background:#0b0d14;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:30px;font-weight:700;color:#ef4444" id="stat-errors">—</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">שגיאות</div>
+      </div>
+    </div>
+    <!-- Analytics charts -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:8px">שיחות - 7 ימים אחרונים</div>
+      <div id="chart-daily" style="display:flex;align-items:flex-end;gap:3px;height:60px;background:#0b0d14;border-radius:8px;padding:8px 12px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">רגשות</div>
+        <div id="chart-sentiment" style="font-size:12px"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">מתקשרים תכופים</div>
+        <div id="chart-callers" style="font-size:12px"></div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:10px">חיבורים</div>
+    <div id="conn-grid" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-drachtio"></div>
+        <div><div style="font-size:13px;font-weight:600">Drachtio SIP</div><div style="font-size:11px;color:#64748b" id="cs-sub-drachtio">בודק...</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-sip"></div>
+        <div><div style="font-size:13px;font-weight:600" id="cs-label-sip">SIP Trunk</div><div style="font-size:11px;color:#64748b" id="cs-sub-sip">בודק...</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-teamy"></div>
+        <div><div style="font-size:13px;font-weight:600">Teamy</div><div style="font-size:11px;color:#64748b" id="cs-sub-teamy">לא מוגדר</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-openclaw"></div>
+        <div><div style="font-size:13px;font-weight:600">OpenClaw</div><div style="font-size:11px;color:#64748b" id="cs-sub-openclaw">לא מוגדר</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#0b0d14;border-radius:8px;padding:10px 14px">
+        <div class="dot na" id="cs-dot-ha"></div>
+        <div><div style="font-size:13px;font-weight:600">Home Assistant</div><div style="font-size:11px;color:#64748b" id="cs-sub-ha">לא מוגדר</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="refresh()">רענן</button>
+  </div>
+</div>
+
+<!-- Active Calls -->
+<div class="drawer" id="panel-calls">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">📞</span> שיחות פעילות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="active-calls-list"><em style="color:#64748b">אין שיחות פעילות כרגע</em></div>
+    <div id="live-transcript" style="display:none;margin-top:12px;border-top:1px solid #2d2d30;padding-top:10px">
+      <div style="font-size:12px;color:#4ade80;margin-bottom:6px">🔴 Live — <span id="lt-caller"></span></div>
+      <div id="lt-lines" style="max-height:300px;overflow-y:auto;font-size:12px;line-height:1.7"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Recordings -->
+<div class="drawer" id="panel-recordings">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">📝</span> תמלולים</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <input id="rec-search" type="text" placeholder="חיפוש לפי שם / תאריך..." style="width:100%;background:#1a1a1c;border:1px solid #2d2d30;border-radius:4px;padding:8px 12px;color:#e2e8f0;font-size:13px;margin-bottom:10px;outline:none" oninput="filterRecordings(this.value)">
+    <div id="recordings-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="loadRecordings()">רענן</button>
+    <a class="btn btn-g" href="/api/recordings/export.csv" download style="text-decoration:none">📊 ייצוא CSV</a>
+  </div>
+</div>
+
+<!-- Transcript Modal -->
+<div id="transcript-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#1a1a1c;border:1px solid #2d2d30;border-radius:12px;max-width:600px;width:100%;max-height:80vh;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid #2d2d30;display:flex;align-items:center;gap:10px">
+      <span style="font-size:16px;font-weight:600;color:#e2e8f0;flex:1" id="tm-title">תמלול</span>
+      <span style="font-size:12px;color:#64748b" id="tm-meta"></span>
+      <button onclick="document.getElementById('transcript-modal').style.display='none'" style="background:none;border:none;color:#64748b;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="tm-audio" style="padding:6px 18px;display:none"><audio id="tm-player" controls style="width:100%;height:32px;direction:ltr"></audio></div>
+    <div id="tm-tags" style="padding:4px 18px;display:flex;flex-wrap:wrap;gap:2px"></div>
+    <div id="tm-body" style="padding:14px 18px;overflow-y:auto;flex:1;font-size:13px;line-height:1.8"></div>
+    <div style="padding:10px 18px;border-top:1px solid #2d2d30">
+      <div id="tm-notes" style="margin-bottom:8px;font-size:12px"></div>
+      <div style="display:flex;gap:6px">
+        <input id="tm-note-input" placeholder="הוסף הערה..." style="flex:1;font-size:12px">
+        <button class="btn btn-p btn-sm" onclick="addNote()">הוסף</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Voicemails -->
+<div class="drawer" id="panel-voicemails">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-rose" style="width:36px;height:36px;font-size:18px;border-radius:10px">🎙️</span> הודעות קוליות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="voicemails-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer"><button class="btn btn-g" onclick="loadVoicemails()">רענן</button></div>
+</div>
+
+<!-- Bot Settings -->
+<div class="drawer" id="panel-bot">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;font-size:18px;border-radius:10px">🤖</span> הגדרות AI Bot</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>שם הבוט</label><input id="s-name" placeholder="CallMe Bot"></div>
+    <div class="fr"><label>ברכה</label><input id="s-greeting" placeholder="שלום!"></div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">⚙️ מנוע AI</div>
+    <div class="toggle-row"><label>הפעל מנוע AI</label><label class="switch"><input type="checkbox" id="s-aiEnabled" onchange="onAiEnabledChange()"><span class="slider"></span></label></div>
+    <div id="ai-engine-section">
+    <div class="fr"><label>Engine</label>
+      <select id="s-aiEngine" onchange="onEngineChange()">
+        <option value="gemini-live">Gemini Live (Google) — $5.70/שעה</option>
+        <option value="groq-pipeline">Groq Pipeline (זול!) — $0.66/שעה</option>
+        <option value="openclaw">OpenClaw (Luky Bot) — חכם!</option>
+        <option value="openai-realtime">OpenAI Realtime (GPT-4o) 🔜</option>
+      </select>
+    </div>
+    <div id="gemini-keys-section">
+      <div class="fr"><label>Gemini API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-geminiApiKey" type="password" placeholder="(ריק = מ-env)" style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-gemini" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('gemini')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>Gemini Model</label>
+        <select id="s-geminiModel">
+          <option value="gemini-2.0-flash-live-001">gemini-2.0-flash (מהיר, חינמי)</option>
+          <option value="gemini-2.5-pro-preview-native-audio-dialog">gemini-2.5-pro (איכותי יותר)</option>
+        </select>
+      </div>
+    </div>
+    <div id="groq-keys-section" style="display:none">
+      <div class="section-hint" style="color:#4ade80;margin-bottom:8px">💰 Groq Pipeline: Deepgram STT → Groq LLM → Google TTS — חיסכון של ~88% מול Gemini Live</div>
+      <div class="fr"><label>Groq API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-groqApiKey" type="password" placeholder="gsk_..." style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-groq" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('groq')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>Deepgram API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-deepgramApiKey" type="password" placeholder="(STT — זיהוי דיבור)" style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-deepgram" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('deepgram')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>TTS Voice</label>
+        <select id="s-ttsVoice">
+          <option value="">ברירת מחדל (he-IL-Wavenet-A)</option>
+          <option value="he-IL-Wavenet-A">he-IL-Wavenet-A (נקבה)</option>
+          <option value="he-IL-Wavenet-B">he-IL-Wavenet-B (זכר)</option>
+          <option value="he-IL-Wavenet-C">he-IL-Wavenet-C (נקבה 2)</option>
+          <option value="he-IL-Wavenet-D">he-IL-Wavenet-D (זכר 2)</option>
+          <option value="en-US-Wavenet-D">en-US-Wavenet-D (English M)</option>
+          <option value="en-US-Wavenet-F">en-US-Wavenet-F (English F)</option>
+        </select>
+      </div>
+    </div>
+    <div id="openai-keys-section" style="display:none">
+      <div class="fr"><label>OpenAI API Key</label><div style="display:flex;gap:6px;flex:1"><input id="s-openaiApiKey" type="password" placeholder="sk-..." style="direction:ltr;flex:1" onblur="saveSettings()"><button id="btn-clear-openai" class="btn btn-d btn-sm" style="display:none;padding:4px 8px;font-size:11px" onclick="clearApiKey('openai')" title="מחק מפתח">✕</button></div></div>
+      <div class="fr"><label>Model</label>
+        <select id="s-openaiModel">
+          <option value="gpt-4o-realtime-preview">gpt-4o-realtime-preview</option>
+          <option value="gpt-4o-mini-realtime-preview">gpt-4o-mini-realtime-preview</option>
+        </select>
+      </div>
+      <div class="section-hint" style="color:#f59e0b">⚠️ תמיכה ב-OpenAI Realtime — בקרוב</div>
+    </div>
+    </div><!-- /ai-engine-section -->
+    <div class="fr" id="ai-cost-limit-row"><label>מגבלת עלות יומית ($)</label><input id="s-aiDailyCostLimitUsd" type="number" min="0" step="0.1" placeholder="0 = ללא מגבלה" style="direction:ltr;width:140px" onblur="saveSettings()"></div>
+    <div id="ai-daily-cost-display" style="font-size:12px;color:#64748b;padding:2px 0"></div>
+    <div class="fr" id="ai-monthly-limit-row"><label>מגבלת עלות חודשית ($)</label><input id="s-aiMonthlyCostLimitUsd" type="number" min="0" step="1" placeholder="0 = ללא מגבלה" style="direction:ltr;width:140px" onblur="saveSettings()"></div>
+    <div id="ai-monthly-cost-display" style="font-size:12px;color:#64748b;padding:2px 0"></div>
+    <div id="ai-disabled-notice" style="display:none;font-size:12px;color:#f87171;padding:6px 0">מנוע AI כבוי — שיחות נכנסות יעברו ישירות לתא קולי.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div class="fr"><label>קול</label>
+      <select id="s-voice">
+        <option value="Kore">Kore (נקבה)</option>
+        <option value="Aoede">Aoede (נקבה)</option>
+        <option value="Zephyr">Zephyr (נקבה)</option>
+        <option value="Charon">Charon (זכר)</option>
+        <option value="Puck">Puck (זכר)</option>
+        <option value="Fenrir">Fenrir (זכר)</option>
+      </select>
+    </div>
+    <div class="fr"><label>שפה</label>
+      <select id="s-language">
+        <option value="auto">🌍 זיהוי אוטומטי</option>
+        <option value="he">עברית</option>
+        <option value="en">אנגלית</option>
+        <option value="ar">ערבית</option>
+        <option value="ru">רוסית</option>
+        <option value="fr">צרפתית</option>
+        <option value="es">ספרדית</option>
+      </select>
+    </div>
+    <div class="fr"><label>Persona — Soul</label><textarea id="s-persona" rows="3" placeholder="אני בוט קולי AI בשם כלב. אני עוזר ידידותי, מדבר עברית, ותמיד מסיים משפט בעידוד."></textarea></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">מי הבוט, מה תפקידו, איך הוא מדבר, מה הטון שלו.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">🎚 אורך תשובות</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <label style="flex:1;cursor:pointer"><input type="radio" name="responseStyle" id="rs-brief" value="brief" onchange="saveSettings()"> <span style="font-size:13px">קצר מאוד</span><div style="font-size:11px;color:#4b5563">משפט אחד בלבד</div></label>
+      <label style="flex:1;cursor:pointer"><input type="radio" name="responseStyle" id="rs-concise" value="concise" onchange="saveSettings()" checked> <span style="font-size:13px">קצר</span><div style="font-size:11px;color:#4b5563">1-2 משפטים</div></label>
+      <label style="flex:1;cursor:pointer"><input type="radio" name="responseStyle" id="rs-detailed" value="detailed" onchange="saveSettings()"> <span style="font-size:13px">מפורט</span><div style="font-size:11px;color:#4b5563">ללא הגבלה</div></label>
+    </div>
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 כללים (Rules)</div>
+    <textarea id="s-rules" rows="3" placeholder="- אל תדון בנושאים פוליטיים&#10;- אם לא יודע — אמור שתבדוק ותחזור&#10;- תמיד היה קצר ולעניין" style="width:100%;box-sizing:border-box"></textarea>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">רשימת כללים ברורים — מה מותר, מה אסור, איך לנהוג.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">📚 ידע (Knowledge Base)</div>
+    <textarea id="s-knowledge" rows="4" placeholder="שעות פעילות: א׳-ה׳ 9:00-18:00&#10;כתובת: רחוב הרצל 1, תל אביב&#10;שאלות נפוצות: ..." style="width:100%;box-sizing:border-box"></textarea>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">מידע עסקי שהבוט יכיר — שעות, FAQ, פרטי קשר.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">🔀 הסלמה (Escalation)</div>
+    <div class="fr"><label>העברה אחרי</label>
+      <select id="s-escalationTurns">
+        <option value="">— אין —</option>
+        <option value="3">3 פניות</option>
+        <option value="5">5 פניות</option>
+        <option value="10">10 פניות</option>
+      </select>
+    </div>
+    <div class="fr"><label>העבר למספר</label><input id="s-escalationNumber" placeholder="+972501234567" style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">כשהבוט לא מצליח לעזור — מעביר לאדם.</div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">🛠️ כלים מורשים</div>
+    <div class="toggle-row"><label>Home Assistant</label><label class="switch"><input type="checkbox" id="s-toolHa"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>OpenClaw</label><label class="switch"><input type="checkbox" id="s-toolOpenclaw"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>Google Calendar</label><label class="switch"><input type="checkbox" id="s-toolCalendar"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>אנשי קשר</label><label class="switch"><input type="checkbox" id="s-toolContacts"><span class="slider"></span></label></div>
+    <div class="toggle-row"><label>מתזמן שיחות</label><label class="switch"><input type="checkbox" id="s-toolScheduler"><span class="slider"></span></label></div>
+
+    <hr style="border:none;border-top:1px solid #1e2545;margin:12px 0">
+    <div class="fr"><label>Webhook URL</label><input id="s-callWebhookUrl" placeholder="https://..." style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">POST JSON: call.started / call.ended / call.failed</div>
+    <div class="fr"><label>CRM Webhook</label><input id="s-crmWebhookUrl" placeholder="https://..." style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">POST JSON אחרי כל שיחה עם: סיכום AI, כוונה, action items</div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- SIP Trunk -->
+<div class="drawer" id="panel-sip">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">☎️</span> SIP Trunk</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>ספק</label>
+      <select id="s-sipProvider" onchange="onProviderChange()">
+        <option value="">— בחר ספק —</option>
+        <option value="3cx">3CX (נוכחי)</option>
+        <option value="zadarma">Zadarma</option>
+        <option value="twilio">Twilio SIP</option>
+        <option value="custom">Custom SIP</option>
+      </select>
+    </div>
+    <div id="sip-help" style="font-size:12px;color:#3b82f6;margin-bottom:10px;display:none"></div>
+    <div class="fr"><label>SIP Server</label><input id="s-sipServer" placeholder="sip.zadarma.com" style="direction:ltr"></div>
+    <div class="fr"><label>Registrar</label><input id="s-sipRegistrar" placeholder="sip.zadarma.com" style="direction:ltr"></div>
+    <div class="fr"><label>Extension</label><input id="s-sipExtension" placeholder="12345" style="direction:ltr"></div>
+    <div class="fr"><label>Auth ID</label><input id="s-sipAuthId" placeholder="12345" style="direction:ltr"></div>
+    <div class="fr"><label>סיסמה</label><div style="display:flex;gap:6px"><input id="s-sipPassword" type="password" placeholder="(ריק = לא לשנות)" style="flex:1"><button class="btn btn-sm" style="padding:0 8px;font-size:16px" title="צור סיסמה" onclick="genPass('s-sipPassword')">🔑</button></div></div>
+    <div class="fr"><label>DID</label><input id="s-sipDid" placeholder="+972501234567" style="direction:ltr"></div>
+    <div style="font-size:11px;color:#64748b">שינויים ייכנסו לתוקף בהפעלה הבאה.</div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- IVR -->
+<div class="drawer" id="panel-ivr">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-lime" style="width:36px;height:36px;font-size:20px;border-radius:10px">🔀</span> IVR Builder</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">כשמתקבלת שיחה נכנסת, הבוט ינגן תפריט ויחכה ללחיצת מקש.</div>
+    <div class="toggle-row">
+      <label>הפעל IVR</label>
+      <label class="switch"><input type="checkbox" id="ivr-enabled"><span class="slider"></span></label>
+    </div>
+    <div class="fr" style="margin-top:10px"><label>הודעת פתיחה</label><textarea id="ivr-greeting" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="flex:1"><label style="font-size:12px;color:#64748b">Timeout (שניות)</label>
+        <input id="ivr-timeout" type="number" min="3" max="30" value="5">
+      </div>
+      <div style="flex:1"><label style="font-size:12px;color:#64748b">אם אין לחיצה</label>
+        <select id="ivr-timeout-action">
+          <option value="ai">שיחה עם הבוט</option>
+          <option value="voicemail">קח הודעה</option>
+          <option value="hangup">נתק</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px">מקשים:</div>
+    <div id="ivr-nodes-list"></div>
+    <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="addIvrNode()">+ הוסף מקש</button>
+    <div class="status-line ok" id="ivr-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveIvr()">שמור IVR</button>
+  </div>
+</div>
+
+<!-- Dialer -->
+<div class="drawer" id="panel-dialer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔢</span> חייגן SIP</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>מספר / SIP URI</label><input id="dial-target" placeholder="05XXXXXXXX או sip:ext@domain" style="direction:ltr"></div>
+    <div class="fr"><label>Caller ID</label><input id="dial-from" placeholder="ברירת מחדל: הגדרות SIP" style="direction:ltr"></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-p" id="dial-btn" onclick="dialOut()">📞 התקשר</button>
+      <button class="btn btn-d" id="hangup-btn2" onclick="hangupSipCall()" style="display:none">⏹ נתק</button>
+    </div>
+    <div class="status-line" id="dial-status"></div>
+  </div>
+</div>
+
+<!-- Contacts -->
+<div class="drawer" id="panel-contacts">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-pink" style="width:36px;height:36px;font-size:18px;border-radius:10px">👥</span> אנשי קשר</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input id="c-name" placeholder="שם" style="flex:1;min-width:90px">
+      <input id="c-phone" placeholder="מספר / SIP URI" style="flex:2;min-width:120px;direction:ltr">
+      <button class="btn btn-p btn-sm" onclick="addContact()">הוסף</button>
+    </div>
+    <div id="contacts-list" style="font-size:13px;color:#64748b">טוען...</div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="syncGoogleContacts()">🔄 סנכרן מ-Google</button>
+    <button class="btn btn-g" onclick="loadContacts()">רענן</button>
+  </div>
+</div>
+
+<!-- Scheduler -->
+<div class="drawer" id="panel-scheduler">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-amber" style="width:36px;height:36px;font-size:18px;border-radius:10px">⏰</span> מתזמן שיחות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="background:#0b1629;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div class="fr"><label>שם / תיאור</label><input id="sc-name" placeholder="תזכורת בוקר"></div>
+      <div class="fr"><label>יעד</label>
+        <div style="display:flex;gap:6px">
+          <input id="sc-target" placeholder="מספר או SIP URI" style="flex:2;direction:ltr">
+          <select id="sc-contact" style="flex:1" onchange="onScContact()"><option value="">— מאנשי קשר —</option></select>
+        </div>
+      </div>
+      <div class="fr"><label>שעה</label><input id="sc-time" type="time" style="direction:ltr"></div>
+      <div class="fr"><label>חזרה</label>
+        <select id="sc-repeat">
+          <option value="once">פעם אחת</option>
+          <option value="daily">כל יום</option>
+          <option value="weekdays">ימי חול</option>
+        </select>
+      </div>
+      <div class="fr"><label>הודעה קולית</label><textarea id="sc-message" placeholder="מה יגיד הבוט? (ריק = ברירת מחדל)" style="min-height:56px"></textarea></div>
+      <button class="btn btn-p btn-sm" onclick="addScheduledJob()">צור תזמון</button>
+    </div>
+    <div id="scheduler-list" style="font-size:13px;color:#64748b">טוען...</div>
+  </div>
+</div>
+
+<!-- Security -->
+<div class="drawer" id="panel-security">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔒</span> אבטחה</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>שם משתמש</label><input id="s-adminUser" placeholder="admin"></div>
+    <div class="fr"><label>סיסמה חדשה</label><div style="display:flex;gap:6px"><input id="s-adminPass" type="password" placeholder="(ריק = לא לשנות)" style="flex:1"><button class="btn btn-sm" style="padding:0 8px;font-size:16px" title="צור סיסמה" onclick="genPass('s-adminPass','s-adminPassConfirm')">🔑</button></div></div>
+    <div class="fr"><label>אמת סיסמה</label><input id="s-adminPassConfirm" type="password" placeholder="חזור על הסיסמה"></div>
+    <div class="status-line" id="admin-pass-status"></div>
+    <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">משתמשים נוספים</div>
+    <div id="users-list" style="font-size:13px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <input id="new-user-name" placeholder="שם משתמש" style="flex:1;min-width:120px">
+      <input id="new-user-pass" type="password" placeholder="סיסמה" style="flex:1;min-width:120px">
+      <button class="btn btn-sm" style="padding:0 8px;font-size:16px;flex-shrink:0" title="צור סיסמה" onclick="genPass('new-user-pass')">🔑</button>
+      <select id="new-user-role" style="flex:0 0 auto;background:#0f1629;color:#e2e8f0;border:1px solid #1e2545;border-radius:8px;padding:0 8px;font-size:13px">
+        <option value="viewer">👁 צופה</option>
+        <option value="operator">📞 מפעיל</option>
+        <option value="admin">⚙️ מנהל</option>
+      </select>
+      <button class="btn btn-g btn-sm" onclick="addUser()">הוסף</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">
+      👁 <b>צופה</b> — קריאה בלבד &nbsp;|&nbsp; 📞 <b>מפעיל</b> — שיחות + אנשי קשר &nbsp;|&nbsp; ⚙️ <b>מנהל</b> — גישה מלאה
+    </div>
+    <div class="status-line" id="users-status"></div>
+    <hr style="border:none;border-top:1px solid #1e2545;margin:16px 0">
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:10px">ניתוק מהדאשבורד</div>
+    <button class="btn" style="background:#1e2545;color:#ef4444;border:1px solid #ef4444" onclick="doLogout()">🚪 התנתק</button>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveAdminCreds()">שמור</button>
+  </div>
+</div>
+
+<!-- Home Assistant -->
+<div class="drawer" id="panel-ha">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-haBlue" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/homeassistant/ffffff" style="width:22px;height:22px"></span> Home Assistant</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">כאשר פעיל: HA יכול להפעיל שיחה יוצאת. הבוט יכול לשלוח אירועים ל-HA.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-ha-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
+    </div>
+    <div class="fr" style="margin-top:10px"><label>HA URL</label><input id="int-ha-url" placeholder="http://homeassistant.local:8123" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>Long-lived Token</label><input id="int-ha-token" type="password" placeholder="eyJ..." onblur="saveIntegrations()"></div>
+    <div class="fr"><label>Webhook ID</label><input id="int-ha-webhook" placeholder="callme_webhook" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-ha-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('ha')">בדוק חיבור</button>
+  </div>
+</div>
+
+<!-- OpenClaw -->
+<div class="drawer" id="panel-openclaw">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;border-radius:10px;font-size:20px">🦞</span> OpenClaw AI Gateway</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">כאשר פעיל: הבוט יוכל לקרוא ל-OpenClaw כ-tool בזמן שיחה.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-openclaw-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
+    </div>
+    <div class="fr" style="margin-top:10px"><label>OpenClaw URL</label><input id="int-openclaw-url" placeholder="http://127.0.0.1:18790" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>API Token</label><input id="int-openclaw-token" type="password" placeholder="token" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-openclaw-status"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('openclaw')">בדוק חיבור</button>
+  </div>
+</div>
+
+<!-- Teamy -->
+<div class="drawer" id="panel-teamy">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;border-radius:10px;font-size:20px">🔴</span> Teamy — Teams Bot</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">CallMe Bot ישמש כ-voice engine של Teamy. Teamy ינהל פגישות Teams.</div>
+    <div class="toggle-row">
+      <label>הפעל אינטגרציה</label>
+      <label class="switch"><input type="checkbox" id="int-teamy-enabled" onchange="saveIntegrations()"><span class="slider"></span></label>
+    </div>
+    <div class="fr" style="margin-top:10px"><label>Teamy Server URL</label><input id="int-teamy-url" placeholder="http://100.64.0.12:3069" style="direction:ltr" onblur="saveIntegrations()"></div>
+    <div class="fr"><label>API Token</label><input id="int-teamy-token" type="password" placeholder="(ריק = ללא auth)" onblur="saveIntegrations()"></div>
+    <div class="status-line" id="int-teamy-status"></div>
+    <div id="teamy-live-status" style="margin-top:10px;font-size:13px;display:none">
+      <hr style="border:none;border-top:1px solid #1e2545;margin:10px 0">
+      <div style="font-weight:600;margin-bottom:6px">📊 סטטוס Teamy</div>
+      <div id="teamy-status-content"></div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testIntegration('teamy');loadTeamyStatus()">בדוק חיבור</button>
+    <button class="btn btn-g" onclick="loadTeamyStatus()">רענן סטטוס</button>
+  </div>
+</div>
+
+<!-- Telegram -->
+<div class="drawer" id="panel-telegram">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/telegram/ffffff" style="width:22px;height:22px"></span> Telegram</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="fr"><label>Bot Token</label><input id="s-telegramBotToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Chat ID</label><input id="s-telegramChatId" placeholder="-100XXXXXXXXX" style="direction:ltr"></div>
+    <div class="fr"><label>Thread ID</label><input id="s-telegramThreadId" placeholder="201 (אופציונלי)" style="direction:ltr"></div>
+    <div class="toggle-row">
+      <label>סיכום אחרי שיחה</label>
+      <label class="switch"><input type="checkbox" id="s-telegramCallSummary"><span class="slider"></span></label>
+    </div>
+    <div class="section-hint" style="margin-top:14px;border-top:1px solid #333;padding-top:10px">פקודות בוט (webhook)</div>
+    <div id="telegram-webhook-status" style="font-size:13px;color:#888;margin-bottom:8px">טוען...</div>
+    <div class="section-hint" style="font-size:12px;color:#64748b">מאפשר לשלוח פקודות לבוט: /status, /calls, /calendar, /remind</div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="setupTelegramWebhook()">🔗 הפעל Webhook</button>
+    <button class="btn btn-g" onclick="removeTelegramWebhook()">נתק</button>
+    <button class="btn btn-p" onclick="saveTelegramSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- WhatsApp -->
+<div class="drawer" id="panel-whatsapp">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" style="width:22px;height:22px"></span> WhatsApp</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">שמור את המספר <b>+34 644 59 65 90</b> ושלח "I allow callmebot to send me messages" → תקבל apikey.</div>
+    <div class="fr"><label>מספר טלפון</label><input id="s-whatsappPhone" placeholder="+972501234567" style="direction:ltr"></div>
+    <div class="fr"><label>API Key</label><input id="s-whatsappApiKey" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="toggle-row">
+      <label>סיכום אחרי שיחה / voicemail</label>
+      <label class="switch"><input type="checkbox" id="s-whatsappCallSummary"><span class="slider"></span></label>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testWhatsapp()">בדיקה</button>
+    <button class="btn btn-p" onclick="saveWhatsappSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Calendar -->
+<div class="drawer" id="panel-calendar">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-indigo" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/googlecalendar/ffffff" style="width:22px;height:22px"></span> Google Calendar</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint" style="margin-bottom:10px">חיבור Google OAuth (מומלץ)</div>
+    <div id="oauth-status" style="margin-bottom:12px;font-size:13px;color:#888">בודק...</div>
+    <div style="margin-bottom:14px;display:flex;gap:8px">
+      <button class="btn btn-p" id="btn-google-connect" onclick="connectGoogle()">🔗 חבר Google</button>
+      <button class="btn btn-g" id="btn-google-disconnect" onclick="disconnectGoogle()" style="display:none">נתק</button>
+    </div>
+    <div class="section-hint" style="margin-bottom:8px;border-top:1px solid #333;padding-top:10px">iCal URL (חלופי)</div>
+    <div class="fr"><label>iCal URL</label><input id="s-calendarUrl" placeholder="https://calendar.google.com/..." style="direction:ltr"></div>
+    <div class="fr"><label>שם יומן</label><input id="s-calendarName" placeholder="My Calendar"></div>
+    <div class="section-hint" style="margin-top:14px;border-top:1px solid #333;padding-top:10px">תזכורות ובריפינג בוקר</div>
+    <div class="fr"><label>תזכורות לפני אירוע</label>
+      <label class="switch"><input type="checkbox" id="s-calendarReminders"><span class="slider"></span></label>
+    </div>
+    <div class="fr"><label>דקות לפני</label><input id="s-calendarReminderMinutes" type="number" value="15" min="1" max="60" style="width:60px;direction:ltr"></div>
+    <div class="fr"><label>טלפון לתזכורות</label><input id="s-reminderPhone" placeholder="שלוחה או מספר" style="direction:ltr"></div>
+    <div class="fr"><label>בריפינג בוקר</label>
+      <label class="switch"><input type="checkbox" id="s-morningBriefingEnabled"><span class="slider"></span></label>
+    </div>
+    <div class="fr"><label>שעת בריפינג</label><input id="s-morningBriefingTime" type="time" value="08:00" style="direction:ltr"></div>
+    <div id="calendar-events" style="margin-top:10px;font-size:13px"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="testCalendar()">בדוק</button>
+    <button class="btn btn-g" onclick="loadCalendarEvents()">טען אירועים</button>
+    <button class="btn btn-p" onclick="saveCalendarSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Twilio -->
+<div class="drawer" id="panel-twilio">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-red" style="width:36px;height:36px;border-radius:10px"><img src="https://www.twilio.com/assets/icons/twilio-icon-red.svg" style="width:22px;height:22px" onerror="this.outerHTML='<span style=\'font-size:16px;font-weight:900;color:#fff;font-family:sans-serif\'>T</span>'"></span> Twilio PSTN</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">שיחות PSTN דרך Twilio Media Streams → Gemini Live ישיר.</div>
+    <div class="fr"><label>Account SID</label><input id="s-twilioSid" placeholder="ACxxxxxxxx" style="direction:ltr"></div>
+    <div class="fr"><label>Auth Token</label><input id="s-twilioToken" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Public URL</label><input id="s-twilioUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-g btn-sm" onclick="loadTwilioNumbers()">טען מספרים</button>
+    </div>
+    <div id="twilio-numbers" style="margin-top:10px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #1e2545;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">חפש מספר חדש</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="twilio-country" placeholder="US" style="width:56px;direction:ltr">
+        <input id="twilio-area" placeholder="Area Code" style="flex:1;direction:ltr">
+        <button class="btn btn-p btn-sm" onclick="searchTwilioNumbers()">חפש</button>
+      </div>
+      <div id="twilio-search-results" style="margin-top:8px;font-size:13px"></div>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid #1e2545;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">SMS Notifications</div>
+      <div class="fr"><label>מספר לשליחת SMS</label><input id="s-smsNotifyNumber" placeholder="+972501234567" style="direction:ltr"></div>
+      <div class="toggle-row">
+        <label>סיכום שיחה ב-SMS</label>
+        <label class="switch"><input type="checkbox" id="s-smsCallSummary"><span class="slider"></span></label>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveTwilioSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Vonage -->
+<div class="drawer" id="panel-vonage">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-teal" style="width:36px;height:36px;border-radius:10px"><img src="https://cdn.simpleicons.org/vonage/ffffff" style="width:22px;height:22px" onerror="this.style.display='none';this.parentElement.insertAdjacentText('beforeend','📞')"></span> Vonage PSTN</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">WebSocket 16kHz ישיר ל-Gemini Live. פשוט יותר מ-Twilio.</div>
+    <div class="fr"><label>API Key</label><input id="s-vonageKey" placeholder="xxxxxxxx" style="direction:ltr"></div>
+    <div class="fr"><label>API Secret</label><input id="s-vonageSecret" type="password" placeholder="(ריק = לא לשנות)" style="direction:ltr"></div>
+    <div class="fr"><label>Public URL</label><input id="s-vonageUrl" placeholder="https://callme.right-api.com" style="direction:ltr"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-g btn-sm" onclick="loadVonageNumbers()">טען מספרים</button>
+    </div>
+    <div id="vonage-numbers" style="margin-top:10px;font-size:13px"></div>
+    <div style="margin-top:14px;border-top:1px solid #1e2545;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">חפש מספר חדש</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="vonage-country" placeholder="IL" style="width:56px;direction:ltr">
+        <input id="vonage-pattern" placeholder="Pattern" style="flex:1;direction:ltr">
+        <button class="btn btn-p btn-sm" onclick="searchVonageNumbers()">חפש</button>
+      </div>
+      <div id="vonage-search-results" style="margin-top:8px;font-size:13px"></div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-p" onclick="saveVonageSettings()">שמור</button>
+  </div>
+</div>
+
+<!-- Logs -->
+<div class="drawer" id="panel-logs">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">📋</span> לוגים חיים</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="logs"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g" onclick="clearLogs()">נקה</button>
+  </div>
+</div>
+
+<!-- Chat test -->
+<div class="drawer" id="panel-chat">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-cyan" style="width:36px;height:36px;font-size:18px;border-radius:10px">💭</span> בדיקת צ'אט</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="chat-out" style="background:#0b0d14;border-radius:8px;padding:12px;min-height:80px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px">תגובת הבוט תופיע כאן...</div>
+    <div style="display:flex;gap:8px">
+      <input id="chat-input" placeholder="שלח הודעה לבוט..." onkeydown="if(event.key==='Enter')sendChat()" style="flex:1">
+      <button class="btn btn-p btn-sm" onclick="sendChat()">שלח</button>
+    </div>
+  </div>
+</div>
+
+<!-- Audit Log -->
+<div class="drawer" id="panel-audit">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-gray" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔍</span> יומן פעולות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="audit-list" style="font-size:13px"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g btn-sm" onclick="loadAudit()">רענן</button>
+  </div>
+</div>
+
+<!-- Call Filter (Blacklist/Whitelist) -->
+<div class="drawer" id="panel-callfilter">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-red" style="width:36px;height:36px;font-size:18px;border-radius:10px">🚫</span> חסימת שיחות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <label>מצב סינון:</label>
+    <select id="cf-mode" onchange="updateCallFilter()" style="margin-bottom:12px">
+      <option value="none">ללא סינון</option>
+      <option value="blacklist">רשימה שחורה (חסום)</option>
+      <option value="whitelist">רשימה לבנה (אפשר רק)</option>
+    </select>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="cf-number" placeholder="מספר טלפון (למשל 0501234567)" style="flex:1">
+      <button class="btn btn-p btn-sm" onclick="addFilterNumber()">הוסף</button>
+    </div>
+    <div id="cf-list"></div>
+  </div>
+</div>
+
+<!-- Scheduled Callbacks -->
+<div class="drawer" id="panel-callbacks">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔄</span> Scheduled Callbacks</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      <input id="cb-phone" placeholder="מספר טלפון">
+      <input id="cb-time" type="datetime-local">
+      <input id="cb-reason" placeholder="סיבה (אופציונלי)">
+      <button class="btn btn-p btn-sm" onclick="addCallback()">תזמן שיחה חזרה</button>
+    </div>
+    <div id="cb-list"></div>
+  </div>
+</div>
+
+<!-- Custom AI Tools -->
+<div class="drawer" id="panel-customtools">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-indigo" style="width:36px;height:36px;font-size:18px;border-radius:10px">🛠</span> Custom AI Tools</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">הגדר כלים מותאמים שהבוט יכול להפעיל בשיחה. כל כלי יכול לשלוח webhook.</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;padding:10px;background:#0b0d14;border-radius:8px">
+      <input id="ct-name" placeholder="שם הכלי (באנגלית, למשל: check_order)">
+      <input id="ct-desc" placeholder="תיאור (מה הכלי עושה)">
+      <input id="ct-webhook" placeholder="Webhook URL (אופציונלי)" style="direction:ltr">
+      <input id="ct-default" placeholder="תשובת ברירת מחדל (למשל: בוצע)">
+      <button class="btn btn-p btn-sm" onclick="addCustomTool()">הוסף כלי</button>
+    </div>
+    <div id="ct-list"></div>
+  </div>
+</div>
+
+<!-- Call Queue -->
+<div class="drawer" id="panel-callqueue">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-amber" style="width:36px;height:36px;font-size:18px;border-radius:10px">📋</span> תור שיחות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="toggle-row"><label>הפעל תור שיחות</label><label class="switch"><input type="checkbox" id="cq-enabled" onchange="saveCqSettings()"><span class="slider"></span></label></div>
+    <div class="fr" style="margin-top:8px"><label>גודל תור מקסימלי</label><input id="cq-maxsize" type="number" min="1" max="20" value="5" style="width:80px" onblur="saveCqSettings()"></div>
+    <div class="fr"><label>הודעת המתנה</label><input id="cq-message" placeholder="כרגע אנחנו עסוקים..." onblur="saveCqSettings()"></div>
+    <div class="toggle-row" style="margin-top:8px"><label>SMS תשובה אוטומטית</label><label class="switch"><input type="checkbox" id="cq-autoreply" onchange="saveCqSettings()"><span class="slider"></span></label></div>
+    <div class="fr"><label>הודעת SMS</label><input id="cq-autoreply-msg" placeholder="תודה שהתקשרת..." onblur="saveCqSettings()"></div>
+    <hr style="border:none;border-top:1px solid #2d2d30;margin:12px 0">
+    <div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:8px">שיחות בתור כרגע</div>
+    <div id="cq-list"><em style="color:#64748b">אין שיחות בתור</em></div>
+  </div>
+</div>
+
+<!-- Webhook Logs -->
+<div class="drawer" id="panel-webhooklogs">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-teal" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔗</span> Webhook Logs</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="wh-list"><em style="color:#64748b">טוען...</em></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g btn-sm" onclick="loadWebhookLogs()">רענן</button>
+  </div>
+</div>
+
+<!-- API Keys -->
+<div class="drawer" id="panel-apikeys">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-purple" style="width:36px;height:36px;font-size:18px;border-radius:10px">🔑</span> API Keys</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-hint">צור מפתחות API לגישה חיצונית למערכת. המפתח המלא מוצג פעם אחת בלבד.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="ak-name" placeholder="שם המפתח (למשל: Zapier)" style="flex:1">
+      <button class="btn btn-p btn-sm" onclick="createApiKey()">צור מפתח</button>
+    </div>
+    <div id="ak-new" style="display:none;background:#0b2e0b;border:1px solid #22c55e;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+      <div style="color:#22c55e;margin-bottom:4px">מפתח חדש נוצר! העתק עכשיו — לא יוצג שוב:</div>
+      <code id="ak-new-key" style="color:#e2e8f0;word-break:break-all;font-size:11px"></code>
+    </div>
+    <div id="ak-list"></div>
+  </div>
+</div>
+
+<!-- Speed Dial -->
+<div class="drawer" id="panel-speeddial">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-sky" style="width:36px;height:36px;font-size:18px;border-radius:10px">⚡</span> חיוג מהיר</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="sd-name" placeholder="שם" style="flex:1">
+      <input id="sd-phone" placeholder="מספר טלפון" style="flex:1;direction:ltr">
+      <button class="btn btn-p btn-sm" onclick="addSpeedDial()">הוסף</button>
+    </div>
+    <div id="sd-list"></div>
+  </div>
+</div>
+
+<!-- Live Call Monitor -->
+<div class="drawer" id="panel-livecalls">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-green" style="width:36px;height:36px;font-size:18px;border-radius:10px">📡</span> Live Monitor</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="lc-status" style="margin-bottom:12px;font-size:13px;color:#64748b"></div>
+    <div id="lc-list"><em style="color:#64748b">אין שיחות פעילות</em></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-g btn-sm" onclick="loadLiveCalls()">רענן</button>
+  </div>
+</div>
+
+<!-- Business Hours -->
+<div class="drawer" id="panel-businesshours">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="app-icon ic-lime" style="width:36px;height:36px;font-size:18px;border-radius:10px">🕐</span> שעות פעילות</div>
+    <button class="drawer-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="toggle-row"><label>הפעל שעות פעילות</label><label class="switch"><input type="checkbox" id="bh-enabled" onchange="saveBusinessHours()"><span class="slider"></span></label></div>
+    <div id="bh-status" style="margin:8px 0;font-size:13px;padding:8px 12px;border-radius:6px"></div>
+    <div class="fr" style="margin-top:8px"><label>שעת פתיחה</label><input id="bh-start" type="time" value="09:00" onchange="saveBusinessHours()"></div>
+    <div class="fr"><label>שעת סגירה</label><input id="bh-end" type="time" value="18:00" onchange="saveBusinessHours()"></div>
+    <div style="margin:12px 0">
+      <label style="font-size:12px;color:#4b5563;display:block;margin-bottom:6px">ימי פעילות:</label>
+      <div id="bh-days" style="display:flex;gap:6px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="0" onchange="saveBusinessHours()"> א׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="1" onchange="saveBusinessHours()"> ב׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="2" onchange="saveBusinessHours()"> ג׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="3" onchange="saveBusinessHours()"> ד׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="4" onchange="saveBusinessHours()"> ה׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="5" onchange="saveBusinessHours()"> ו׳</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#1a1a1c;padding:4px 10px;border-radius:4px;border:1px solid #2d2d30;cursor:pointer"><input type="checkbox" value="6" onchange="saveBusinessHours()"> ש׳</label>
+      </div>
+    </div>
+    <div class="fr"><label>הודעה מחוץ לשעות</label><textarea id="bh-message" rows="2" onblur="saveBusinessHours()"></textarea></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Auth: support both global and tenant dashboards ────────────────────────
+const _tenantMatch = window.location.pathname.match(/^\/t\/([^/]+)/);
+const _tenantId = _tenantMatch ? decodeURIComponent(_tenantMatch[1]) : '';
+const _isTenantDashboard = Boolean(_tenantId);
+const AUTH_STORAGE_KEY = _isTenantDashboard ? `callme_tenant_auth:${_tenantId}` : 'callme_auth';
+const LOGIN_PATH = _isTenantDashboard ? `/t/${_tenantId}/login` : '/login';
+const _storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem(AUTH_STORAGE_KEY)
+  || sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
+if (!_storedAuth) { window.location.replace(LOGIN_PATH); }
+// Sync to sessionStorage so the rest of the code works uniformly
+if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+  const fallback = localStorage.getItem(AUTH_STORAGE_KEY)
+    || sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth');
+  if (fallback) sessionStorage.setItem(AUTH_STORAGE_KEY, fallback);
+}
+if (_isTenantDashboard) {
+  const setupLink = document.getElementById('setup-link');
+  if (setupLink) setupLink.style.display = 'none';
+}
+
+// Override fetch to inject Authorization header + handle 401
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (url, opts = {}) => {
+  const auth = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  if (auth) {
+    opts = { ...opts, headers: { 'Authorization': 'Basic ' + auth, ...(opts.headers || {}) } };
+  }
+  const resp = await _origFetch(url, opts);
+  if (resp.status === 401) {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.location.replace(LOGIN_PATH);
+  }
+  return resp;
+};
+
+const API = '';
+
+// ── Panel / Drawer ────────────────────────────────────────────────────────
+let currentPanel = null;
+
+function openPanel(id) {
+  if (currentPanel) {
+    document.getElementById(currentPanel).classList.remove('open');
+  }
+  currentPanel = id;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById(id).classList.add('open');
+  if (id === 'panel-security') loadUsers();
+  if (id === 'panel-calendar') checkGoogleOAuth();
+  if (id === 'panel-recordings') loadRecordings();
+  if (id === 'panel-voicemails') loadVoicemails();
+  if (id === 'panel-audit') loadAudit();
+  if (id === 'panel-callfilter') loadCallFilter();
+  if (id === 'panel-callbacks') loadCallbacks();
+  if (id === 'panel-customtools') loadCustomTools();
+  if (id === 'panel-callqueue') loadCallQueue();
+  if (id === 'panel-webhooklogs') loadWebhookLogs();
+  if (id === 'panel-apikeys') loadApiKeys();
+  if (id === 'panel-speeddial') loadSpeedDial();
+  if (id === 'panel-livecalls') loadLiveCalls();
+  if (id === 'panel-businesshours') loadBusinessHours();
+}
+
+function closePanel() {
+  if (currentPanel) {
+    document.getElementById(currentPanel).classList.remove('open');
+    currentPanel = null;
+  }
+  clearInterval(_lcInterval);
+  document.getElementById('overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+async function fetchJsonChecked(url, opts = {}) {
+  const resp = await fetch(url, opts);
+  let data = null;
+  try {
+    data = await resp.json();
+  } catch (_) {}
+  if (!resp.ok) {
+    const message = data && (data.error || data.message) ? (data.error || data.message) : `HTTP ${resp.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+// ── SIP hints ─────────────────────────────────────────────────────────────
+const SIP_HINTS = {
+  '3cx': 'SIP Domain: 1664.3cx.cloud | Registrar: 127.0.0.1 (via SBC)',
+  'zadarma': 'SIP Server: sip.zadarma.com | Extension: account number',
+  'twilio': 'SIP Server: your-domain.pstn.twilio.com',
+  'custom': 'Enter your SIP provider details manually.',
+};
+
+let _settingsLoaded = false;
+function onAiEnabledChange() {
+  const enabled = document.getElementById('s-aiEnabled').checked;
+  document.getElementById('ai-engine-section').style.display = enabled ? '' : 'none';
+  document.getElementById('ai-disabled-notice').style.display = enabled ? 'none' : '';
+  if (_settingsLoaded) saveSettings();
+}
+
+function onEngineChange() {
+  const engine = document.getElementById('s-aiEngine')?.value;
+  const gemini = document.getElementById('gemini-keys-section');
+  const groq = document.getElementById('groq-keys-section');
+  const openai = document.getElementById('openai-keys-section');
+  if (gemini) gemini.style.display = engine === 'gemini-live' ? '' : 'none';
+  if (groq) groq.style.display = engine === 'groq-pipeline' ? '' : 'none';
+  if (openai) openai.style.display = engine === 'openai-realtime' ? '' : 'none';
+  const badge = document.getElementById('engine-badge');
+  if (badge) badge.style.display = engine === 'openclaw' ? '' : 'none';
+}
+
+function onProviderChange() {
+  const v = document.getElementById('s-sipProvider').value;
+  const h = document.getElementById('sip-help');
+  if (v && SIP_HINTS[v]) { h.textContent = SIP_HINTS[v]; h.style.display = ''; }
+  else h.style.display = 'none';
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const r = await fetch(API + '/api/settings');
+    const s = await r.json();
+    document.getElementById('s-name').value = s.name || '';
+    document.getElementById('s-greeting').value = s.greeting || '';
+    document.getElementById('s-aiEnabled').checked = s.aiEnabled !== false;
+    document.getElementById('s-aiDailyCostLimitUsd').value = s.aiDailyCostLimitUsd || '';
+    document.getElementById('s-aiMonthlyCostLimitUsd').value = s.aiMonthlyCostLimitUsd || '';
+    onAiEnabledChange();
+    loadDailyCost();
+    document.getElementById('s-aiEngine').value = s.aiEngine || 'gemini-live';
+    document.getElementById('s-geminiModel').value = s.geminiModel || 'gemini-2.0-flash-live-001';
+    if (s.geminiApiKey) { document.getElementById('s-geminiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-gemini').style.display = ''; }
+    // Groq pipeline fields
+    if (s.groqApiKey) { document.getElementById('s-groqApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-groq').style.display = ''; }
+    if (s.deepgramApiKey) { document.getElementById('s-deepgramApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-deepgram').style.display = ''; }
+    document.getElementById('s-ttsVoice').value = s.ttsVoice || '';
+    document.getElementById('s-openaiModel').value = s.openaiModel || 'gpt-4o-realtime-preview';
+    if (s.openaiApiKey) { document.getElementById('s-openaiApiKey').placeholder = '✓ set'; document.getElementById('btn-clear-openai').style.display = ''; }
+    onEngineChange();
+    document.getElementById('s-persona').value = s.persona || '';
+    const rs = s.responseStyle || 'concise';
+    const rsEl = document.getElementById(`rs-${rs}`);
+    if (rsEl) rsEl.checked = true;
+    document.getElementById('s-rules').value = s.rules || '';
+    document.getElementById('s-knowledge').value = s.knowledge || '';
+    document.getElementById('s-escalationTurns').value = s.escalationTurns || '';
+    document.getElementById('s-escalationNumber').value = s.escalationNumber || '';
+    document.getElementById('s-toolHa').checked = !!s.toolHa;
+    document.getElementById('s-toolOpenclaw').checked = !!s.toolOpenclaw;
+    document.getElementById('s-toolCalendar').checked = !!s.toolCalendar;
+    document.getElementById('s-toolContacts').checked = !!s.toolContacts;
+    document.getElementById('s-toolScheduler').checked = !!s.toolScheduler;
+    document.getElementById('s-voice').value = s.voice || 'Kore';
+    document.getElementById('s-language').value = s.language || 'he';
+    document.getElementById('s-sipProvider').value = s.sipProvider || '';
+    document.getElementById('s-sipServer').value = s.sipServer || '';
+    document.getElementById('s-sipRegistrar').value = s.sipRegistrar || '';
+    document.getElementById('s-sipExtension').value = s.sipExtension || '';
+    document.getElementById('s-sipAuthId').value = s.sipAuthId || '';
+    document.getElementById('s-sipDid').value = s.sipDid || '';
+    if (s.sipPassword) document.getElementById('s-sipPassword').placeholder = '✓ set';
+    if (s.adminUser) document.getElementById('s-adminUser').value = s.adminUser;
+    document.getElementById('s-callWebhookUrl').value = s.callWebhookUrl || '';
+    document.getElementById('s-crmWebhookUrl').value = s.crmWebhookUrl || '';
+    document.getElementById('s-telegramChatId').value = s.telegramChatId || '';
+    document.getElementById('s-telegramThreadId').value = s.telegramThreadId || '';
+    document.getElementById('s-telegramCallSummary').checked = !!s.telegramCallSummary;
+    if (s.telegramBotToken) document.getElementById('s-telegramBotToken').placeholder = '✓ set';
+    document.getElementById('s-calendarUrl').value = s.calendarUrl || '';
+    document.getElementById('s-calendarName').value = s.calendarName || '';
+    document.getElementById('s-calendarReminders').checked = !!s.calendarReminders;
+    document.getElementById('s-calendarReminderMinutes').value = s.calendarReminderMinutes || 15;
+    document.getElementById('s-reminderPhone').value = s.reminderPhone || '';
+    document.getElementById('s-morningBriefingEnabled').checked = !!s.morningBriefingEnabled;
+    document.getElementById('s-morningBriefingTime').value = s.morningBriefingTime || '08:00';
+    document.getElementById('s-whatsappPhone').value = s.whatsappPhone || '';
+    if (s.whatsappApiKey) document.getElementById('s-whatsappApiKey').placeholder = '✓ set';
+    document.getElementById('s-whatsappCallSummary').checked = !!s.whatsappCallSummary;
+    document.getElementById('s-twilioSid').value = s.twilioAccountSid || '';
+    document.getElementById('s-twilioUrl').value = s.twilioPublicUrl || location.origin;
+    document.getElementById('s-smsNotifyNumber').value = s.smsNotifyNumber || '';
+    document.getElementById('s-smsCallSummary').checked = !!s.smsCallSummary;
+    document.getElementById('s-vonageKey').value = s.vonageApiKey || '';
+    document.getElementById('s-vonageUrl').value = s.vonagePublicUrl || location.origin;
+    onProviderChange();
+    // Update integration badges
+    const setBadge = (id, on) => { const b = document.getElementById(id); if (b) b.className = 'app-badge ' + (on ? 'on' : 'na'); };
+    setBadge('badge-telegram', !!s.telegramBotToken);
+    setBadge('badge-whatsapp', !!s.whatsappApiKey);
+    setBadge('badge-calendar', !!(s.calendarUrl));
+    // Check OAuth status for calendar badge
+    fetch(API + '/api/oauth/google/status').then(r=>r.json()).then(d => { if(d.connected) setBadge('badge-calendar', true); updateOnboarding(s, d); }).catch(()=> updateOnboarding(s, {}));
+    _settingsLoaded = true;
+  } catch(e) { console.error(e); }
+}
+
+function updateOnboarding(s, oauth) {
+  const steps = [];
+  if (!s.sipExtension && !s.twilioAccountSid && !s.vonageApiKey) steps.push('<span style="color:#fbbf24">1.</span> הגדר חיבור SIP / Twilio / Vonage → <span style="color:#818cf8;cursor:pointer" onclick="openPanel(\'panel-sip\')">SIP</span>');
+  if (!s.telegramBotToken) steps.push('<span style="color:#fbbf24">2.</span> חבר Telegram Bot → <span style="color:#818cf8;cursor:pointer" onclick="openPanel(\'panel-telegram\')">Telegram</span>');
+  if (!s.calendarUrl && !(oauth && oauth.connected)) steps.push('<span style="color:#fbbf24">3.</span> חבר Google Calendar → <span style="color:#818cf8;cursor:pointer" onclick="openPanel(\'panel-calendar\')">Calendar</span>');
+  const el = document.getElementById('onboarding-hint');
+  const stepsEl = document.getElementById('onboarding-steps');
+  if (steps.length > 0) {
+    stepsEl.innerHTML = steps.join('<br>');
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+async function clearApiKey(provider) {
+  if (!confirm('למחוק את ה-API key?')) return;
+  const keyMap = { gemini: 'geminiApiKey', openai: 'openaiApiKey', groq: 'groqApiKey', deepgram: 'deepgramApiKey' };
+  const inputMap = { gemini: 's-geminiApiKey', openai: 's-openaiApiKey', groq: 's-groqApiKey', deepgram: 's-deepgramApiKey' };
+  const btnMap = { gemini: 'btn-clear-gemini', openai: 'btn-clear-openai', groq: 'btn-clear-groq', deepgram: 'btn-clear-deepgram' };
+  await fetchJsonChecked(`${API}/api/settings`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [keyMap[provider]]: '__CLEAR__' }) });
+  document.getElementById(inputMap[provider]).placeholder = '(ריק = ללא)';
+  document.getElementById(inputMap[provider]).value = '';
+  document.getElementById(btnMap[provider]).style.display = 'none';
+  toast('API key נמחק');
+}
+
+async function loadDailyCost() {
+  try {
+    const d = await (await fetch(`${API}/api/daily-cost`)).json();
+    const el = document.getElementById('ai-daily-cost-display');
+    if (el) {
+      const costStr = `$${d.todayCostUsd.toFixed(4)}`;
+      const limitStr = d.limitActive ? ` / $${d.limitUsd.toFixed(2)}` : '';
+      const color = d.limitReached ? '#f87171' : d.limitActive && d.todayCostUsd > d.limitUsd * 0.8 ? '#fbbf24' : '#64748b';
+      el.innerHTML = `עלות היום: <span style="color:${color};font-family:'SF Mono','Fira Code',monospace">${costStr}${limitStr}</span>${d.limitReached ? ' <span style="color:#f87171">⚠ מגבלה הושגה</span>' : ''}`;
+    }
+    const mel = document.getElementById('ai-monthly-cost-display');
+    if (mel) {
+      const mCostStr = `$${(d.monthCostUsd||0).toFixed(4)}`;
+      const mLimitStr = d.monthlyLimitActive ? ` / $${d.monthlyLimitUsd.toFixed(2)}` : '';
+      const mColor = d.monthlyLimitReached ? '#f87171' : d.monthlyLimitActive && d.monthCostUsd > d.monthlyLimitUsd * 0.8 ? '#fbbf24' : '#64748b';
+      mel.innerHTML = `עלות החודש: <span style="color:${mColor};font-family:'SF Mono','Fira Code',monospace">${mCostStr}${mLimitStr}</span>${d.monthlyLimitReached ? ' <span style="color:#f87171">⚠ מגבלה הושגה</span>' : ''}`;
+    }
+    // Update header budget display
+    const hdr = document.getElementById('budget-hdr');
+    if (hdr) {
+      const actual = `$${(d.monthCostUsd||0).toFixed(2)}`;
+      const cap = d.monthlyLimitActive ? `$${d.monthlyLimitUsd.toFixed(2)}` : '∞';
+      const pct = d.monthlyLimitActive ? ((d.monthCostUsd||0) / d.monthlyLimitUsd * 100) : 0;
+      const color = d.monthlyLimitReached ? '#f87171' : pct > 80 ? '#fbbf24' : '#22c55e';
+      hdr.style.color = color;
+      hdr.style.borderColor = color + '40';
+      hdr.style.background = color === '#f87171' ? '#1a0a0a' : color === '#fbbf24' ? '#1a1a0a' : '#0a1a0a';
+      hdr.textContent = `${actual} / ${cap}`;
+      hdr.title = d.monthlyLimitActive ? `תקציב חודשי: ${actual} מתוך ${cap}` : `עלות החודש: ${actual}`;
+    }
+  } catch(e) { console.warn('loadDailyCost failed:', e); }
+}
+
+// Refresh budget every 30s
+setInterval(loadDailyCost, 30000);
+
+async function saveSettings() {
+  const body = {
+    name: document.getElementById('s-name').value,
+    greeting: document.getElementById('s-greeting').value,
+    aiEnabled: document.getElementById('s-aiEnabled').checked,
+    aiDailyCostLimitUsd: parseFloat(document.getElementById('s-aiDailyCostLimitUsd').value) || 0,
+    aiMonthlyCostLimitUsd: parseFloat(document.getElementById('s-aiMonthlyCostLimitUsd').value) || 0,
+    aiEngine: document.getElementById('s-aiEngine').value,
+    geminiModel: document.getElementById('s-geminiModel').value,
+    geminiApiKey: document.getElementById('s-geminiApiKey').value || undefined,
+    groqApiKey: document.getElementById('s-groqApiKey').value || undefined,
+    deepgramApiKey: document.getElementById('s-deepgramApiKey').value || undefined,
+    ttsVoice: document.getElementById('s-ttsVoice').value,
+    openaiModel: document.getElementById('s-openaiModel').value,
+    openaiApiKey: document.getElementById('s-openaiApiKey').value || undefined,
+    persona: document.getElementById('s-persona').value,
+    responseStyle: document.querySelector('input[name="responseStyle"]:checked')?.value || 'concise',
+    rules: document.getElementById('s-rules').value,
+    knowledge: document.getElementById('s-knowledge').value,
+    escalationTurns: document.getElementById('s-escalationTurns').value,
+    escalationNumber: document.getElementById('s-escalationNumber').value,
+    toolHa: document.getElementById('s-toolHa').checked,
+    toolOpenclaw: document.getElementById('s-toolOpenclaw').checked,
+    toolCalendar: document.getElementById('s-toolCalendar').checked,
+    toolContacts: document.getElementById('s-toolContacts').checked,
+    toolScheduler: document.getElementById('s-toolScheduler').checked,
+    voice: document.getElementById('s-voice').value,
+    language: document.getElementById('s-language').value,
+    sipProvider: document.getElementById('s-sipProvider').value,
+    sipServer: document.getElementById('s-sipServer').value,
+    sipRegistrar: document.getElementById('s-sipRegistrar').value,
+    sipExtension: document.getElementById('s-sipExtension').value,
+    sipAuthId: document.getElementById('s-sipAuthId').value,
+    sipPassword: document.getElementById('s-sipPassword').value,
+    sipDid: document.getElementById('s-sipDid').value,
+    callWebhookUrl: document.getElementById('s-callWebhookUrl').value,
+    crmWebhookUrl: document.getElementById('s-crmWebhookUrl').value,
+  };
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('הגדרות נשמרו ✓'); document.getElementById('s-sipPassword').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveTelegramSettings() {
+  const body = {
+    telegramChatId: document.getElementById('s-telegramChatId').value,
+    telegramThreadId: document.getElementById('s-telegramThreadId').value,
+    telegramCallSummary: document.getElementById('s-telegramCallSummary').checked,
+  };
+  const token = document.getElementById('s-telegramBotToken').value;
+  if (token) body.telegramBotToken = token;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('Telegram נשמר ✓'); document.getElementById('s-telegramBotToken').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function setupTelegramWebhook() {
+  try {
+    const r = await fetch(API + '/api/telegram/setup-webhook', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    const el = document.getElementById('telegram-webhook-status');
+    if (d.ok) { toast('Webhook הופעל ✓'); el.innerHTML = '✅ Webhook פעיל: <code>' + (d.webhookUrl || '') + '</code>'; el.style.color = '#4ade80'; }
+    else { toast('שגיאה: ' + (d.error || d.description), true); el.innerHTML = '❌ ' + (d.error || ''); el.style.color = '#f87171'; }
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function removeTelegramWebhook() {
+  try {
+    const r = await fetch(API + '/api/telegram/remove-webhook', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    if (d.ok) { toast('Webhook הוסר'); document.getElementById('telegram-webhook-status').innerHTML = 'Webhook לא פעיל'; document.getElementById('telegram-webhook-status').style.color = '#888'; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveAdminCreds() {
+  const user = document.getElementById('s-adminUser').value.trim();
+  const pass = document.getElementById('s-adminPass').value;
+  const confirm = document.getElementById('s-adminPassConfirm').value;
+  const status = document.getElementById('admin-pass-status');
+  if (pass && pass !== confirm) { status.textContent = 'הסיסמאות לא תואמות'; status.className = 'status-line err'; return; }
+  if (!user) { status.textContent = 'שם משתמש לא יכול להיות ריק'; status.className = 'status-line err'; return; }
+  const body = { adminUser: user };
+  if (pass) body.adminPass = pass;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      toast('פרטי כניסה עודכנו ✓');
+      document.getElementById('s-adminPass').value = '';
+      document.getElementById('s-adminPassConfirm').value = '';
+      status.textContent = pass ? 'סיסמה שונתה' : 'שם משתמש עודכן';
+      status.className = 'status-line ok';
+    } else { toast('שגיאה', true); }
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+// ── Health / Metrics / Status ─────────────────────────────────────────────
+async function loadHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const h = await r.json();
+    document.getElementById('status-dot').className = 'dot on';
+    document.getElementById('status-text').textContent = 'מחובר';
+    const up = Math.floor(h.uptime);
+    const hh = Math.floor(up/3600), mm = Math.floor((up%3600)/60), ss = up%60;
+    document.getElementById('uptime').textContent = `${hh}h ${mm}m`;
+  } catch(e) {
+    document.getElementById('status-dot').className = 'dot off';
+    document.getElementById('status-text').textContent = 'לא מחובר';
+  }
+}
+
+async function loadMetrics() {
+  try {
+    const r = await fetch(API + '/metrics');
+    const m = await r.json();
+    const s = m.stats || {};
+    document.getElementById('stat-total').textContent = s.totalCalls ?? '0';
+    const active = s.activeCalls ?? 0;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-active-hdr').textContent = active + ' שיחות';
+    const avg = s.avgDurationMs ? Math.round(s.avgDurationMs/1000) : 0;
+    document.getElementById('stat-avg').textContent = avg;
+    document.getElementById('stat-errors').textContent = s.totalErrors ?? '0';
+    // Update badge
+    const b = document.getElementById('badge-calls');
+    if (b) b.className = 'app-badge ' + (active > 0 ? 'on' : 'na');
+  } catch(e) {}
+}
+
+function setConn(id, ok, sub) {
+  const dot = document.getElementById('cs-dot-' + id);
+  const subEl = document.getElementById('cs-sub-' + id);
+  if (dot) dot.className = 'dot ' + (ok === true ? 'on' : ok === false ? 'off' : 'na');
+  if (subEl) subEl.textContent = sub || '';
+  // Update app grid badges
+  const badge = document.getElementById('badge-' + id);
+  if (badge) badge.className = 'app-badge ' + (ok === true ? 'on' : ok === false ? 'off' : 'na');
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(API + '/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    setConn('drachtio', d.drachtio === 'connected', d.drachtio === 'connected' ? 'מחובר' : 'מנותק');
+    const extKeys = Object.keys(d.sip || {});
+    const label = document.getElementById('cs-label-sip');
+    const providerNames = { '3cx': '3CX', zadarma: 'Zadarma', twilio: 'Twilio', custom: 'Custom', '': 'SIP Trunk' };
+    if (label) label.textContent = providerNames[d.sipProvider] || 'SIP Trunk';
+    if (extKeys.length > 0) {
+      const ext = extKeys[0]; const reg = d.sip[ext];
+      setConn('sip', true, `שלוחה ${ext} — רשום (${reg.age}s)`);
+      const b = document.getElementById('badge-sip'); if (b) b.className = 'app-badge on';
+    } else {
+      setConn('sip', false, d.sipExtension ? `שלוחה ${d.sipExtension} — לא רשום` : 'לא מוגדר');
+    }
+    for (const name of ['teamy', 'openclaw', 'ha']) {
+      const s = d.integrations?.[name];
+      if (!s || s.ok === null) setConn(name, null, 'לא מוגדר / כבוי');
+      else if (s.ok) {
+        const isEngine = name === 'openclaw' && d.aiEngine === 'openclaw';
+        setConn(name, true, isEngine ? 'מחובר — פעיל כמנוע AI ✓' : 'מחובר');
+        if (isEngine) {
+          const badge = document.getElementById('badge-openclaw');
+          if (badge) badge.className = 'app-badge on';
+        }
+      } else setConn(name, false, s.error || 'שגיאה');
+    }
+    // Active calls
+    const calls = d.activeCalls || [];
+    const callsEl = document.getElementById('active-calls-list');
+    if (callsEl) {
+      if (!calls.length) {
+        callsEl.innerHTML = '<em style="color:#64748b">אין שיחות פעילות</em>';
+        document.getElementById('live-transcript').style.display = 'none';
+        if (window._ltInterval) { clearInterval(window._ltInterval); window._ltInterval = null; }
+      } else {
+        callsEl.innerHTML = calls.map(c => `
+          <div class="call-item">
+            <div style="flex:1"><b>${c.callerName||c.from||'—'}</b><br><span style="font-size:11px;color:#64748b">${c.callId?.slice(0,14)||''} · ${c.durationS||0}ש</span></div>
+            <button class="btn btn-g btn-sm" onclick="watchLiveTranscript('${c.callId}')">👁 צפה</button>
+          </div>`).join('');
+      }
+    }
+  } catch(e) { console.error(e); }
+}
+
+function refresh() { loadHealth(); loadMetrics(); loadStatus(); }
+
+function watchLiveTranscript(callId) {
+  const ltEl = document.getElementById('live-transcript');
+  const ltLines = document.getElementById('lt-lines');
+  ltEl.style.display = '';
+  document.getElementById('lt-caller').textContent = callId.slice(0, 14);
+  ltLines.innerHTML = '<em style="color:#64748b">מתחבר...</em>';
+  if (window._ltInterval) clearInterval(window._ltInterval);
+  let lastCount = 0;
+  const poll = async () => {
+    try {
+      const r = await fetch(API + '/api/calls/' + encodeURIComponent(callId) + '/transcript');
+      if (!r.ok) { ltLines.innerHTML = '<em style="color:#64748b">שיחה הסתיימה</em>'; clearInterval(window._ltInterval); window._ltInterval = null; return; }
+      const d = await r.json();
+      document.getElementById('lt-caller').textContent = (d.callerName || callId.slice(0, 14)) + ' · ' + (d.durationS || 0) + 'ש';
+      if (d.transcript && d.transcript.length !== lastCount) {
+        lastCount = d.transcript.length;
+        ltLines.innerHTML = d.transcript.map(l => {
+          const icon = l.role === 'user' ? '👤' : '🤖';
+          const color = l.role === 'user' ? '#94a3b8' : '#818cf8';
+          return `<div style="color:${color}">${icon} ${(l.text||'').replace(/</g,'&lt;')}</div>`;
+        }).join('');
+        ltLines.scrollTop = ltLines.scrollHeight;
+      }
+    } catch(e) {}
+  };
+  poll();
+  window._ltInterval = setInterval(poll, 1500);
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────
+async function loadIntegrations() {
+  try {
+    const r = await fetch(API + '/api/integrations');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('int-teamy-enabled').checked = !!d.teamy?.enabled;
+    document.getElementById('int-teamy-url').value = d.teamy?.url || '';
+    document.getElementById('int-openclaw-enabled').checked = !!d.openclaw?.enabled;
+    document.getElementById('int-openclaw-url').value = d.openclaw?.url || '';
+    document.getElementById('int-ha-enabled').checked = !!d.ha?.enabled;
+    document.getElementById('int-ha-url').value = d.ha?.url || '';
+    document.getElementById('int-ha-webhook').value = d.ha?.webhookId || '';
+  } catch(e) {}
+}
+
+async function saveIntegrations() {
+  const body = {
+    teamy: { enabled: document.getElementById('int-teamy-enabled').checked, url: document.getElementById('int-teamy-url').value, token: document.getElementById('int-teamy-token').value || undefined },
+    openclaw: { enabled: document.getElementById('int-openclaw-enabled').checked, url: document.getElementById('int-openclaw-url').value, token: document.getElementById('int-openclaw-token').value || undefined },
+    ha: { enabled: document.getElementById('int-ha-enabled').checked, url: document.getElementById('int-ha-url').value, token: document.getElementById('int-ha-token').value || undefined, webhookId: document.getElementById('int-ha-webhook').value }
+  };
+  try {
+    await fetch(API + '/api/integrations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  } catch(e) {}
+}
+
+async function testIntegration(name) {
+  const statEl = document.getElementById('int-' + name + '-status');
+  if (statEl) { statEl.className = 'status-line warn'; statEl.textContent = 'בודק...'; }
+  try {
+    const r = await fetch(API + '/api/integrations/test/' + name, { method: 'POST' });
+    const d = await r.json();
+    if (statEl) {
+      statEl.className = 'status-line ' + (d.ok ? 'ok' : 'err');
+      statEl.textContent = d.ok ? `חיבור תקין ✓` : (d.error || 'שגיאה');
+    }
+  } catch(e) { if (statEl) { statEl.className = 'status-line err'; statEl.textContent = e.message; } }
+}
+
+// ── Contacts ──────────────────────────────────────────────────────────────
+let contactsData = [];
+
+async function loadContacts() {
+  try {
+    const r = await fetch('/api/contacts');
+    const d = await r.json();
+    contactsData = d.contacts || [];
+    renderContacts();
+    populateContactSelect();
+  } catch(e) { document.getElementById('contacts-list').textContent = 'שגיאה'; }
+}
+
+function renderContacts() {
+  const el = document.getElementById('contacts-list');
+  if (!contactsData.length) { el.textContent = 'אין אנשי קשר עדיין.'; return; }
+  el.innerHTML = contactsData.map(c => `
+    <div class="list-row">
+      <div style="flex:1"><b>${c.name}</b> <span style="color:#64748b;direction:ltr;font-size:12px">${c.phone}</span></div>
+      <button class="btn btn-p btn-sm" onclick="dialContactFromGrid('${c.phone}')">חייג</button>
+      <button class="btn btn-g btn-sm" onclick="deleteContact('${c.id}')">✕</button>
+    </div>`).join('');
+}
+
+function populateContactSelect() {
+  const sel = document.getElementById('sc-contact');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— מאנשי קשר —</option>' + contactsData.map(c => `<option value="${c.phone}">${c.name}</option>`).join('');
+}
+
+async function addContact() {
+  const name = document.getElementById('c-name').value.trim();
+  const phone = document.getElementById('c-phone').value.trim();
+  if (!name || !phone) { toast('נדרשים שם ומספר', true); return; }
+  try {
+    const r = await fetch('/api/contacts', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, phone }) });
+    if (!r.ok) throw new Error((await r.json()).error);
+    document.getElementById('c-name').value = '';
+    document.getElementById('c-phone').value = '';
+    toast('איש קשר נוסף ✓');
+    loadContacts();
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function syncGoogleContacts() {
+  try {
+    toast('מסנכרן אנשי קשר מ-Google...');
+    const r = await fetch(API + '/api/contacts/sync-google', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`סנכרון הושלם ✓ — ${d.imported} חדשים מתוך ${d.total}`);
+      loadContacts();
+    } else {
+      toast('שגיאה: ' + d.error, true);
+    }
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function deleteContact(id) {
+  try {
+    await fetch('/api/contacts/' + id, { method: 'DELETE' });
+    toast('נמחק ✓');
+    loadContacts();
+  } catch(e) { toast('שגיאה', true); }
+}
+
+function dialContactFromGrid(phone) {
+  document.getElementById('phone-target').value = phone;
+  closePanel();
+  toast('מספר נטען — לחץ התחל שיחה');
+}
+
+function dialContact(phone) {
+  document.getElementById('dial-target').value = phone;
+  document.getElementById('dial-target').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── Scheduler ─────────────────────────────────────────────────────────────
+function onScContact() {
+  const val = document.getElementById('sc-contact').value;
+  if (val) document.getElementById('sc-target').value = val;
+}
+
+async function loadScheduler() {
+  try {
+    const r = await fetch('/api/scheduler');
+    const d = await r.json();
+    renderScheduler(d.jobs || []);
+  } catch(e) { document.getElementById('scheduler-list').textContent = 'שגיאה'; }
+}
+
+function renderScheduler(jobs) {
+  const el = document.getElementById('scheduler-list');
+  if (!jobs.length) { el.textContent = 'אין תזמונים פעילים.'; return; }
+  const repeatLabel = { once: 'פעם אחת', daily: 'יומי', weekdays: 'ימי חול' };
+  el.innerHTML = jobs.map(j => {
+    const nextStr = j.nextAt ? new Date(j.nextAt).toLocaleString('he-IL') : '—';
+    return `<div style="background:#0b0d14;border-radius:8px;padding:10px;margin-bottom:8px;${j.enabled?'':'opacity:.5'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div><b>${j.name}</b> <span style="color:#64748b;font-size:12px">· ${j.time} · ${repeatLabel[j.repeat]||j.repeat}</span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="background:${j.enabled?'#374151':'#14532d'};color:#fff" onclick="toggleJob('${j.id}',${!j.enabled})">${j.enabled?'השבת':'הפעל'}</button>
+          <button class="btn btn-d btn-sm" onclick="deleteJob('${j.id}')">מחק</button>
+        </div>
+      </div>
+      <div style="color:#64748b;font-size:11px;margin-top:4px">יעד: <span style="direction:ltr">${j.target}</span> · הבא: ${nextStr}</div>
+    </div>`;
+  }).join('');
+}
+
+async function addScheduledJob() {
+  const body = { name: document.getElementById('sc-name').value.trim() || document.getElementById('sc-target').value.trim(), target: document.getElementById('sc-target').value.trim(), message: document.getElementById('sc-message').value.trim(), time: document.getElementById('sc-time').value, repeat: document.getElementById('sc-repeat').value };
+  if (!body.target || !body.time) { toast('נדרשים יעד ושעה', true); return; }
+  try {
+    const r = await fetch('/api/scheduler', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json()).error);
+    toast('תזמון נוצר ✓');
+    document.getElementById('sc-name').value = '';
+    document.getElementById('sc-target').value = '';
+    document.getElementById('sc-message').value = '';
+    loadScheduler();
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function toggleJob(id, enabled) {
+  await fetch('/api/scheduler/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled }) });
+  loadScheduler();
+}
+
+async function deleteJob(id) {
+  await fetch('/api/scheduler/' + id, { method: 'DELETE' });
+  toast('נמחק ✓');
+  loadScheduler();
+}
+
+// ── Dialer (SIP outbound) ─────────────────────────────────────────────────
+let activeCallId = null;
+let dialPollTimer = null;
+
+function handleCallBtn() {
+  const target = document.getElementById('phone-target').value.trim();
+  if (target) {
+    // Has target number → SIP outbound dial
+    dialOutFromBar(target);
+  } else {
+    // No target → Web Call (AI bot)
+    toggleWebCall();
+  }
+}
+
+async function dialOutFromBar(target) {
+  if (wcActive) { stopWebCall(); }
+  setDialStatus('מחייג...', '#60a5fa');
+  document.getElementById('wcb-label').textContent = 'מחייג...';
+  document.getElementById('webcall-btn').disabled = true;
+  try {
+    const r = await fetch('/call', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: target }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    activeCallId = d.callId;
+    updateWcStatus('מחייג...', '#60a5fa');
+    document.getElementById('hangup-btn').style.display = '';
+    document.getElementById('mute-btn').style.display = '';
+    document.getElementById('webcall-btn').style.display = 'none';
+    startDialPoll();
+  } catch(e) {
+    updateWcStatus('שגיאה: ' + e.message.slice(0,40), '#ef4444');
+    document.getElementById('webcall-btn').disabled = false;
+    document.getElementById('wcb-label').textContent = 'התחל שיחה';
+  }
+}
+
+async function dialOut() {
+  const target = document.getElementById('dial-target').value.trim();
+  const from = document.getElementById('dial-from').value.trim();
+  if (!target) { toast('הכנס מספר יעד', true); return; }
+  const body = { to: target };
+  if (from) body.callerId = from;
+  setDialStatusPanel('מחייג...', '#60a5fa');
+  document.getElementById('dial-btn').disabled = true;
+  try {
+    const r = await fetch('/call', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    activeCallId = d.callId;
+    setDialStatusPanel('שיחה פעילה ✓ — ' + target, '#22c55e');
+    document.getElementById('hangup-btn2').style.display = '';
+    document.getElementById('dial-btn').style.display = 'none';
+    startDialPoll();
+  } catch(e) {
+    setDialStatusPanel('שגיאה: ' + e.message, '#ef4444');
+    document.getElementById('dial-btn').disabled = false;
+  }
+}
+
+async function hangupCall() {
+  if (!activeCallId) { stopWebCall(); return; }
+  try { await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' }); } catch {}
+  dialReset();
+}
+
+async function hangupSipCall() {
+  if (!activeCallId) return;
+  try { await fetch('/call/' + encodeURIComponent(activeCallId), { method: 'DELETE' }); } catch {}
+  dialReset();
+}
+
+function dialReset() {
+  activeCallId = null;
+  if (dialPollTimer) { clearInterval(dialPollTimer); dialPollTimer = null; }
+  updateWcStatus('לא מחובר', '#64748b');
+  document.getElementById('hangup-btn').style.display = 'none';
+  document.getElementById('mute-btn').style.display = 'none';
+  wcMuted = false;
+  document.getElementById('webcall-btn').style.display = '';
+  document.getElementById('webcall-btn').disabled = false;
+  document.getElementById('wcb-icon').textContent = '📞';
+  document.getElementById('wcb-label').textContent = 'התחל שיחה';
+  document.getElementById('webcall-btn').className = 'call-btn start';
+  // panel dialer
+  setDialStatusPanel('', '#64748b');
+  document.getElementById('dial-btn').disabled = false;
+  document.getElementById('dial-btn').style.display = '';
+  document.getElementById('hangup-btn2').style.display = 'none';
+}
+
+function setDialStatus(msg, color) {
+  const el = document.getElementById('webcall-status');
+  el.textContent = msg; el.style.color = color;
+}
+
+function setDialStatusPanel(msg, color) {
+  const el = document.getElementById('dial-status');
+  el.textContent = msg; el.style.color = color || '#64748b';
+}
+
+function startDialPoll() {
+  if (dialPollTimer) clearInterval(dialPollTimer);
+  dialPollTimer = setInterval(async () => {
+    if (!activeCallId) return;
+    try {
+      const r = await fetch('/api/calls');
+      if (!r.ok) return;
+      const d = await r.json();
+      const call = d.calls?.find(c => c.callId === activeCallId);
+      if (!call) { dialReset(); updateWcStatus('שיחה הסתיימה', '#64748b'); }
+      else if (call.status === 'connected') updateWcStatus('שיחה פעילה ✓', '#22c55e');
+    } catch {}
+  }, 3000);
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const out = document.getElementById('chat-out');
+  out.textContent = 'שולח...';
+  try {
+    const r = await fetch(API + '/api/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ message: msg }) });
+    const d = await r.json();
+    out.textContent = d.response || '(אין תגובה)';
+  } catch(e) { out.textContent = 'שגיאה: ' + e.message; }
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────
+const logEl = document.getElementById('logs');
+let lastLogTs = 0;
+
+function appendLog(line) {
+  let cls = 'log-info';
+  if (line.includes('"level":"warn"') || line.includes('warn')) cls = 'log-warn';
+  if (line.includes('"level":"error"') || line.includes('error')) cls = 'log-error';
+  if (line.includes('debug')) cls = 'log-debug';
+  try {
+    const obj = JSON.parse(line);
+    const ts = obj.timestamp ? new Date(obj.timestamp).toLocaleTimeString('he-IL') : '';
+    const msg = obj.message || obj.msg || line;
+    const extras = Object.entries(obj).filter(([k]) => !['message','msg','timestamp','level'].includes(k)).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(' ');
+    line = `[${ts}] ${msg}${extras ? ' | '+extras : ''}`;
+  } catch(_) {}
+  const div = document.createElement('div');
+  div.className = cls;
+  div.textContent = line;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
+}
+
+function clearLogs() { logEl.innerHTML = ''; }
+
+async function pollLogs() {
+  try {
+    const r = await fetch(API + '/api/logs?since=' + lastLogTs);
+    if (!r.ok) return;
+    const lines = (await r.text()).split('\n').filter(Boolean);
+    for (const l of lines) {
+      try {
+        const obj = JSON.parse(l);
+        if (obj._ts && obj._ts <= lastLogTs) continue;
+        if (obj._ts) lastLogTs = obj._ts;
+      } catch(_) {}
+      appendLog(l);
+    }
+  } catch(_) {}
+}
+
+// ── Vonage / Twilio / WhatsApp / Calendar ─────────────────────────────────
+async function saveVonageSettings() {
+  const body = { vonageApiKey: document.getElementById('s-vonageKey').value.trim(), vonagePublicUrl: document.getElementById('s-vonageUrl').value.trim() };
+  const secret = document.getElementById('s-vonageSecret').value;
+  if (secret) body.vonageApiSecret = secret;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('Vonage נשמר ✓'); document.getElementById('s-vonageSecret').value = ''; }
+    else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadVonageNumbers() {
+  const el = document.getElementById('vonage-numbers'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/vonage/numbers'); const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">אין מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.msisdn} <span style="color:#64748b">${n.country}</span></span><button class="btn btn-g btn-sm" onclick="configVonageNumber('${n.msisdn}','${n.country}')">הפנה לבוט</button></div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function configVonageNumber(msisdn, country) {
+  try {
+    const r = await fetch(`${API}/api/vonage/configure/${msisdn}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ country }) });
+    const d = await r.json();
+    if (d.ok) toast('מספר הוגדר ✓'); else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function searchVonageNumbers() {
+  const el = document.getElementById('vonage-search-results');
+  const country = document.getElementById('vonage-country').value.trim() || 'IL';
+  const pattern = document.getElementById('vonage-pattern').value.trim();
+  el.innerHTML = '<em style="color:#64748b">מחפש...</em>';
+  try {
+    const r = await fetch(`${API}/api/vonage/search?country=${country}&pattern=${encodeURIComponent(pattern)}`);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.msisdn} <span style="color:#64748b">${n.country} · €${n.cost}/חודש</span></span><button class="btn btn-p btn-sm" onclick="buyVonageNumber('${n.msisdn}','${n.country}')">קנה</button></div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function buyVonageNumber(msisdn, country) {
+  if (!confirm(`לקנות ${msisdn}?`)) return;
+  try {
+    const r = await fetch(`${API}/api/vonage/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ msisdn, country }) });
+    const d = await r.json();
+    if (d.ok) { toast('נרכש ✓ ' + d.msisdn); loadVonageNumbers(); } else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveTwilioSettings() {
+  const body = {
+    twilioAccountSid: document.getElementById('s-twilioSid').value.trim(),
+    twilioPublicUrl: document.getElementById('s-twilioUrl').value.trim(),
+    smsNotifyNumber: document.getElementById('s-smsNotifyNumber').value.trim(),
+    smsCallSummary: document.getElementById('s-smsCallSummary').checked,
+  };
+  const token = document.getElementById('s-twilioToken').value;
+  if (token) body.twilioAuthToken = token;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('Twilio נשמר ✓'); document.getElementById('s-twilioToken').value = ''; } else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadTwilioNumbers() {
+  const el = document.getElementById('twilio-numbers'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/twilio/numbers'); const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">אין מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.phoneNumber}</span><button class="btn btn-g btn-sm" onclick="configTwilioNumber('${n.sid}')">הפנה לבוט</button></div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function configTwilioNumber(sid) {
+  try {
+    const r = await fetch(`${API}/api/twilio/configure/${sid}`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast('מספר הוגדר ✓'); else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function searchTwilioNumbers() {
+  const el = document.getElementById('twilio-search-results');
+  const country = document.getElementById('twilio-country').value.trim() || 'US';
+  const area = document.getElementById('twilio-area').value.trim();
+  el.innerHTML = '<em style="color:#64748b">מחפש...</em>';
+  try {
+    const r = await fetch(`${API}/api/twilio/search?country=${country}&areaCode=${area}`);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#ef5350">${d.error}</span>`; return; }
+    const nums = d.numbers || [];
+    if (!nums.length) { el.innerHTML = '<em style="color:#64748b">לא נמצאו מספרים</em>'; return; }
+    el.innerHTML = nums.map(n => `<div class="list-row"><span style="direction:ltr">${n.phoneNumber} <span style="color:#64748b">${n.region||''}</span></span><button class="btn btn-p btn-sm" onclick="buyTwilioNumber('${n.phoneNumber}')">קנה ~$1/חודש</button></div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function buyTwilioNumber(phoneNumber) {
+  if (!confirm(`לקנות ${phoneNumber}?`)) return;
+  try {
+    const r = await fetch(`${API}/api/twilio/buy`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phoneNumber }) });
+    const d = await r.json();
+    if (d.ok) { toast('נרכש ✓ ' + d.phoneNumber); loadTwilioNumbers(); } else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveWhatsappSettings() {
+  const body = { whatsappPhone: document.getElementById('s-whatsappPhone').value.trim(), whatsappCallSummary: document.getElementById('s-whatsappCallSummary').checked };
+  const key = document.getElementById('s-whatsappApiKey').value;
+  if (key) body.whatsappApiKey = key;
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { toast('WhatsApp נשמר ✓'); document.getElementById('s-whatsappApiKey').value = ''; } else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function testWhatsapp() {
+  try {
+    const r = await fetch(API + '/api/whatsapp/test', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast('הודעת בדיקה נשלחה ✓'); else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function saveCalendarSettings() {
+  const body = {
+    calendarUrl: document.getElementById('s-calendarUrl').value.trim(),
+    calendarName: document.getElementById('s-calendarName').value.trim(),
+    calendarReminders: document.getElementById('s-calendarReminders').checked,
+    calendarReminderMinutes: parseInt(document.getElementById('s-calendarReminderMinutes').value) || 15,
+    reminderPhone: document.getElementById('s-reminderPhone').value.trim(),
+    morningBriefingEnabled: document.getElementById('s-morningBriefingEnabled').checked,
+    morningBriefingTime: document.getElementById('s-morningBriefingTime').value || '08:00',
+  };
+  try {
+    const r = await fetch(API + '/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) toast('יומן נשמר ✓'); else toast('שגיאה', true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function checkGoogleOAuth() {
+  try {
+    const r = await fetch(API + '/api/oauth/google/status');
+    const d = await r.json();
+    const el = document.getElementById('oauth-status');
+    const btnConnect = document.getElementById('btn-google-connect');
+    const btnDisconnect = document.getElementById('btn-google-disconnect');
+    if (!d.configured) {
+      el.innerHTML = '⚠️ OAuth לא מוגדר (חסר GOOGLE_OAUTH_CLIENT_ID)';
+      btnConnect.style.display = 'none';
+    } else if (d.connected) {
+      el.innerHTML = '✅ <b>Google מחובר</b>';
+      el.style.color = '#4ade80';
+      btnConnect.style.display = 'none';
+      btnDisconnect.style.display = '';
+    } else {
+      el.innerHTML = 'לא מחובר';
+      btnConnect.style.display = '';
+      btnDisconnect.style.display = 'none';
+    }
+  } catch(e) { /* ignore */ }
+}
+function connectGoogle() {
+  window.open(API + '/oauth/google', '_blank', 'width=500,height=600');
+  // Poll for connection
+  const iv = setInterval(async () => {
+    try {
+      const r = await fetch(API + '/api/oauth/google/status');
+      const d = await r.json();
+      if (d.connected) { clearInterval(iv); checkGoogleOAuth(); toast('Google מחובר ✓'); }
+    } catch(e) {}
+  }, 2000);
+  setTimeout(() => clearInterval(iv), 120000);
+}
+async function disconnectGoogle() {
+  try {
+    await fetch(API + '/api/oauth/google/disconnect', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    checkGoogleOAuth();
+    toast('Google נותק');
+  } catch(e) { toast('שגיאה', true); }
+}
+
+async function testCalendar() {
+  try {
+    const r = await fetch(API + '/api/calendar/test', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast(`יומן מחובר ✓ — ${d.count} אירועים`); else toast('שגיאה: ' + d.error, true);
+  } catch(e) { toast('שגיאה: ' + e.message, true); }
+}
+
+async function loadCalendarEvents() {
+  const el = document.getElementById('calendar-events'); el.innerHTML = '<em style="color:#64748b">טוען...</em>';
+  try {
+    const r = await fetch(API + '/api/calendar/events?days=7');
+    const d = await r.json();
+    const evs = d.events || [];
+    if (!evs.length) { el.innerHTML = '<em style="color:#64748b">אין אירועים ב-7 ימים הקרובים</em>'; return; }
+    el.innerHTML = evs.map(e => {
+      const dt = new Date(e.start).toLocaleString('he-IL', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<div style="padding:5px 0;border-bottom:1px solid #1e2545"><b>${e.title}</b><br><span style="color:#64748b;font-size:12px">${dt}</span></div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+// ── Browser Web Call ──────────────────────────────────────────────────────
+let wcWs = null, wcCtx = null, wcStream = null, wcProcessor = null;
+let wcActive = false, wcScheduled = 0, wcMuted = false;
+
+function toggleWebCall() {
+  if (wcActive) { stopWebCall(); return; }
+  try { startWebCall(); } catch(e) { toast('שגיאה: ' + e.message, true); updateWcStatus('שגיאה', '#ef5350'); }
+}
+
+async function startWebCall() {
+  const tokenData = await (await fetch('/api/live-token')).json();
+  const { token, wsBase: serverWsBase } = tokenData;
+  wcStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  wcCtx = new AudioContext();
+  wcScheduled = 0;
+  document.getElementById('webcall-transcript').innerHTML = '';
+  const wsBase = serverWsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+  wcWs = new WebSocket(`${wsBase}/api/browser-call?token=${token}`);
+  wcWs.binaryType = 'arraybuffer';
+  wcWs.onopen = () => {
+    wcWs.send(JSON.stringify({ voice: 'Kore', language: 'he' }));
+    const source = wcCtx.createMediaStreamSource(wcStream);
+    wcProcessor = wcCtx.createScriptProcessor(4096, 1, 1);
+    const ratio = wcCtx.sampleRate / 16000;
+    wcProcessor.onaudioprocess = (e) => {
+      if (!wcWs || wcWs.readyState !== 1) return;
+      const inp = e.inputBuffer.getChannelData(0);
+      const outLen = Math.floor(inp.length / ratio);
+      const out = new Int16Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        const s = inp[Math.round(i * ratio)];
+        out[i] = Math.max(-32768, Math.min(32767, s * 32767));
+      }
+      const rms = Math.sqrt(out.reduce((s,v)=>s+v*v,0)/out.length);
+      document.getElementById('webcall-rms').textContent = '█'.repeat(Math.min(8, Math.round(rms / 500))) || '·';
+      wcWs.send(out.buffer);
+    };
+    source.connect(wcProcessor);
+    wcProcessor.connect(wcCtx.destination);
+    wcActive = true;
+    wcMuted = false;
+    document.getElementById('webcall-btn').className = 'call-btn end';
+    document.getElementById('wcb-icon').textContent = '⏹';
+    document.getElementById('wcb-label').textContent = 'סיים שיחה';
+    document.getElementById('mute-btn').style.display = '';
+    document.getElementById('hangup-btn').style.display = 'none';
+  };
+  wcWs.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      const i16 = new Int16Array(e.data);
+      const f32 = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32767;
+      const buf = wcCtx.createBuffer(1, f32.length, 24000);
+      buf.copyToChannel(f32, 0);
+      const src = wcCtx.createBufferSource();
+      src.buffer = buf; src.connect(wcCtx.destination);
+      const now = wcCtx.currentTime;
+      const at = Math.max(now, wcScheduled);
+      src.start(at); wcScheduled = at + buf.duration;
+    } else {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'status') updateWcStatus({ ready: 'מוכן', listening: '🎙 מאזין', thinking: '💭 חושב...' }[msg.state] || msg.state, msg.state === 'listening' ? '#22c55e' : '#f59e0b');
+        if (msg.type === 'transcript') {
+          const d = document.getElementById('webcall-transcript');
+          d.innerHTML += `<div><b>${msg.role === 'user' ? '👤' : '🤖'}</b> ${msg.text}</div>`;
+          d.scrollTop = d.scrollHeight;
+        }
+      } catch(_) {}
+    }
+  };
+  wcWs.onclose = () => stopWebCall();
+  wcWs.onerror = () => { toast('WebCall נותק', true); stopWebCall(); };
+}
+
+function stopWebCall() {
+  wcActive = false;
+  if (wcProcessor) { try { wcProcessor.disconnect(); } catch(_) {} wcProcessor = null; }
+  if (wcStream) { wcStream.getTracks().forEach(t => t.stop()); wcStream = null; }
+  if (wcWs && wcWs.readyState < 2) wcWs.close();
+  wcWs = null;
+  if (wcCtx) { wcCtx.close().catch(()=>{}); wcCtx = null; }
+  wcMuted = false;
+  document.getElementById('webcall-btn').className = 'call-btn start';
+  document.getElementById('wcb-icon').textContent = '📞';
+  document.getElementById('wcb-label').textContent = 'התחל שיחה';
+  document.getElementById('webcall-rms').textContent = '';
+  document.getElementById('mute-btn').style.display = 'none';
+  document.getElementById('hangup-btn').style.display = 'none';
+  updateWcStatus('לא מחובר', '#64748b');
+}
+
+function toggleMute() {
+  if (!wcActive && !activeCallId) return;
+  wcMuted = !wcMuted;
+  // Mute local mic track (browser call)
+  if (wcStream) {
+    wcStream.getAudioTracks().forEach(t => { t.enabled = !wcMuted; });
+  }
+  const btn = document.getElementById('mute-btn');
+  const lbl = document.getElementById('mute-label');
+  if (wcMuted) {
+    btn.classList.add('active');
+    lbl.textContent = 'בטל השתק';
+  } else {
+    btn.classList.remove('active');
+    lbl.textContent = 'השתק';
+  }
+}
+
+function updateWcStatus(text, color) {
+  const el = document.getElementById('webcall-status');
+  el.textContent = text; el.style.color = color || '#64748b';
+}
+
+// ── Recordings / Voicemails ───────────────────────────────────────────────
+let _allRecordings = [];
+async function loadRecordings() {
+  const el = document.getElementById('recordings-list');
+  try {
+    const r = await fetch(`${API}/api/recordings`);
+    const d = await r.json();
+    _allRecordings = d.recordings || [];
+    renderRecordings(_allRecordings, d.totalCostUsd || 0);
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+let _searchTimer = null;
+function filterRecordings(query) {
+  if (!query) { renderRecordings(_allRecordings, null); return; }
+  const q = query.toLowerCase();
+  // Local filter first (instant)
+  const filtered = _allRecordings.filter(rec => {
+    const caller = (rec.callerName || rec.callId || '').toLowerCase();
+    const dt = new Date(rec.savedAt).toLocaleString('he-IL');
+    const summary = (rec.aiSummary || '').toLowerCase();
+    const intent = (rec.aiIntent || '').toLowerCase();
+    return caller.includes(q) || dt.includes(q) || summary.includes(q) || intent.includes(q);
+  });
+  renderRecordings(filtered, null);
+  // Deep search (transcript content) after 500ms debounce
+  clearTimeout(_searchTimer);
+  if (q.length >= 2) {
+    _searchTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${API}/api/recordings/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        if (d.results && d.results.length > filtered.length) {
+          renderRecordings(d.results, null);
+        }
+      } catch(e) {}
+    }, 500);
+  }
+}
+
+function renderRecordings(recs, totalCost) {
+  const el = document.getElementById('recordings-list');
+  if (!recs.length) { el.innerHTML = '<em style="color:#64748b">אין תמלולים</em>'; return; }
+  const costStr = totalCost !== null ? `<div style="font-size:12px;color:#4b5563;margin-bottom:10px;padding:8px 0;border-bottom:1px solid #2d2d30;font-family:'SF Mono','Fira Code',monospace">עלות מוערכת החודש: <b style="color:#fbbf24">$${totalCost.toFixed(4)}</b> · ${recs.length} שיחות</div>` : '';
+  el.innerHTML = costStr + recs.map(rec => {
+    const dt = new Date(rec.savedAt).toLocaleString('he-IL');
+    const caller = rec.callerName || rec.callId?.slice(0,12) || '—';
+    const dur = rec.durationS ? `${Math.floor(rec.durationS/60)}:${String(rec.durationS%60).padStart(2,'0')}` : '0:00';
+    const cost = rec.estimatedCostUsd ? `<span style="color:#fbbf24;font-size:11px;font-family:'SF Mono','Fira Code',monospace"> · $${rec.estimatedCostUsd.toFixed(4)}</span>` : '';
+    const intent = rec.aiIntent ? `<span style="display:inline-block;background:#1e1b4b;color:#818cf8;font-size:10px;padding:1px 6px;border-radius:3px;margin-right:4px">${rec.aiIntent}</span>` : '';
+    const sEmojis = { positive: '😊', neutral: '😐', negative: '😞', frustrated: '😤' };
+    const sentiment = rec.aiSentiment ? `<span style="font-size:10px;margin-right:3px" title="${rec.aiSentiment}">${sEmojis[rec.aiSentiment] || ''}</span>` : '';
+    const tags = (rec.tags || []).map(t => {
+      const tc = t === 'VIP' ? '#fbbf24' : t === 'urgent' ? '#f87171' : t === 'follow-up' ? '#34d399' : '#818cf8';
+      return `<span style="display:inline-block;background:${tc}20;color:${tc};font-size:9px;padding:1px 5px;border-radius:3px;margin-right:2px">${t}</span>`;
+    }).join('');
+    const notesCount = rec.notes ? `<span style="color:#64748b;font-size:10px">📝${rec.notes}</span>` : '';
+    const summary = rec.aiSummary ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${rec.aiSummary.slice(0,100)}</div>` : '';
+    const stars = [1,2,3,4,5].map(s => `<span style="cursor:pointer;color:${s <= (rec.rating||0) ? '#fbbf24' : '#374151'};font-size:12px" onclick="event.stopPropagation();rateCall('${rec.file}',${s})">★</span>`).join('');
+    return `<div class="list-row"><div style="flex:1"><b>${caller}</b> ${sentiment}${intent}${tags} ${notesCount}<br><span style="font-size:11px;color:#64748b">${dt} · ⏱${dur} ${cost}</span> ${stars}${summary}</div><button class="btn btn-g btn-sm" onclick="viewRecording('${rec.file}')">צפה</button><a class="btn btn-g btn-sm" href="${API}/api/recordings/${encodeURIComponent(rec.file)}/audio" download style="text-decoration:none">⬇</a><button class="btn btn-d btn-sm" onclick="deleteRecording('${rec.file}')">מחק</button></div>`;
+  }).join('');
+}
+
+async function viewRecording(file) {
+  const r = await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`);
+  const d = await r.json();
+  const modal = document.getElementById('transcript-modal');
+  document.getElementById('tm-title').textContent = d.callerName || d.callId || 'תמלול';
+  const dur = d.durationS ? `${Math.floor(d.durationS/60)}:${String(d.durationS%60).padStart(2,'0')}` : '';
+  const dt = d.savedAt ? new Date(d.savedAt).toLocaleString('he-IL') : '';
+  document.getElementById('tm-meta').textContent = `${dt} · ${dur}`;
+
+  // AI summary section
+  let aiHtml = '';
+  if (d.aiSummary || d.aiIntent) {
+    aiHtml = '<div style="background:#1e1b4b;border:1px solid #312e81;border-radius:8px;padding:10px 12px;margin-bottom:12px">';
+    if (d.aiIntent) aiHtml += `<span style="display:inline-block;background:#312e81;color:#a5b4fc;font-size:11px;padding:2px 8px;border-radius:4px;margin-bottom:6px">🎯 ${d.aiIntent}</span>`;
+    if (d.aiSummary) aiHtml += `<div style="color:#c7d2fe;font-size:13px;margin-top:4px">🧠 ${d.aiSummary}</div>`;
+    if (d.aiActionItems && d.aiActionItems.length) aiHtml += `<div style="color:#a5b4fc;font-size:12px;margin-top:6px">📋 ${d.aiActionItems.map(a => '• ' + a).join('<br>')}</div>`;
+    aiHtml += '</div>';
+  }
+
+  const lines = (d.transcript || []).map(l => {
+    const icon = l.role === 'user' ? '👤' : '🤖';
+    const color = l.role === 'user' ? '#94a3b8' : '#818cf8';
+    return `<div style="padding:4px 0;border-bottom:1px solid #1f1f22"><span style="color:${color}">${icon}</span> ${(l.text || '').replace(/</g,'&lt;')}</div>`;
+  }).join('');
+  document.getElementById('tm-body').innerHTML = aiHtml + (lines || '<em style="color:#64748b">אין תמלול</em>');
+  // Audio player
+  const audioEl = document.getElementById('tm-audio');
+  const playerEl = document.getElementById('tm-player');
+  const audioUrl = `${API}/api/recordings/${encodeURIComponent(file)}/audio`;
+  playerEl.src = audioUrl;
+  playerEl.onerror = () => { audioEl.style.display = 'none'; };
+  playerEl.onloadeddata = () => { audioEl.style.display = 'block'; };
+  audioEl.style.display = 'none'; // hide until loaded
+  // Tags + Notes
+  window._currentRecFile = file;
+  window._currentRecTags = d.tags || [];
+  renderTags(d.tags || []);
+  renderNotes(d.notes || []);
+  modal.style.display = 'flex';
+}
+
+const TAG_PRESETS = ['VIP', 'urgent', 'follow-up', 'resolved', 'spam'];
+const TAG_COLORS = { VIP: '#fbbf24', urgent: '#f87171', 'follow-up': '#34d399', resolved: '#818cf8', spam: '#ef4444' };
+
+function renderTags(tags) {
+  const el = document.getElementById('tm-tags');
+  if (!el) return;
+  const existing = (tags || []).map(t => {
+    const c = TAG_COLORS[t] || '#818cf8';
+    return `<span style="display:inline-block;background:${c}20;color:${c};padding:2px 8px;border-radius:4px;font-size:11px;margin:2px;cursor:pointer" onclick="removeTag('${t}')">${t} ✕</span>`;
+  }).join('');
+  const available = TAG_PRESETS.filter(t => !(tags || []).includes(t)).map(t => {
+    const c = TAG_COLORS[t] || '#818cf8';
+    return `<span style="display:inline-block;background:#1a1a1c;border:1px solid ${c}40;color:${c}80;padding:2px 8px;border-radius:4px;font-size:11px;margin:2px;cursor:pointer" onclick="addTag('${t}')">+ ${t}</span>`;
+  }).join('');
+  el.innerHTML = existing + available;
+}
+
+async function addTag(tag) {
+  if (!window._currentRecFile) return;
+  try {
+    const r = await fetch(`${API}/api/recordings/${encodeURIComponent(window._currentRecFile)}/tags`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag }) });
+    const d = await r.json();
+    window._currentRecTags = d.tags || [];
+    renderTags(d.tags || []);
+  } catch(e) {}
+}
+
+async function removeTag(tag) {
+  if (!window._currentRecFile) return;
+  try {
+    const r = await fetch(`${API}/api/recordings/${encodeURIComponent(window._currentRecFile)}/tags/${encodeURIComponent(tag)}`, { method: 'DELETE' });
+    const d = await r.json();
+    window._currentRecTags = d.tags || [];
+    renderTags(d.tags || []);
+  } catch(e) {}
+}
+
+function renderNotes(notes) {
+  const el = document.getElementById('tm-notes');
+  if (!notes || !notes.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-weight:600;color:#818cf8;margin-bottom:4px">📝 הערות</div>' + notes.map(n => {
+    const t = new Date(n.ts).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+    return `<div style="padding:3px 0;border-bottom:1px solid #ffffff08"><span style="color:#e2e8f0">${n.text}</span> <span style="color:#64748b;font-size:10px">${n.author} · ${t}</span> <span style="cursor:pointer;color:#64748b" onclick="deleteNote('${n.id}')">✕</span></div>`;
+  }).join('');
+}
+
+async function addNote() {
+  const text = document.getElementById('tm-note-input').value.trim();
+  if (!text || !window._currentRecFile) return;
+  try {
+    const r = await fetch(`${API}/api/recordings/${encodeURIComponent(window._currentRecFile)}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const d = await r.json();
+    document.getElementById('tm-note-input').value = '';
+    renderNotes(d.notes || []);
+  } catch(e) { toast('שגיאה', true); }
+}
+
+async function deleteNote(noteId) {
+  if (!window._currentRecFile) return;
+  try {
+    const r = await fetch(`${API}/api/recordings/${encodeURIComponent(window._currentRecFile)}/notes/${noteId}`, { method: 'DELETE' });
+    const d = await r.json();
+    renderNotes(d.notes || []);
+  } catch(e) {}
+}
+
+async function deleteRecording(file) {
+  if (!confirm('למחוק?')) return;
+  await fetch(`${API}/api/recordings/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  loadRecordings();
+}
+
+async function loadVoicemails() {
+  const el = document.getElementById('voicemails-list');
+  try {
+    const r = await fetch(`${API}/api/voicemails`);
+    const d = await r.json();
+    const vms = d.voicemails || [];
+    if (!vms.length) { el.innerHTML = '<em style="color:#64748b">אין הודעות קוליות</em>'; return; }
+    el.innerHTML = vms.map(vm => {
+      const dt = new Date(vm.savedAt).toLocaleString('he-IL');
+      const audioUrl = `${API}/voicemail-audio/${encodeURIComponent(vm.wavFile)}`;
+      const transcript = vm.transcript ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;max-height:40px;overflow:hidden">💬 ${vm.transcript.slice(0,150)}</div>` : '';
+      return `<div class="list-row"><div style="flex:1"><b>${vm.callerName||'—'}</b><br><span style="font-size:11px;color:#64748b">${dt} · ${vm.durationS}ש</span>${transcript}</div><audio controls src="${audioUrl}" style="height:26px;direction:ltr"></audio><button class="btn btn-d btn-sm" onclick="deleteVoicemail('${vm.file}')">מחק</button></div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<span style="color:#ef5350">${e.message}</span>`; }
+}
+
+async function deleteVoicemail(file) {
+  if (!confirm('למחוק?')) return;
+  await fetch(`${API}/api/voicemails/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  loadVoicemails();
+}
+
+// ── IVR Builder ───────────────────────────────────────────────────────────
+const IVR_ACTIONS = { ai: 'שיחה עם הבוט', voicemail: 'קח הודעה', transfer: 'העבר לשלוחה', message: 'נגן הודעה', hangup: 'נתק' };
+let ivrNodes = [];
+
+async function loadIvr() {
+  try {
+    const r = await fetch(API + '/api/ivr');
+    const d = await r.json();
+    document.getElementById('ivr-enabled').checked = !!d.enabled;
+    document.getElementById('ivr-greeting').value = d.greeting || '';
+    document.getElementById('ivr-timeout').value = d.timeout || 5;
+    document.getElementById('ivr-timeout-action').value = d.timeoutAction || 'ai';
+    ivrNodes = d.nodes || [];
+    renderIvrNodes();
+  } catch(e) {}
+}
+
+function renderIvrNodes() {
+  const el = document.getElementById('ivr-nodes-list');
+  if (!ivrNodes.length) { el.innerHTML = '<em style="color:#64748b;font-size:13px">אין מקשים. לחץ "+ הוסף מקש"</em>'; return; }
+  el.innerHTML = ivrNodes.map((n, i) => `
+    <div class="ivr-node">
+      <input type="text" value="${n.digit}" maxlength="1" placeholder="#" style="width:38px;text-align:center" oninput="ivrNodes[${i}].digit=this.value">
+      <input type="text" value="${n.label||''}" placeholder="תיאור" style="flex:1" oninput="ivrNodes[${i}].label=this.value">
+      <select style="flex:1" onchange="ivrNodes[${i}].action=this.value;renderIvrNodes()">
+        ${Object.entries(IVR_ACTIONS).map(([v,l]) => `<option value="${v}"${n.action===v?' selected':''}>${l}</option>`).join('')}
+      </select>
+      ${(n.action === 'transfer' || n.action === 'message') ? `<input type="text" value="${n.value||''}" placeholder="${n.action==='transfer'?'שלוחה':'הודעה'}" style="flex:1" oninput="ivrNodes[${i}].value=this.value">` : ''}
+      <button class="btn btn-d btn-sm" onclick="removeIvrNode(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addIvrNode() {
+  ivrNodes.push({ digit: String(ivrNodes.length + 1), label: '', action: 'ai', value: '' });
+  renderIvrNodes();
+}
+
+function removeIvrNode(i) { ivrNodes.splice(i, 1); renderIvrNodes(); }
+
+async function saveIvr() {
+  const body = { enabled: document.getElementById('ivr-enabled').checked, greeting: document.getElementById('ivr-greeting').value, timeout: parseInt(document.getElementById('ivr-timeout').value)||5, timeoutAction: document.getElementById('ivr-timeout-action').value, nodes: ivrNodes };
+  try {
+    const r = await fetch(API + '/api/ivr', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    const st = document.getElementById('ivr-status');
+    if (d.success) { st.className='status-line ok'; st.textContent = 'IVR נשמר ✓' + (body.enabled?' — פעיל':' — כבוי'); }
+    else { st.className='status-line err'; st.textContent = 'שגיאה'; }
+  } catch(e) { document.getElementById('ivr-status').textContent = e.message; }
+}
+
+// ── Stats loader ─────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const r = await fetch(API + '/api/stats');
+    const d = await r.json();
+    document.getElementById('sw-today-calls').textContent = d.today?.calls || 0;
+    document.getElementById('sw-week-calls').textContent = d.week?.calls || 0;
+    document.getElementById('sw-today-cost').textContent = '$' + (d.today?.costUsd || 0).toFixed(2);
+    const h = Math.floor((d.uptime || 0) / 3600);
+    document.getElementById('sw-uptime').textContent = h + 'h';
+
+    // Daily chart
+    const chartEl = document.getElementById('chart-daily');
+    if (chartEl && d.daily) {
+      const days = Object.entries(d.daily);
+      const maxCalls = Math.max(1, ...days.map(([,v]) => v.calls));
+      chartEl.innerHTML = days.map(([date, v]) => {
+        const pct = Math.max(4, (v.calls / maxCalls) * 100);
+        const day = new Date(date).toLocaleDateString('he-IL', { weekday: 'short' });
+        return `<div style="flex:1;text-align:center"><div style="background:#3b82f6;border-radius:3px;height:${pct}%;min-height:2px;transition:height 0.3s"></div><div style="font-size:9px;color:#64748b;margin-top:4px">${day}</div><div style="font-size:10px;color:#e2e8f0">${v.calls}</div></div>`;
+      }).join('');
+    }
+
+    // Sentiment chart
+    const sentEl = document.getElementById('chart-sentiment');
+    if (sentEl && d.sentiments) {
+      const sEmojis = { positive: '😊', neutral: '😐', negative: '😞', frustrated: '😤' };
+      const sColors = { positive: '#34d399', neutral: '#94a3b8', negative: '#f87171', frustrated: '#fbbf24' };
+      sentEl.innerHTML = Object.entries(d.sentiments).map(([k, v]) => `<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><span>${sEmojis[k] || '❓'}</span><span style="color:${sColors[k] || '#888'}">${k}</span><span style="color:#64748b;font-size:11px">${v}</span></div>`).join('') || '<span style="color:#64748b">אין נתונים</span>';
+    }
+
+    // Top callers
+    const callersEl = document.getElementById('chart-callers');
+    if (callersEl && d.topCallers) {
+      callersEl.innerHTML = d.topCallers.slice(0, 5).map(c => `<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:#e2e8f0">${c.name}</span><span style="color:#818cf8">${c.count}</span></div>`).join('') || '<span style="color:#64748b">אין נתונים</span>';
+    }
+  } catch(e) {}
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadSettings();
+loadStats();
+loadDailyCost(); // also load budget independently in case settings fetch fails
+loadIntegrations();
+loadContacts();
+loadScheduler();
+loadRecordings();
+loadVoicemails();
+loadIvr();
+// Refresh stats every 60s
+setInterval(loadStats, 60000);
+
+// PWA Service Worker
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+refresh();
+setInterval(refresh, 5000);
+setInterval(pollLogs, 2000);
+setInterval(loadScheduler, 30000);
+
+// ── Teamy status ─────────────────────────────────────────────────────────
+async function loadTeamyStatus() {
+  const panel = document.getElementById('teamy-live-status');
+  const content = document.getElementById('teamy-status-content');
+  if (!panel || !content) return;
+  try {
+    const r = await fetch(API + '/api/teamy/status');
+    if (!r.ok) { panel.style.display = 'none'; return; }
+    const d = await r.json();
+    panel.style.display = '';
+    const state = d.state || 'unknown';
+    const stateColor = state === 'active' ? '#22c55e' : state === 'idle' ? '#64748b' : '#f59e0b';
+    const bots = d.bots || [];
+    content.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${stateColor};display:inline-block"></span>
+        <span>${state}</span>
+        ${d.transcriptLines ? `<span style="font-size:11px;color:#64748b">📝 ${d.transcriptLines} שורות</span>` : ''}
+        ${d.recordingBytes ? `<span style="font-size:11px;color:#64748b">🎙️ ${(d.recordingBytes/1024/1024).toFixed(1)}MB</span>` : ''}
+      </div>
+      ${bots.length ? `<div style="font-size:12px;color:#94a3b8">${bots.length} bot(s) active</div>` : ''}
+    `;
+  } catch { panel.style.display = 'none'; }
+}
+
+// ── Users management ─────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const d = await (await fetch(API + '/api/users')).json();
+    const el = document.getElementById('users-list');
+    if (!el) return;
+    const roleLabel = { admin: '⚙️ מנהל', operator: '📞 מפעיל', viewer: '👁 צופה' };
+    const roleColor = { admin: '#818cf8', operator: '#22c55e', viewer: '#64748b' };
+    el.innerHTML = (d.users || []).map(u =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #1e2545">
+        <span style="flex:1">${u.username}</span>
+        <span style="font-size:11px;color:${roleColor[u.role]||'#64748b'};background:#1e2545;padding:2px 8px;border-radius:10px">${roleLabel[u.role]||u.role}</span>
+        ${u.role !== 'admin' ? `<button class="btn btn-sm" style="background:#2d1f1f;color:#ef4444;padding:2px 8px" onclick="deleteUser('${u.username}')">✕</button>` : ''}
+      </div>`
+    ).join('');
+  } catch {}
+}
+
+async function addUser() {
+  const username = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  const st = document.getElementById('users-status');
+  if (!username || !password) { st.textContent = 'נדרשים שם משתמש וסיסמה'; st.style.color = '#ef4444'; return; }
+  try {
+    const role = document.getElementById('new-user-role').value || 'viewer';
+    const r = await fetch(API + '/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, role }) });
+    const d = await r.json();
+    if (!r.ok) { st.textContent = d.error; st.style.color = '#ef4444'; return; }
+    st.textContent = `משתמש ${username} נוסף ✓`; st.style.color = '#22c55e';
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-pass').value = '';
+    loadUsers();
+  } catch(e) { st.textContent = e.message; st.style.color = '#ef4444'; }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`למחוק את המשתמש ${username}?`)) return;
+  try {
+    await fetch(API + '/api/users/' + encodeURIComponent(username), { method: 'DELETE' });
+    loadUsers();
+  } catch {}
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────
+function genPass(inputId, confirmId) {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*';
+  const len = 16;
+  let pass = '';
+  const arr = new Uint32Array(len);
+  crypto.getRandomValues(arr);
+  arr.forEach(v => { pass += chars[v % chars.length]; });
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = pass;
+  el.type = 'text';
+  setTimeout(() => { el.type = 'password'; }, 3000);
+  if (confirmId) { const c = document.getElementById(confirmId); if (c) c.value = pass; }
+  navigator.clipboard?.writeText(pass).catch(() => {});
+  toast('סיסמה נוצרה ✓ (הועתקה ללוח)');
+}
+
+function doLogout() {
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.location.replace(LOGIN_PATH);
+}
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+const T = {
+  he: {
+    checking: 'בודק...', calls: 'שיחות', startCall: 'התחל שיחה', hangup: 'נתק',
+    notConnected: 'לא מחובר', phonePh: 'מספר יעד (ריק = בוט AI)',
+    secCalls: 'שיחות', secSettings: 'הגדרות', secIntegrations: 'אינטגרציות', secSystem: 'מערכת',
+    appStatus: 'סטטוס', appActiveCalls: 'שיחות פעילות', appTranscripts: 'תמלולים',
+    appVoicemail: 'הודעות קוליות', appDialer: 'חייגן', appContacts: 'אנשי קשר',
+    appScheduler: 'מתזמן', appSecurity: 'אבטחה', appLogs: 'לוגים', appChat: 'צ\'אט בדיקה',
+  },
+  en: {
+    checking: 'Checking...', calls: 'Calls', startCall: 'Start Call', hangup: 'Hang Up',
+    notConnected: 'Not connected', phonePh: 'Target number (empty = AI bot)',
+    secCalls: 'Calls', secSettings: 'Settings', secIntegrations: 'Integrations', secSystem: 'System',
+    appStatus: 'Status', appActiveCalls: 'Active Calls', appTranscripts: 'Transcripts',
+    appVoicemail: 'Voicemail', appDialer: 'Dialer', appContacts: 'Contacts',
+    appScheduler: 'Scheduler', appSecurity: 'Security', appLogs: 'Logs', appChat: 'Test Chat',
+  }
+};
+
+let currentLang = localStorage.getItem('lang') || 'he';
+
+function applyLang(lang) {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = T[lang][el.dataset.i18n];
+    if (v !== undefined) el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const v = T[lang][el.dataset.i18nPh];
+    if (v !== undefined) el.placeholder = v;
+  });
+  const btn = document.getElementById('lang-btn');
+  if (btn) btn.textContent = lang === 'he' ? 'EN' : 'עב';
+  currentLang = lang;
+}
+
+function toggleLang() {
+  const next = currentLang === 'he' ? 'en' : 'he';
+  localStorage.setItem('lang', next);
+  applyLang(next);
+}
+
+applyLang(currentLang);
+
+// ── Theme toggle ──
+function applyTheme(t) {
+  document.body.classList.toggle('light', t === 'light');
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'light' ? '☾' : '☀';
+}
+function toggleTheme() {
+  const next = document.body.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem('theme') || 'dark');
+
+// ── Custom AI Tools ────────────────────────────────────────────────────
+async function loadCustomTools() {
+  try {
+    const r = await fetch(API + '/api/custom-tools');
+    const d = await r.json();
+    renderCustomTools(d.tools || []);
+  } catch(e) { console.error('loadCustomTools', e); }
+}
+
+function renderCustomTools(tools) {
+  const el = document.getElementById('ct-list');
+  if (!tools.length) { el.innerHTML = '<div style="color:#888;text-align:center;padding:10px">אין כלים מותאמים</div>'; return; }
+  el.innerHTML = tools.map(t => `<div style="padding:8px;background:#0b0d14;border-radius:8px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-family:monospace;color:#818cf8;font-weight:600">${t.name}</span>
+        <span style="color:${t.enabled ? '#34d399' : '#64748b'};font-size:11px;margin-right:6px">${t.enabled ? 'פעיל' : 'כבוי'}</span>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-sm" style="background:${t.enabled ? '#64748b' : '#34d399'};color:#fff;padding:2px 8px;font-size:11px" onclick="toggleCustomTool('${t.id}',${!t.enabled})">${t.enabled ? 'כבה' : 'הפעל'}</button>
+        <button class="btn btn-sm" style="background:#dc2626;color:#fff;padding:2px 8px;font-size:11px" onclick="deleteCustomTool('${t.id}')">מחק</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-top:4px">${t.description}</div>
+    ${t.webhookUrl ? '<div style="font-size:10px;color:#64748b;margin-top:2px;direction:ltr">🔗 ' + t.webhookUrl + '</div>' : ''}
+  </div>`).join('');
+}
+
+async function addCustomTool() {
+  const name = document.getElementById('ct-name').value.trim();
+  const description = document.getElementById('ct-desc').value.trim();
+  const webhookUrl = document.getElementById('ct-webhook').value.trim();
+  const defaultResponse = document.getElementById('ct-default').value.trim();
+  if (!name) { toast('נא להזין שם כלי'); return; }
+  await fetch(API + '/api/custom-tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description, webhookUrl, defaultResponse }) });
+  document.getElementById('ct-name').value = '';
+  document.getElementById('ct-desc').value = '';
+  document.getElementById('ct-webhook').value = '';
+  document.getElementById('ct-default').value = '';
+  loadCustomTools();
+  toast('כלי נוסף');
+}
+
+async function toggleCustomTool(id, enabled) {
+  await fetch(API + '/api/custom-tools/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
+  loadCustomTools();
+}
+
+async function deleteCustomTool(id) {
+  await fetch(API + '/api/custom-tools/' + id, { method: 'DELETE' });
+  loadCustomTools();
+  toast('כלי נמחק');
+}
+
+// ── Keyboard Shortcuts ─────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') { closePanel(); return; }
+  const shortcuts = { '1': 'panel-status', '2': 'panel-calls', '3': 'panel-recordings', '4': 'panel-contacts', '5': 'panel-bot', '6': 'panel-scheduler', '7': 'panel-logs', 'd': 'panel-dialer', 's': 'panel-sip', 't': 'panel-telegram', 'c': 'panel-calendar' };
+  if (shortcuts[e.key]) { e.preventDefault(); openPanel(shortcuts[e.key]); }
+});
+
+// ── Audit Log ──────────────────────────────────────────────────────────
+async function loadAudit() {
+  try {
+    const r = await fetch(API + '/api/audit?limit=100');
+    const d = await r.json();
+    const el = document.getElementById('audit-list');
+    if (!d.entries || d.entries.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין פעולות עדיין</div>'; return; }
+    el.innerHTML = d.entries.map(e => {
+      const t = new Date(e.ts);
+      const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+      const actionColor = e.action.includes('fail') || e.action.includes('filter') ? '#f87171' : e.action.includes('created') || e.action.includes('added') ? '#34d399' : '#818cf8';
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="color:${actionColor};font-weight:600">${e.action}</span><br><span style="color:#888;font-size:12px">${e.details || '-'}</span></div>
+        <div style="text-align:left;min-width:80px"><span style="color:#888;font-size:11px">${time}</span><br><span style="color:#666;font-size:11px">${e.user || ''}</span></div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadAudit', e); }
+}
+
+// ── Call Filter (Blacklist/Whitelist) ──────────────────────────────────
+async function loadCallFilter() {
+  try {
+    const r = await fetch(API + '/api/call-filter');
+    const d = await r.json();
+    document.getElementById('cf-mode').value = d.mode || 'none';
+    renderFilterList(d.list || []);
+  } catch(e) { console.error('loadCallFilter', e); }
+}
+
+function renderFilterList(list) {
+  const el = document.getElementById('cf-list');
+  if (!list || list.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:10px">רשימה ריקה</div>'; return; }
+  el.innerHTML = list.map(n => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #ffffff10">
+    <span style="font-family:monospace;font-size:14px">${n}</span>
+    <button class="btn btn-sm" style="background:#dc2626;color:#fff;padding:2px 10px" onclick="removeFilterNumber('${n}')">✕</button>
+  </div>`).join('');
+}
+
+async function updateCallFilter() {
+  const mode = document.getElementById('cf-mode').value;
+  await fetch(API + '/api/call-filter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) });
+  toast('מצב סינון עודכן');
+}
+
+async function addFilterNumber() {
+  const num = document.getElementById('cf-number').value.trim();
+  if (!num) return;
+  const r = await fetch(API + '/api/call-filter/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: num }) });
+  const d = await r.json();
+  document.getElementById('cf-number').value = '';
+  renderFilterList(d.list || []);
+  toast('מספר נוסף');
+}
+
+async function removeFilterNumber(num) {
+  const r = await fetch(API + '/api/call-filter/' + encodeURIComponent(num), { method: 'DELETE' });
+  const d = await r.json();
+  renderFilterList(d.list || []);
+  toast('מספר הוסר');
+}
+
+// ── Scheduled Callbacks ──────────────────────────────────────────────
+async function loadCallbacks() {
+  try {
+    const r = await fetch(API + '/api/callbacks');
+    const d = await r.json();
+    renderCallbacks(d.callbacks || []);
+  } catch(e) { console.error('loadCallbacks', e); }
+}
+
+function renderCallbacks(cbs) {
+  const el = document.getElementById('cb-list');
+  if (!cbs || cbs.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:10px">אין שיחות חזרה מתוזמנות</div>'; return; }
+  el.innerHTML = cbs.map(cb => {
+    const t = new Date(cb.scheduledAt);
+    const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+    const statusColor = cb.status === 'completed' ? '#34d399' : cb.status === 'failed' ? '#f87171' : cb.status === 'calling' ? '#fbbf24' : '#818cf8';
+    return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-family:monospace">${cb.phone}</span>
+        <span style="background:${statusColor}20;color:${statusColor};padding:1px 6px;border-radius:4px;font-size:11px;margin-right:6px">${cb.status}</span>
+        ${cb.reason ? '<br><span style="color:#888;font-size:12px">' + cb.reason + '</span>' : ''}
+      </div>
+      <div style="text-align:left;min-width:70px">
+        <span style="color:#888;font-size:11px">${time}</span>
+        ${cb.status === 'pending' ? '<br><button class="btn btn-sm" style="background:#dc2626;color:#fff;padding:1px 8px;font-size:11px" onclick="deleteCallback(\'' + cb.id + '\')">בטל</button>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addCallback() {
+  const phone = document.getElementById('cb-phone').value.trim();
+  const scheduledAt = document.getElementById('cb-time').value;
+  const reason = document.getElementById('cb-reason').value.trim();
+  if (!phone || !scheduledAt) { toast('נא למלא טלפון ושעה'); return; }
+  await fetch(API + '/api/callbacks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, scheduledAt: new Date(scheduledAt).toISOString(), reason }) });
+  document.getElementById('cb-phone').value = '';
+  document.getElementById('cb-time').value = '';
+  document.getElementById('cb-reason').value = '';
+  loadCallbacks();
+  toast('שיחה חזרה תוזמנה');
+}
+
+async function deleteCallback(id) {
+  await fetch(API + '/api/callbacks/' + id, { method: 'DELETE' });
+  loadCallbacks();
+  toast('בוטל');
+}
+
+// ── Call Queue ─────────────────────────────────────────────────────────
+async function loadCallQueue() {
+  try {
+    const [qr, sr] = await Promise.all([
+      fetchJsonChecked(API + '/api/call-queue'),
+      fetchJsonChecked(API + '/api/settings'),
+    ]);
+    document.getElementById('cq-enabled').checked = !!sr.callQueueEnabled;
+    document.getElementById('cq-maxsize').value = sr.callQueueMaxSize || 5;
+    document.getElementById('cq-message').value = sr.callQueueMessage || '';
+    document.getElementById('cq-autoreply').checked = !!sr.autoReplySms;
+    document.getElementById('cq-autoreply-msg').value = sr.autoReplySmsMessage || '';
+    const el = document.getElementById('cq-list');
+    if (!qr.queue || qr.queue.length === 0) { el.innerHTML = '<em style="color:#64748b">אין שיחות בתור</em>'; return; }
+    el.innerHTML = qr.queue.map(q => {
+      const t = new Date(q.enqueuedAt);
+      const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="font-family:monospace">${q.callerName || q.callerNumber}</span><br><span style="color:#888;font-size:11px">${q.callerNumber}</span></div>
+        <div style="text-align:left"><span style="color:#888;font-size:11px">${time}</span><br><button class="btn btn-d btn-sm" style="font-size:10px;padding:2px 6px" onclick="removeCqEntry('${q.id}')">הסר</button></div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadCallQueue', e); }
+}
+
+async function saveCqSettings() {
+  try {
+    await fetchJsonChecked(API + '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      callQueueEnabled: document.getElementById('cq-enabled').checked,
+      callQueueMaxSize: parseInt(document.getElementById('cq-maxsize').value) || 5,
+      callQueueMessage: document.getElementById('cq-message').value,
+      autoReplySms: document.getElementById('cq-autoreply').checked,
+      autoReplySmsMessage: document.getElementById('cq-autoreply-msg').value,
+    })});
+    toast('נשמר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function removeCqEntry(id) {
+  try {
+    await fetchJsonChecked(API + '/api/call-queue/' + id, { method: 'DELETE' });
+    loadCallQueue();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Webhook Logs ────────────────────────────────────────────────────────
+async function loadWebhookLogs() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/webhook-logs?limit=100');
+    const el = document.getElementById('wh-list');
+    if (!d.logs || d.logs.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין לוגים עדיין</div>'; return; }
+    el.innerHTML = d.logs.map(l => {
+      const t = new Date(l.ts);
+      const time = t.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit' });
+      const statusColor = l.status === 'sent' ? '#22c55e' : '#f87171';
+      return `<div style="padding:6px 0;border-bottom:1px solid #ffffff10;font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:${statusColor};font-weight:600">${l.type}</span>
+          <span style="color:#888;font-size:11px">${time}</span>
+        </div>
+        <div style="color:#64748b;font-size:11px;direction:ltr;word-break:break-all">${l.url}</div>
+        ${l.error ? '<div style="color:#f87171;font-size:11px">' + l.error + '</div>' : ''}
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadWebhookLogs', e); }
+}
+
+// ── API Keys ────────────────────────────────────────────────────────────
+async function loadApiKeys() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/api-keys');
+    const el = document.getElementById('ak-list');
+    if (!d.keys || d.keys.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין מפתחות API</div>'; return; }
+    el.innerHTML = d.keys.map(k => {
+      const t = new Date(k.createdAt);
+      const time = t.toLocaleDateString('he-IL');
+      const lastUsed = k.lastUsed ? new Date(k.lastUsed).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'never';
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="font-weight:600">${k.name}</span><br><code style="color:#64748b;font-size:11px">${k.key}</code><br><span style="color:#888;font-size:11px">Last used: ${lastUsed}</span></div>
+        <div style="text-align:left"><span style="color:#888;font-size:11px">${time}</span><br><button class="btn btn-d btn-sm" style="font-size:10px;padding:2px 6px" onclick="deleteApiKey('${k.id}')">מחק</button></div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadApiKeys', e); }
+}
+
+async function createApiKey() {
+  const name = document.getElementById('ak-name').value.trim();
+  if (!name) { toast('נא להזין שם'); return; }
+  try {
+    const d = await fetchJsonChecked(API + '/api/api-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    document.getElementById('ak-name').value = '';
+    if (d.entry && d.entry.key) {
+      document.getElementById('ak-new').style.display = 'block';
+      document.getElementById('ak-new-key').textContent = d.entry.key;
+    }
+    loadApiKeys();
+    toast('מפתח נוצר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteApiKey(id) {
+  try {
+    await fetchJsonChecked(API + '/api/api-keys/' + id, { method: 'DELETE' });
+    loadApiKeys();
+    toast('מפתח נמחק');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Speed Dial ──────────────────────────────────────────────────────────
+async function loadSpeedDial() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/speed-dial');
+    const el = document.getElementById('sd-list');
+    if (!d.entries || d.entries.length === 0) { el.innerHTML = '<div style="color:#888;text-align:center;padding:20px">אין מספרים מועדפים</div>'; return; }
+    el.innerHTML = d.entries.map(e => {
+      return `<div style="padding:8px 0;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">${e.icon || '📞'}</span>
+          <div><span style="font-weight:600">${e.name}</span><br><span style="color:#888;font-family:monospace;font-size:12px">${e.phone}</span></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-p btn-sm" style="font-size:11px" onclick="quickDial('${e.phone}')">📞 חייג</button>
+          <button class="btn btn-d btn-sm" style="font-size:10px" onclick="deleteSpeedDial('${e.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadSpeedDial', e); }
+}
+
+async function addSpeedDial() {
+  const name = document.getElementById('sd-name').value.trim();
+  const phone = document.getElementById('sd-phone').value.trim();
+  if (!name || !phone) { toast('נא למלא שם ומספר'); return; }
+  try {
+    await fetchJsonChecked(API + '/api/speed-dial', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone }) });
+    document.getElementById('sd-name').value = '';
+    document.getElementById('sd-phone').value = '';
+    loadSpeedDial();
+    toast('מספר נוסף');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteSpeedDial(id) {
+  try {
+    await fetchJsonChecked(API + '/api/speed-dial/' + id, { method: 'DELETE' });
+    loadSpeedDial();
+    toast('מספר הוסר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function quickDial(phone) {
+  document.getElementById('phone-target').value = phone;
+  closePanel();
+  handleCallBtn();
+}
+
+// ── Live Call Monitor ───────────────────────────────────────────────────
+let _lcInterval = null;
+async function loadLiveCalls() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/live-calls');
+    const el = document.getElementById('lc-list');
+    document.getElementById('lc-status').innerHTML = `<span style="color:#22c55e">${d.calls.length}</span> שיחות פעילות | <span style="color:#fbbf24">${d.queueSize}</span> בתור`;
+    if (!d.calls || d.calls.length === 0) { el.innerHTML = '<em style="color:#64748b">אין שיחות פעילות כרגע</em>'; return; }
+    el.innerHTML = d.calls.map(c => {
+      const dur = c.durationS;
+      const mins = Math.floor(dur / 60);
+      const secs = dur % 60;
+      return `<div style="background:#0b0d14;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;color:#e2e8f0">${c.callerName || c.callerNumber || 'Unknown'}</div>
+          <div style="font-size:12px;color:#64748b;font-family:monospace">${c.callerNumber}</div>
+          <div style="font-size:11px;color:#64748b">${c.engine}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#3b82f6;font-family:monospace">${mins}:${secs.toString().padStart(2,'0')}</div>
+          <div style="font-size:11px;color:#64748b">${c.transcriptLines} שורות</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadLiveCalls', e); }
+  // Auto-refresh every 3 seconds while panel is open
+  clearInterval(_lcInterval);
+  _lcInterval = setInterval(() => {
+    if (currentPanel === 'panel-livecalls') loadLiveCalls();
+    else clearInterval(_lcInterval);
+  }, 3000);
+}
+
+// ── Business Hours ──────────────────────────────────────────────────────
+async function loadBusinessHours() {
+  try {
+    const d = await fetchJsonChecked(API + '/api/business-hours');
+    document.getElementById('bh-enabled').checked = !!d.enabled;
+    document.getElementById('bh-start').value = d.start || '09:00';
+    document.getElementById('bh-end').value = d.end || '18:00';
+    document.getElementById('bh-message').value = d.message || '';
+    // Set day checkboxes
+    const days = d.days || [0, 1, 2, 3, 4];
+    document.querySelectorAll('#bh-days input[type=checkbox]').forEach(cb => {
+      cb.checked = days.includes(parseInt(cb.value));
+    });
+    // Show current status
+    const statusEl = document.getElementById('bh-status');
+    if (d.enabled) {
+      statusEl.style.background = d.currentlyOpen ? '#0b2e0b' : '#2e0b0b';
+      statusEl.style.color = d.currentlyOpen ? '#22c55e' : '#f87171';
+      statusEl.textContent = d.currentlyOpen ? '🟢 פתוח כרגע' : '🔴 סגור כרגע — שיחות יועברו לתא קולי';
+    } else {
+      statusEl.style.background = '#1a1a2e';
+      statusEl.style.color = '#818cf8';
+      statusEl.textContent = 'שעות פעילות כבויות — הבוט פעיל 24/7';
+    }
+  } catch(e) { console.error('loadBusinessHours', e); }
+}
+
+async function saveBusinessHours() {
+  const days = [];
+  document.querySelectorAll('#bh-days input[type=checkbox]').forEach(cb => {
+    if (cb.checked) days.push(parseInt(cb.value));
+  });
+  try {
+    await fetchJsonChecked(API + '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      businessHoursEnabled: document.getElementById('bh-enabled').checked,
+      businessHoursStart: document.getElementById('bh-start').value,
+      businessHoursEnd: document.getElementById('bh-end').value,
+      businessHoursDays: days,
+      businessHoursMessage: document.getElementById('bh-message').value,
+    })});
+    loadBusinessHours();
+    toast('נשמר');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Call Rating ──────────────────────────────────────────────────────────
+async function rateCall(file, rating) {
+  try {
+    await fetchJsonChecked(API + '/api/recordings/' + encodeURIComponent(file) + '/rating', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating })
+    });
+    toast('דירוג נשמר');
+    loadRecordings();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+</script>
+</body>
+</html>

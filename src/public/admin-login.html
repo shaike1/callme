@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CallMe Bot — Super Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #1a1a1c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    color: #abb2bf;
+    padding: 20px;
+    font-size: 14px;
+  }
+  .wrap { width: 100%; max-width: 380px; }
+
+  .header { margin-bottom: 28px; }
+  .header .prompt { color: #f59e0b; }
+  .header h1 {
+    font-size: 16px;
+    font-weight: 400;
+    color: #e2e8f0;
+    margin-top: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  .header p {
+    font-size: 12px;
+    color: #4b5563;
+    margin-top: 3px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  .header .tag {
+    display: inline-block;
+    border: 1px solid #2d2d30;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #f59e0b;
+    padding: 2px 8px;
+    letter-spacing: 0.8px;
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+
+  .form-block { margin-bottom: 20px; }
+  .field { margin-bottom: 14px; }
+  .field .lbl {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 12px;
+  }
+  .field .lbl-he { color: #f59e0b; }
+  .field .lbl-en { color: #374151; font-size: 11px; }
+  .field input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #2d2d30;
+    padding: 7px 0;
+    color: #e2e8f0;
+    font-size: 14px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus { border-bottom-color: #f59e0b; }
+
+  .btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid #2d2d30;
+    border-radius: 4px;
+    padding: 11px 10px;
+    color: #abb2bf;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    text-align: center;
+    margin-top: 6px;
+  }
+  .btn:hover { border-color: #f59e0b; color: #e2e8f0; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn .he { display: block; }
+  .btn .en { display: block; color: #4b5563; font-size: 10px; margin-top: 2px; }
+
+  .error {
+    color: #f87171;
+    font-size: 12px;
+    margin-top: 12px;
+    display: none;
+  }
+  .error.show { display: block; }
+  .error::before { content: '✗ '; }
+  .footer {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 12px;
+  }
+  .footer a { color: #374151; text-decoration: none; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .footer a:hover { color: #abb2bf; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="prompt">callme:~# sudo</div>
+    <h1>CallMe Bot</h1>
+    <p>Platform Administration</p>
+    <div class="tag">Super Admin</div>
+  </div>
+
+  <form id="login-form" class="form-block" onsubmit="doLogin(event)">
+    <div class="field">
+      <div class="lbl"><span class="lbl-he">משתמש</span><span class="lbl-en">username</span></div>
+      <input id="username" type="text" autocomplete="username" autofocus required>
+    </div>
+    <div class="field">
+      <div class="lbl"><span class="lbl-he">סיסמה</span><span class="lbl-en">password</span></div>
+      <input id="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit" id="login-btn">
+      <span class="he">[ כניסה ]</span>
+      <span class="en">Login</span>
+    </button>
+    <div class="error" id="error-msg"></div>
+  </form>
+
+  <div class="footer">
+    <a href="/login">&larr; חזרה / back</a>
+  </div>
+</div>
+<script>
+if (sessionStorage.getItem('callme_super_auth') || localStorage.getItem('callme_super_auth')) { window.location.replace('/admin'); }
+
+async function doLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) return;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('error-msg');
+  err.classList.remove('show');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.token) {
+      sessionStorage.setItem('callme_super_auth', data.token);
+      window.location.replace('/admin');
+    } else {
+      err.textContent = data.error || 'Login failed';
+      err.classList.add('show');
+      btn.disabled = false;
+    }
+  } catch (ex) {
+    err.textContent = 'Network error';
+    err.classList.add('show');
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
