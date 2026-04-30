@@ -98,7 +98,10 @@ class BrainMode {
         res.on('data', c => { raw += c; });
         res.on('end', () => {
           try {
-            const data = JSON.parse(raw);
+            // OmniRoute returns JSON + SSE headers: extract JSON part
+            const jsonEnd = raw.indexOf('\n:');
+            const jsonPart = jsonEnd > 0 ? raw.slice(0, jsonEnd) : raw;
+            const data = JSON.parse(jsonPart);
             // Handle OpenAI-style response
             const text = data?.choices?.[0]?.message?.content
               || data?.content?.[0]?.text

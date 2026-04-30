@@ -1,0 +1,15 @@
+FROM oraclelinux:8-slim
+
+RUN microdnf install -y \
+    openssl libcurl zlib boost boost-system boost-thread boost-log boost-filesystem \
+    && microdnf clean all
+
+COPY drachtio-arm64 /usr/local/bin/drachtio
+RUN chmod +x /usr/local/bin/drachtio
+
+COPY drachtio.conf.xml /etc/drachtio.conf.xml
+
+EXPOSE 9022 5060/udp 5060/tcp
+
+ENTRYPOINT ["/usr/local/bin/drachtio"]
+CMD ["-f", "/etc/drachtio.conf.xml"]

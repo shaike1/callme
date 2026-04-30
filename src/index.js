@@ -207,11 +207,11 @@ const defaultSettings = {
   aiEnabled: true,
   aiDailyCostLimitUsd: 0,     // 0 = no limit
   aiMonthlyCostLimitUsd: 0,   // 0 = no limit
-  aiEngine: process.env.AI_ENGINE || 'ocplatform',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime' | 'openclaw'
+  aiEngine: process.env.AI_ENGINE || 'ocplatform',    // 'gemini-live' | 'groq-pipeline' | 'openai-realtime' | 'ocplatform'
   geminiApiKey: '',             // set via dashboard only — no env fallback
   geminiModel: '',             // blank = use server default
   groqApiKey: '',               // Groq API key for groq-pipeline engine
-  deepgramApiKey: '',           // Deepgram API key for groq-pipeline STT
+  deepgramApiKey: process.env.DEEPGRAM_API_KEY || '',  // Deepgram API key for OCPlatform/Groq STT
   ttsVoice: '',                 // Google Cloud TTS voice name (e.g., he-IL-Wavenet-A)
   openaiApiKey: '',             // set via dashboard; blank = fall back to OPENAI_API_KEY env
   elevenlabsApiKey: '',         // set via dashboard; blank = fall back to ELEVENLABS_API_KEY env
@@ -731,9 +731,7 @@ app.post('/api/tts', async (req, res) => {
 // ── Webhook: text chat with the bot ──────────────────────────────────────
 const https = require('https');
 
-app.post('/api/chat', express.json(), async (req, res) => {
-  logger.info("🔥 CHAT CALLED");
-  logger.info('🔥 /api/chat called', { message: req.body?.message, hasBody: !!req.body });
+app.post('/api/chat', async (req, res) => {
   const { message, sessionId } = req.body || {};
   if (!message) return res.status(400).json({ error: 'missing "message" field' });
 
@@ -743,24 +741,17 @@ app.post('/api/chat', express.json(), async (req, res) => {
   }
 
   // Try OCPlatform brain first, fallback to Gemini
-  const ocpUrl = (integrations.openclaw?.enabled && integrations.openclaw?.url)
-    ? integrations.openclaw.url
+  const ocpUrl = (integrations.ocplatform?.enabled && integrations.ocplatform?.url)
+    ? integrations.ocplatform.url
     : process.env.OCPLATFORM_GATEWAY_URL;
 
-  logger.info('🔍 ocpUrl check', { 
-    enabled: integrations.openclaw?.enabled, 
-    url: integrations.openclaw?.url, 
-    env: process.env.OCPLATFORM_GATEWAY_URL,
-    final: ocpUrl 
-  });
-
   if (ocpUrl) {
-    logger.info('🟡 Entering OCP block');
+    logger.info("[DEBUG] Starting OCPlatform request", { ocpUrl });
     try {
       const urlObj = new URL(ocpUrl + '/v1/chat/completions');
       const mod = urlObj.protocol === 'https:' ? require('https') : require('http');
       const payload = JSON.stringify({
-        model: 'gh/claude-sonnet-4.5',
+        model: 'auto-route',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
@@ -774,7 +765,7 @@ app.post('/api/chat', express.json(), async (req, res) => {
           path: urlObj.pathname,
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-          timeout: 10000
+          timeout: 30000
         };
         const req2 = mod.request(opts, (r) => {
           let data = '';
@@ -782,34 +773,26 @@ app.post('/api/chat', express.json(), async (req, res) => {
           r.on('end', () => resolve({ status: r.statusCode, body: data }));
         });
         req2.on('error', reject);
-        req2.on('timeout', () => { req2.destroy(); reject(new Error('OCPlatform timeout 10s')); });
+        req2.on('timeout', () => reject(new Error('OCPlatform timeout')));
         req2.write(payload);
         req2.end();
       });
-      logger.info('🔍 OCP response', { status: response.status, bodyLen: response.body?.length });
       // Handle SSE stream or plain JSON
-      const rawBody = response.body;
-      logger.info('[RAW] rawBody check', { hasData: rawBody?.includes('data: '), sample: rawBody?.slice(0, 150) });
       let text = '';
-      // Check if it's SSE stream (lines starting with "data: ") or plain JSON
-      const isSSE = rawBody && rawBody.trim().startsWith('data: ');
-      if (isSSE) {
+      const rawBody = response.body;
+      if (rawBody.includes('data: ')) {
+        // SSE format: parse each data: line
         for (const line of rawBody.split('\n')) {
           if (line.startsWith('data: ') && !line.includes('[DONE]')) {
-            try { text += JSON.parse(line.slice(6))?.choices?.[0]?.delta?.content || ''; } catch (_) {}
+            try {
+              const chunk = JSON.parse(line.slice(6));
+              text += chunk?.choices?.[0]?.delta?.content || '';
+            } catch (_) {}
           }
         }
       } else {
-        try { 
-          // OmniRoute returns JSON + SSE headers. Extract JSON part.
-          const jsonEnd = rawBody.indexOf('\n:');
-          const jsonPart = jsonEnd > 0 ? rawBody.slice(0, jsonEnd) : rawBody;
-          const result = JSON.parse(jsonPart);
-          text = result?.choices?.[0]?.message?.content || '';
-          logger.info('[PARSE] ✅ Success', { textLen: text?.length });
-        } catch(e) {
-          logger.warn('[PARSE ERROR]', { error: e.message, body: rawBody?.slice(0, 200) });
-        }
+        const result = JSON.parse(rawBody);
+        text = result?.choices?.[0]?.message?.content || '';
       }
       if (text) {
         logger.info('API chat via OCPlatform', { sessionId, responseLength: text.length });

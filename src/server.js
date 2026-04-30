@@ -232,6 +232,37 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- Chat test endpoint ---
+
+  // 3CX Webhook endpoint for incoming calls
+  if (pathname === '/webhook/3cx' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      console.log('[3CX Webhook]', JSON.stringify(body));
+      
+      const { CallID, Callee, Caller, Event } = body;
+      
+      if (Event === 'call-started' || Event === 'answered') {
+        const callId = CallID || `3cx-${Date.now()}`;
+        const handler = getOrCreateHandler(callId);
+        console.log(`[Webhook] Call started: ${callId} from ${Caller} to ${Callee}`);
+        
+        // Respond to 3CX
+        sendJSON(res, 200, { 
+          success: true, 
+          callId,
+          audioWsUrl: `ws://${req.headers.host || 'localhost:3001'}`,
+          message: 'Call handler created'
+        });
+      } else {
+        sendJSON(res, 200, { success: true, event: Event });
+      }
+    } catch (e) { 
+      console.error('[Webhook] Error:', e.message);
+      sendJSON(res, 500, { error: e.message }); 
+    }
+    return;
+  }
+
   if (pathname === '/api/chat' && req.method === 'POST') {
     try {
       const body = JSON.parse(await readBody(req));

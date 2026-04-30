@@ -17,42 +17,39 @@ services:
       - HEALTH_PORT=3101
       - OCPLATFORM_GATEWAY_URL=http://100.64.0.7:20129
       - OCPLATFORM_ENABLED=true
-      - AI_ENGINE=ocplatform
-      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GOOGLE_CLOUD_KEY=${GOOGLE_CLOUD_KEY}
-      - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY}
+      - AI_ENGINE=openclaw
       - AUDIO_WS_PORT=3001
       - HOST=0.0.0.0
-
+      
       # 3CX
       - THREECX_HOST=${THREECX_HOST:-1664.3cx.cloud}
       - THREECX_USER=${THREECX_USER:-12610}
       - THREECX_PASSWORD=${THREECX_PASSWORD:-3cx!3Cx!3CX}
       - THREECX_EXTENSION=${THREECX_EXTENSION:-9000}
       - THREECX_API_TOKEN=${THREECX_API_TOKEN:-}
-
-      # OCPlatform Brain
-
+      
+      # OpenClaw Brain
+      
       # Whisper STT
       - WHISPER_API_URL=${WHISPER_API_URL:-}
       - WHISPER_DEFAULT_LANG=${WHISPER_DEFAULT_LANG:-he}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-
+      
       # TTS
       - GOOGLE_TTS_KEY=${GOOGLE_TTS_KEY:-}
       - AZURE_TTS_KEY=${AZURE_TTS_KEY:-}
       - AZURE_TTS_REGION=${AZURE_TTS_REGION:-israelcentral}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-}
-
+      
     volumes:
       - ./src/personas/devices.json:/app/src/personas/devices.json
       - callme-audio:/tmp/callme-tts
-
+    
     networks:
       - callme-net
+    
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3101/health"]
       interval: 30s
@@ -60,22 +57,9 @@ services:
       retries: 3
       start_period: 10s
 
-  drachtio:
-    image: drachtio/drachtio-server:latest
-    container_name: drachtio-server
-    network_mode: host
-    restart: unless-stopped
-    command: --loglevel info
-
-  freeswitch:
-    image: drachtio/drachtio-freeswitch-mrf:latest
-    container_name: freeswitch-media
-    network_mode: host
-    restart: unless-stopped
+volumes:
+  callme-audio:
 
 networks:
   callme-net:
     driver: bridge
-
-volumes:
-  callme-audio:
